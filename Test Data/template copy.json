@@ -1,0 +1,36 @@
+{
+    "version": "1.0",
+    "date": "2025-10-27",
+    "dataset_name": "Action Classification Export",
+    "metadata": {
+        "created_by": "SoccerNet Pro Analysis Tool"
+    },
+    "tasks": [
+        "action_classification"
+    ],
+    "labels": {
+        "foul_type": {
+            "type": "single_label",
+            "labels": [
+                "Tackling",
+                "Standing Tackling",
+                "Holding",
+                "Pushing",
+                "Challenge",
+                "Elbowing",
+                "High Leg",
+                "Dive"
+            ]
+        },
+        "severity": {
+            "type": "single_label",
+            "labels": [
+                "Offence + Red Card",
+                "Offence + Yellow Card",
+                "Offence + No Card",
+                "No Offence"
+            ]
+        }
+    },
+    "data": []
+}
