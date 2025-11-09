@@ -55,7 +55,14 @@ If you already have a virtual environment inside the project (e.g., .venv):
 ```bash
 source .venv/bin/activate
 ```
-
+If you already have a virtual environment inside the project (e.g., .venv):
+```bash
+source .venv/bin/activate
+```
+If you dont have a virtual environment inside the project (e.g., .venv):
+```bash
+pip install -r requirements.txt
+```
 
 ### 4. Run the Application
 Once the environment is activated, start the app:
