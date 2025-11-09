@@ -1,0 +1,5 @@
+# PyQt6 core and extension modules required by ourcode
+PyQt6>=6.0.0,<7.0.0
+PyQt6-QtCharts>=6.0.0,<7.0.0
+PyQt6-QtMultimedia>=6.0.0,<7.0.0
+PyQt6-QtMultimediaWidgets>=6.0.0,<7.0.0
