@@ -16,12 +16,10 @@ from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
 
 from ui_components import MainWindowUI, RightPanel, DynamicSingleLabelGroup, DynamicMultiLabelGroup
 
-# --- 重新新增资源路径解析函数 ---
+# --- Resource Path Helper ---
 def resource_path(relative_path):
     """
-    获取资源文件的绝对路径。
-    在开发环境中，它返回相对路径。
-    在 PyInstaller 打包环境中，它返回临时文件夹路径。
+    Get the absolute path to resource, works for dev and for PyInstaller.
     """
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
@@ -31,12 +29,39 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
 
     return os.path.join(base_path, relative_path)
-# --- 资源路径解析函数结束 ---
+# --- End Resource Path Helper ---
 
-# --- 模拟AI模型和排序辅助函数 ---
+# --- Size Calculation Helpers ---
+def get_dir_size(start_path):
+    """Recursively calculates the total size of all video files in a directory (in bytes)."""
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(start_path):
+        for f in filenames:
+            if f.lower().endswith(('.mp4', '.avi', '.mov')):
+                fp = os.path.join(dirpath, f)
+                # Ensure file exists and is not a symbolic link
+                if not os.path.islink(fp) and os.path.exists(fp):
+                    total_size += os.path.getsize(fp)
+    return total_size
+
+def format_size(size_bytes):
+    """Converts bytes to a human-readable KB, MB, or GB format."""
+    if size_bytes >= 1024**3:
+        return f"{size_bytes / 1024**3:.2f} GB"
+    elif size_bytes >= 1024**2:
+        return f"{size_bytes / 1024**2:.2f} MB"
+    elif size_bytes >= 1024:
+        return f"{size_bytes / 1024:.2f} KB"
+    else:
+        return f"{size_bytes} Bytes"
+# --- End Size Calculation Helpers ---
+
+
+# --- Mock AI Model and Sorting Helpers ---
 def run_model_on_action(action_clips, label_heads):
     """
-    模拟运行模型，为每个标签头生成一个随机分布。
+    Simulates running an AI model, generating a random probability distribution 
+    for each 'single_label' head.
     """
     print(f"Analyzing Action: {os.path.dirname(action_clips[0]) if os.path.isdir(os.path.dirname(action_clips[0])) else os.path.basename(action_clips[0])}...")
     
@@ -45,7 +70,7 @@ def run_model_on_action(action_clips, label_heads):
     for head_name, definition in label_heads.items():
         if definition['type'] == 'single_label':
             labels = definition['labels']
-            # 确保至少有 2 个标签才能生成 top 2 预测，否则随机生成一些默认项
+            # Ensure at least 2 labels for top 2 prediction visualization
             if len(labels) < 2:
                 labels = labels + ['Label B', 'Label C']
             
@@ -56,36 +81,13 @@ def run_model_on_action(action_clips, label_heads):
             results[head_name] = {
                 "distribution": dict(zip(labels, normalized_probs))
             }
-        # Multi-label 暂时跳过模拟预测结果
+        # Multi-label prediction simulation is skipped for now
             
     return results
 
-def get_dir_size(start_path):
-    """递归计算目录下所有视频文件的总大小 (以字节为单位)。"""
-    total_size = 0
-    for dirpath, dirnames, filenames in os.walk(start_path):
-        for f in filenames:
-            if f.lower().endswith(('.mp4', '.avi', '.mov')):
-                fp = os.path.join(dirpath, f)
-                # 确保文件存在且不是符号链接，避免权限问题
-                if not os.path.islink(fp) and os.path.exists(fp):
-                    total_size += os.path.getsize(fp)
-    return total_size
-
-def format_size(size_bytes):
-    """将字节数转换为可读的 KB, MB, GB 格式。"""
-    if size_bytes >= 1024**3:
-        return f"{size_bytes / 1024**3:.2f} GB"
-    elif size_bytes >= 1024**2:
-        return f"{size_bytes / 1024**2:.2f} MB"
-    elif size_bytes >= 1024:
-        return f"{size_bytes / 1024:.2f} KB"
-    else:
-        return f"{size_bytes} Bytes"
-
 def get_action_number(entry):
+    """Tries to parse the numeric part of action_xxx or virtual_action_xxx."""
     try:
-        # 尝试解析 action_xxx 或 virtual_action_xxx 后面的数字
         parts = entry.name.split('_')
         if len(parts) > 1 and parts[-1].isdigit():
             return int(parts[-1])
@@ -95,7 +97,7 @@ def get_action_number(entry):
     except (IndexError, ValueError):
         return float('inf')
 
-# --- 主应用逻辑类 ---
+# --- Main Application Logic Class ---
 class ActionClassifierApp(QMainWindow):
     
     FILTER_ALL = 0
@@ -104,7 +106,7 @@ class ActionClassifierApp(QMainWindow):
     
     SINGLE_VIDEO_PREFIX = "virtual_action_" 
     
-    # 初始标签定义 (使用字典是为了区分类型)
+    # Initial dynamic label definitions
     DEFAULT_LABEL_DEFINITIONS = {
         "foul_type": {"type": "single_label", "labels": ["Undefined"]}, 
     }
@@ -118,13 +120,13 @@ class ActionClassifierApp(QMainWindow):
         self.setCentralWidget(self.ui)
 
         self.analysis_results = {} 
+        # Structure: {action_path: {head_name: label_name/label_list, ...}}
         self.manual_annotations = {} 
         
         self.action_path_to_name = {}
         self.action_item_data = [] 
         self.current_working_directory = None
         
-        # 动态标签头存储
         self.label_definitions = self.DEFAULT_LABEL_DEFINITIONS.copy()
         self.current_task_name = RightPanel.DEFAULT_TASK_NAME 
         
@@ -148,7 +150,7 @@ class ActionClassifierApp(QMainWindow):
         self._setup_dynamic_ui()
 
 
-    # --- 状态指示器辅助方法 (不变) ---
+    # --- Status Indicator Helpers ---
     def _create_checkmark_icon(self, color):
         pixmap = QPixmap(16, 16)
         pixmap.fill(Qt.GlobalColor.transparent) 
@@ -165,7 +167,6 @@ class ActionClassifierApp(QMainWindow):
         return QIcon(pixmap)
 
     def update_action_item_status(self, action_path):
-        # 标注完成逻辑不变
         action_item = self.action_item_map.get(action_path)
         if not action_item:
             return 
@@ -209,12 +210,12 @@ class ActionClassifierApp(QMainWindow):
         self.ui.right_panel.confirm_manual_button.clicked.connect(self.save_manual_annotation)
         self.ui.right_panel.clear_manual_button.clicked.connect(self.clear_current_manual_annotation)
         
-        # 动态连接标签管理按钮信号（在 setup_dynamic_ui 中处理）
+        # Dynamic connection for label management buttons handled in _setup_dynamic_ui
 
     def _connect_dynamic_type_buttons(self):
-        """连接所有动态创建的 DynamicLabelGroup 中的 Add/Remove 按钮"""
+        """Connects Add/Remove buttons for all dynamically created label groups."""
         for head_name, group in self.ui.right_panel.label_groups.items():
-            # 必须先断开旧连接，防止重复
+            # Disconnect previous signals to avoid duplicates
             try:
                 group.add_btn.clicked.disconnect()
                 group.remove_btn.clicked.disconnect()
@@ -226,7 +227,7 @@ class ActionClassifierApp(QMainWindow):
             if isinstance(group, DynamicSingleLabelGroup):
                 group.remove_btn.clicked.connect(lambda _, h=head_name: self.remove_custom_type(h))
             elif isinstance(group, DynamicMultiLabelGroup):
-                # 连接多标签组的 'Remove Checked' 按钮
+                # Connect Multi-label 'Remove Checked' button
                 group.remove_btn.clicked.connect(lambda _, h=head_name: self._remove_multi_labels_via_checkboxes(h))
                 
     def _remove_multi_labels_via_checkboxes(self, head_name):
@@ -244,15 +245,14 @@ class ActionClassifierApp(QMainWindow):
         for type_to_remove in labels_to_remove:
             definition = self.label_definitions[head_name]
             
-            # 检查是否为内置默认类型 (这里简化处理，如果标签少于2个，则不允许删除)
             if len(definition['labels']) <= 1:
                  self._show_temp_message_box("Warning", f"Cannot remove the last label in {head_name} ({type_to_remove}).", QMessageBox.Icon.Warning, 1500)
                  continue
 
-            # 1. 从定义中移除
+            # 1. Remove from definition
             self.label_definitions[head_name]['labels'].remove(type_to_remove)
             
-            # 2. 从 manual_annotations 中移除对该类型的引用
+            # 2. Remove reference from manual_annotations
             keys_to_delete = []
             for path, anno in self.manual_annotations.items():
                 if head_name in anno:
@@ -269,7 +269,7 @@ class ActionClassifierApp(QMainWindow):
 
             labels_removed += 1
             
-        # 3. 更新 UI
+        # 3. Update UI
         group.update_checkboxes(self.label_definitions[head_name]['labels'])
         
         current_path = self._get_current_action_path()
@@ -280,24 +280,21 @@ class ActionClassifierApp(QMainWindow):
         self.update_save_export_button_state()
             
     def _setup_dynamic_ui(self):
-        """根据当前的 self.label_definitions 更新 UI"""
-        # 1. 设置动态标签 UI
+        """Updates the UI based on current label definitions and task name."""
+        # 1. Set dynamic labels UI
         self.ui.right_panel.setup_dynamic_labels(self.label_definitions)
         
-        # 2. 连接动态按钮
+        # 2. Connect dynamic buttons
         self._connect_dynamic_type_buttons()
         
-        # 3. 更新 Task Label
+        # 3. Update Task Label
         self.ui.right_panel.task_label.setText(f"Task: {self.current_task_name}")
-        # 4. 更新窗口标题
+        # 4. Update Window Title
         self.setWindowTitle(f"SoccerNet Pro Analysis Tool ({self.current_task_name} Tool)")
         
     def apply_stylesheet(self):
-        """
-        加载 style.qss 文件，使用 resource_path 兼容 PyInstaller 打包环境。
-        """
+        """Loads the style.qss file, compatible with PyInstaller."""
         try:
-            # 使用 resource_path 获取绝对路径
             qss_path = resource_path("style.qss")
             with open(qss_path, "r") as f:
                 self.setStyleSheet(f.read())
@@ -308,7 +305,7 @@ class ActionClassifierApp(QMainWindow):
 
 
     def apply_action_filter(self):
-        """根据下拉菜单中的选择，隐藏或显示 action item。"""
+        """Hides or shows action items based on the filter selection."""
         current_filter = self.ui.left_panel.filter_combo.currentIndex()
 
         if current_filter == self.FILTER_ALL:
@@ -327,7 +324,8 @@ class ActionClassifierApp(QMainWindow):
 
     def handle_video_import(self):
         """
-        处理用户导入视频：询问用户是导入单个文件还是目录，并调用相应的处理函数。
+        Handles video import by asking the user if they want to import a single file 
+        or a multi-view directory, and sets up the working directory.
         """
         if not self.json_loaded:
              self._show_temp_message_box("Action Blocked", 
@@ -335,7 +333,7 @@ class ActionClassifierApp(QMainWindow):
                                         QMessageBox.Icon.Warning, 2000)
              return
              
-        # 1. 检查或设置工作目录
+        # 1. Check or set working directory
         if not self.current_working_directory or not os.path.isdir(self.current_working_directory):
              self.current_working_directory = QFileDialog.getExistingDirectory(self, "Select Working Directory to Store Videos")
              
@@ -345,7 +343,7 @@ class ActionClassifierApp(QMainWindow):
                                             QMessageBox.Icon.Warning, 2000)
                  return
 
-        # 2. 询问用户导入类型
+        # 2. Ask for import type
         msg = QMessageBox(self)
         msg.setWindowTitle("Video Import Type")
         msg.setText("Do you want to import a single video file or all videos from a directory (Multi-view/Clips)?")
@@ -364,14 +362,13 @@ class ActionClassifierApp(QMainWindow):
 
     def _import_files_as_virtual_actions(self, single_action_per_file):
         """
-        通用文件导入逻辑。
-        如果 single_action_per_file=True (单文件模式)，则 1 个视频 = 1 个 Action 文件夹。
-        如果 single_action_per_file=False (多视角模式)，则 1 个目录 = 1 个 Action 文件夹，包含所有视频。
+        Core import logic that copies files and updates the application state.
+        Includes mandatory user confirmation and progress bars.
         """
         video_formats = "Video Files (*.mp4 *.avi *.mov)" 
         
         if single_action_per_file:
-            # 模式 1: 单文件 -> 单 Action 文件夹
+            # Mode 1: Single File -> Single Virtual Action Folder
             file_paths = []
             original_file_path, _ = QFileDialog.getOpenFileName(self, "Select Single Video File", "", video_formats)
             if original_file_path:
@@ -379,12 +376,11 @@ class ActionClassifierApp(QMainWindow):
             
             if not file_paths: return
 
-            # 预计算大小
+            # --- Pre-calculation & Confirmation ---
             original_file_path = file_paths[0]
             size_bytes = os.path.getsize(original_file_path)
             size_formatted = format_size(size_bytes)
             
-            # --- 确认对话框 ---
             confirm_msg = QMessageBox(self)
             confirm_msg.setWindowTitle("Confirm Video Import")
             confirm_msg.setText(f"You are about to copy one video file ({os.path.basename(original_file_path)}).\n\nEstimated disk usage for copying: {size_formatted}\n\nDo you want to proceed?")
@@ -392,10 +388,9 @@ class ActionClassifierApp(QMainWindow):
             confirm_msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
             if confirm_msg.exec() == QMessageBox.StandardButton.Cancel:
                 return
-            # --- END 确认对话框 ---
+            # --- End Confirmation ---
 
-
-            # 计算新的 Action ID
+            # Calculate new Action ID
             max_counter = 0
             for name in self.action_path_to_name.values():
                 if name.startswith(self.SINGLE_VIDEO_PREFIX):
@@ -408,9 +403,9 @@ class ActionClassifierApp(QMainWindow):
             counter = max_counter + 1
             
             added_count = 0
-            original_file_path = file_paths[0] # 只有一个文件
+            original_file_path = file_paths[0]
             
-            # 确保 Action 文件夹名唯一
+            # Ensure Action folder name is unique
             while True:
                 action_name = f"{self.SINGLE_VIDEO_PREFIX}{counter:03d}"
                 virtual_action_path = os.path.join(self.current_working_directory, action_name)
@@ -420,7 +415,7 @@ class ActionClassifierApp(QMainWindow):
             
             video_name = os.path.basename(original_file_path)
             
-            # --- 进度条 for 单文件复制 (模拟进度，因为 shutil.copy2 不提供回调) ---
+            # --- Progress Bar for Single File Copy (Simulated) ---
             progress = QProgressDialog(f"Copying {video_name} ({size_formatted})...", "Cancel", 0, 100, self)
             progress.setWindowTitle("Importing Video")
             progress.setWindowModality(Qt.WindowModality.WindowModal)
@@ -431,17 +426,18 @@ class ActionClassifierApp(QMainWindow):
                 os.makedirs(virtual_action_path)
                 target_file_path = os.path.join(virtual_action_path, video_name)
                 
-                # 模拟复制进度
+                # Simulate progress while copying in the background
+                shutil.copy2(original_file_path, target_file_path) # Actual copy
+                
+                # Update simulated progress bar (for UX after the operation is complete)
                 for i in range(1, 101):
-                    time.sleep(0.01) # 增加延迟模拟大文件复制时间
+                    time.sleep(0.001) 
                     progress.setValue(i)
                     QApplication.processEvents()
                     if progress.wasCanceled():
                         shutil.rmtree(virtual_action_path, ignore_errors=True)
                         return
-                        
-                shutil.copy2(original_file_path, target_file_path) # 实际复制操作
-                
+
                 self.action_item_data.insert(0, {'name': action_name, 'path': virtual_action_path})
                 self.action_path_to_name[virtual_action_path] = action_name
                 added_count = 1
@@ -454,7 +450,7 @@ class ActionClassifierApp(QMainWindow):
                  return
 
         else:
-            # 模式 2: 单目录 -> 单 Action 文件夹 (多视角)
+            # Mode 2: Single Directory -> Single Virtual Action Folder (Multi-view)
             dir_path = QFileDialog.getExistingDirectory(self, "Select Directory (Containing Multi-view Clips)")
             if not dir_path: return
             
@@ -471,7 +467,7 @@ class ActionClassifierApp(QMainWindow):
             size_bytes = get_dir_size(dir_path)
             size_formatted = format_size(size_bytes)
             
-            # --- 确认对话框 ---
+            # --- Confirmation ---
             confirm_msg = QMessageBox(self)
             confirm_msg.setWindowTitle("Confirm Multi-view Import")
             confirm_msg.setText(f"You are about to copy {total_files} clips into one new Action.\n\nEstimated total disk usage: {size_formatted}\n\nDo you want to proceed?")
@@ -479,10 +475,10 @@ class ActionClassifierApp(QMainWindow):
             confirm_msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
             if confirm_msg.exec() == QMessageBox.StandardButton.Cancel:
                 return
-            # --- END 确认对话框 ---
+            # --- End Confirmation ---
 
 
-            # 计算新的 Action ID
+            # Calculate new Action ID
             max_counter = 0
             for name in self.action_path_to_name.values():
                 if name.startswith(self.SINGLE_VIDEO_PREFIX):
@@ -494,11 +490,11 @@ class ActionClassifierApp(QMainWindow):
                         continue
             counter = max_counter + 1
 
-            # 创建新的 Action 文件夹名称
+            # Create new Action folder name
             action_name = f"{self.SINGLE_VIDEO_PREFIX}{counter:03d}"
             virtual_action_path = os.path.join(self.current_working_directory, action_name)
 
-            # --- 进度条 for 目录复制 (显示文件计数) ---
+            # --- Progress Bar for Directory Copy (File Count) ---
             progress = QProgressDialog(f"Copying {total_files} clips ({size_formatted}) to Action '{action_name}'...", "Cancel", 0, total_files, self)
             progress.setWindowTitle("Importing Videos (Multi-view)")
             progress.setWindowModality(Qt.WindowModality.WindowModal)
@@ -537,7 +533,7 @@ class ActionClassifierApp(QMainWindow):
         if added_count > 0:
             self._populate_action_tree()
             
-            # 尝试选中新的 Action Item
+            # Try to select the new Action Item
             new_item_path = os.path.join(self.current_working_directory, action_name)
             new_item = self.action_item_map.get(new_item_path)
             if new_item:
@@ -550,21 +546,20 @@ class ActionClassifierApp(QMainWindow):
 
 
     def _populate_action_tree(self):
-        """将预加载的数据实际填充到 QTreeWidget 中。"""
+        """Populates the QTreeWidget with preloaded data."""
         if not self.action_item_data:
-            self.ui.left_panel.action_tree.clear() # 确保清空
+            self.ui.left_panel.action_tree.clear() 
             self.action_item_map.clear()
             return
 
         self.ui.left_panel.action_tree.clear()
         self.action_item_map.clear()
         
-        # 为了实现 "Show All" 时 virtual_action_ 置顶，我们重新对 action_item_data 排序
+        # Separate virtual actions and normal actions for ordering
         action_folders = [data for data in self.action_item_data if data['name'].startswith("action_")]
         virtual_actions = [data for data in self.action_item_data if data['name'].startswith(self.SINGLE_VIDEO_PREFIX)]
 
-        # 重新整理列表，让 virtual actions (按编号) 在 action folders (按编号) 之前
-        # 模拟 QDir.Name 行为进行排序
+        # Sort based on numeric part
         sorted_virtual = sorted(virtual_actions, key=lambda d: get_action_number(type('MockEntry', (object,), {'name': d['name']})()))
         sorted_actions = sorted(action_folders, key=lambda d: get_action_number(type('MockEntry', (object,), {'name': d['name']})()))
         
@@ -574,13 +569,13 @@ class ActionClassifierApp(QMainWindow):
             action_item = self.ui.left_panel.add_action_item(data['name'], data['path'])
             self.action_item_map[data['path']] = action_item
             
-        # 初始填充后，更新所有 Action 状态，并应用筛选器
+        # Update status and apply filter
         for path in self.action_item_map.keys():
             self.update_action_item_status(path)
             
         self.apply_action_filter()
 
-    # --- 标签管理逻辑 (通用化) ---
+    # --- Label Management Logic ---
     def add_custom_type(self, head_name):
         group = self.ui.right_panel.label_groups.get(head_name)
         if not group: return
@@ -598,11 +593,11 @@ class ActionClassifierApp(QMainWindow):
             group.input_field.clear()
             return
         
-        # 1. 添加到定义
+        # 1. Add to definition
         self.label_definitions[head_name]['labels'].append(new_type)
         self.label_definitions[head_name]['labels'].sort()
         
-        # 2. 更新 UI (根据类型调用不同的更新函数)
+        # 2. Update UI
         if isinstance(group, DynamicSingleLabelGroup):
              group.update_radios(self.label_definitions[head_name]['labels'])
         elif isinstance(group, DynamicMultiLabelGroup):
@@ -612,10 +607,9 @@ class ActionClassifierApp(QMainWindow):
         group.input_field.clear()
 
     def remove_custom_type(self, head_name):
-        # 仅处理 single_label 的移除
+        # Handles removal for single_label only (via radio button selection)
         group = self.ui.right_panel.label_groups.get(head_name)
         if not group or not isinstance(group, DynamicSingleLabelGroup): 
-             # Multi-label should call _remove_multi_labels_via_checkboxes
              return
         
         definition = self.label_definitions[head_name]
@@ -629,26 +623,24 @@ class ActionClassifierApp(QMainWindow):
         type_to_remove = checked_button.text()
         
 
-        # 检查是否为内置默认类型 (这里简化处理，如果标签少于2个，则不允许删除)
         if len(definition['labels']) <= 1:
              self._show_temp_message_box("Warning", f"Cannot remove the last label in {head_name}.", QMessageBox.Icon.Warning, 1500)
              return
 
-        # 1. 从定义中移除
+        # 1. Remove from definition
         if type_to_remove in type_set:
             self.label_definitions[head_name]['labels'].remove(type_to_remove)
             
-        # 2. 更新 UI
+        # 2. Update UI
         if isinstance(group, DynamicSingleLabelGroup):
             group.update_radios(self.label_definitions[head_name]['labels'])
             
-        # 3. 从 manual_annotations 中移除对该类型的引用
+        # 3. Remove reference from manual_annotations
         keys_to_delete = []
         for path, anno in self.manual_annotations.items():
             if definition['type'] == 'single_label' and anno.get(head_name) == type_to_remove:
                 anno[head_name] = None
             
-            # 检查该 Action 的所有标签是否都为空
             if not any(v for k, v in anno.items() if k in self.label_definitions and v):
                  keys_to_delete.append(path)
 
@@ -663,9 +655,9 @@ class ActionClassifierApp(QMainWindow):
         self._show_temp_message_box("Success", f"'{type_to_remove}' removed.", QMessageBox.Icon.Information, 1000)
         self.update_save_export_button_state()
             
-    # --- 文件和数据加载 ---
+    # --- File and Data Loading ---
     def import_annotations(self):
-        self.clear_action_list(clear_working_dir=False) # 清空数据，但不清除工作目录设置
+        self.clear_action_list(clear_working_dir=False) 
         
         file_path, _ = QFileDialog.getOpenFileName(self, "Select GAC JSON Annotation File", "", "JSON Files (*.json)")
         if not file_path:
@@ -684,13 +676,13 @@ class ActionClassifierApp(QMainWindow):
 
         imported_count = 0
         
-        # 1. 设置工作目录
+        # 1. Set working directory
         self.current_working_directory = os.path.dirname(file_path)
         
-        # 2. 读取 JSON 中的 Task 名称
+        # 2. Read Task Name
         self.current_task_name = data.get('task', RightPanel.DEFAULT_TASK_NAME)
         
-        # 3. 处理 JSON 中的动态标签定义
+        # 3. Process Dynamic Label Definitions
         self.label_definitions.clear()
         if 'labels' in data and isinstance(data['labels'], dict):
             for head_name, definition in data['labels'].items():
@@ -704,38 +696,33 @@ class ActionClassifierApp(QMainWindow):
              self.clear_action_list()
              return
 
-        # 4. 更新 UI 以适应新的标签头和 Task 名称
+        # 4. Update UI for new labels and Task Name
         self._setup_dynamic_ui()
         
-        # 5. 遍历 JSON 数据，加载 Action 和标注
+        # 5. Iterate through JSON data, load Actions and annotations
         for item in data['data']:
             action_id = item.get('id') 
             if not action_id:
                 continue
             
-            # --- 关键修改：兼容单文件 ID，获取视频所在目录作为 Action Path ---
+            # --- Compatibility Check: Find the corresponding local directory ---
             action_path = None
             
-            # 找到视频输入并确定 Action 目录 (使用 ID 作为目录名或直接在工作目录下)
             for input_item in item.get('inputs', []):
                  if input_item.get('type') == 'video' and 'path' in input_item:
-                      # 方案 1: 假设 Action ID (clip_001) 就是一个文件夹名
+                      # Scenario 1: Assume Action ID is a folder name
                       potential_dir_path = os.path.join(self.current_working_directory, action_id)
                       if os.path.isdir(potential_dir_path):
                            action_path = potential_dir_path
                            break
                       
-                      # 方案 2: 假设文件在工作目录或某个子目录下，且 Action Path 就是文件所在的目录
+                      # Scenario 2: Assume file is directly in working dir or sub-dir, and action_path is the directory
                       video_file_name = os.path.basename(input_item['path'])
                       potential_clip_path = os.path.join(self.current_working_directory, video_file_name)
                       if os.path.isfile(potential_clip_path):
-                           action_path = os.path.dirname(potential_clip_path) # 即 working directory
+                           action_path = os.path.dirname(potential_clip_path) # i.e., working directory
                            break
-                      # 允许 Action Path 是一个文件夹，且里面有名为 Action ID 的文件 (最兼容的单文件结构)
-                      elif os.path.isdir(os.path.join(self.current_working_directory, action_id)):
-                           action_path = os.path.join(self.current_working_directory, action_id)
-                           break
-            
+                      
             if not action_path or not os.path.isdir(action_path):
                 print(f"Warning: Action directory for ID '{action_id}' not found. Skipping.")
                 continue 
@@ -746,7 +733,7 @@ class ActionClassifierApp(QMainWindow):
                 self.action_item_data.append({'name': action_name, 'path': action_path})
                 self.action_path_to_name[action_path] = action_name
 
-            # 导入标注 (根据动态标签头)
+            # Import Annotations (based on dynamic heads)
             item_labels = item.get('labels', {})
             manual_labels = {}
             has_label = False
@@ -762,7 +749,7 @@ class ActionClassifierApp(QMainWindow):
                             has_label = True
                             
                     elif definition['type'] == 'multi_label' and 'labels' in label_data:
-                        # 导入时只保留在当前定义中存在的标签
+                        # Only import labels present in current definition
                         labels = [l for l in label_data['labels'] if l in definition['labels']]
                         if labels:
                             manual_labels[head_name] = labels
@@ -813,14 +800,14 @@ class ActionClassifierApp(QMainWindow):
         
         self.ui.right_panel.manual_group_box.setEnabled(False) 
         
-        # 重置 Task 名称、标签定义和 UI
+        # Reset Task Name, label definitions, and UI
         self.current_task_name = RightPanel.DEFAULT_TASK_NAME
         self.label_definitions = self.DEFAULT_LABEL_DEFINITIONS.copy()
         self._setup_dynamic_ui()
 
 
     def toggle_annotation_view(self):
-        # 仅根据选中项和JSON加载状态来启用/禁用
+        # Enable/disable based on selected item and JSON load status
         can_annotate_and_analyze = False 
         current_item = self.ui.left_panel.action_tree.currentItem()
             
@@ -833,7 +820,7 @@ class ActionClassifierApp(QMainWindow):
 
     def on_item_selected(self, current_item, _):
         """
-        当用户在左侧 Tree Widget 中选择一个 Action/Clip 时触发。
+        Triggers when an Action/Clip is selected in the Tree Widget.
         """
         if not current_item:
             self.toggle_annotation_view() 
@@ -845,16 +832,15 @@ class ActionClassifierApp(QMainWindow):
         self.ui.center_panel.multi_view_button.setEnabled(is_action_item)
         
         if is_action_item:
-            # 选中 Action 文件夹
+            # Selected Action folder
             if current_item.childCount() > 0:
-                # 播放第一个子剪辑
                 first_clip_path = current_item.child(0).data(0, Qt.ItemDataRole.UserRole)
             else:
                 first_clip_path = None
             self.ui.center_panel.show_single_view(first_clip_path)
             action_path = current_item.data(0, Qt.ItemDataRole.UserRole)
         else:
-            # 选中 Clip 剪辑
+            # Selected Clip
             clip_path = current_item.data(0, Qt.ItemDataRole.UserRole)
             self.ui.center_panel.show_single_view(clip_path)
             action_path = current_item.parent().data(0, Qt.ItemDataRole.UserRole)
@@ -910,7 +896,6 @@ class ActionClassifierApp(QMainWindow):
                 QApplication.processEvents()
             self.ui.right_panel.progress_bar.setVisible(False)
 
-            # --- 核心修改：传递动态标签定义 ---
             result = run_model_on_action(clip_paths, self.label_definitions)
             self.analysis_results[action_path] = result
             self.ui.right_panel.export_button.setEnabled(True)
@@ -941,12 +926,11 @@ class ActionClassifierApp(QMainWindow):
         if not action_path:
             return
         
-        # --- 核心修改：获取所有动态标签头数据 ---
         data = self.ui.right_panel.get_manual_annotation()
         
         action_name = self.action_path_to_name.get(action_path)
         
-        # 检查是否有任何一个标签或标签列表非空
+        # Check if any label or label list is non-empty
         is_annotated = False
         cleaned_data = {}
         for k, v in data.items():
@@ -956,7 +940,7 @@ class ActionClassifierApp(QMainWindow):
             elif isinstance(v, str) and v: # single_label
                 cleaned_data[k] = v
                 is_annotated = True
-            elif v is not None: # single_label 可以是 None
+            elif v is not None: 
                 pass
         
         if is_annotated:
@@ -1011,7 +995,7 @@ class ActionClassifierApp(QMainWindow):
             self.ui.right_panel.auto_group_box.setChecked(False)
 
     def update_save_export_button_state(self):
-        """检查是否有任何数据可供导出，并更新 Save 和 Export 按钮"""
+        """Checks if there is any data to export and updates Save and Export button states."""
         can_export = self.json_loaded and (bool(self.analysis_results) or bool(self.manual_annotations))
         self.ui.right_panel.export_button.setEnabled(can_export)
         can_save = can_export and (self.current_json_path is not None)
@@ -1045,7 +1029,7 @@ class ActionClassifierApp(QMainWindow):
         self.update_save_export_button_state()
 
     def _write_gac_json(self, file_path):
-        """将当前所有标注 (手动和自动) 按照 GAC JSON 格式写入指定的文件路径。"""
+        """Writes all current annotations to the specified file path in GAC JSON format."""
         all_action_paths = set(self.action_path_to_name.keys()) 
         all_action_paths.update(self.analysis_results.keys()) 
         all_action_paths.update(self.manual_annotations.keys()) 
@@ -1054,7 +1038,7 @@ class ActionClassifierApp(QMainWindow):
             self._show_temp_message_box("No Data", "There is no annotation data to save.", QMessageBox.Icon.Warning)
             return
 
-        # 构造 JSON 基础结构
+        # Construct base JSON structure
         output_data = {
             "version": "1.0",
             "date": datetime.datetime.now().isoformat().split('T')[0],
@@ -1062,7 +1046,7 @@ class ActionClassifierApp(QMainWindow):
             "metadata": {
                 "created_by": "SoccerNet Pro Analysis Tool"
             },
-            "task": self.current_task_name, # 使用动态的 Task 名称
+            "task": self.current_task_name, 
             "labels": self.label_definitions.copy()
         }
 
@@ -1088,24 +1072,24 @@ class ActionClassifierApp(QMainWindow):
 
             data_item = {
                 "id": action_name,
-                "metadata": {"AnnotationSource": "None"}, # 待更新
+                "metadata": {"AnnotationSource": "None"}, 
                 "inputs": [],
                 "labels": {}
             }
             
             annotation_source = "None"
             
-            # 动态填充 labels
+            # Dynamically fill labels
             for head_name, definition in self.label_definitions.items():
                 
-                # --- 1. 确定最终标签值 ---
+                # --- 1. Determine final label value ---
                 if definition['type'] == 'single_label':
                     final_label = None
-                    # 优先使用手动标注
+                    # Prioritize manual annotation
                     if manual_result and manual_result.get(head_name) and isinstance(manual_result.get(head_name), str):
                         final_label = manual_result.get(head_name)
                         annotation_source = "Manual"
-                    # 其次使用自动标注的 Top 1 结果
+                    # Fallback to automated top-1 prediction
                     elif auto_result and head_name in auto_result and 'distribution' in auto_result[head_name]:
                         dist = auto_result[head_name]['distribution']
                         predicted_label = max(dist, key=dist.get)
@@ -1114,23 +1098,21 @@ class ActionClassifierApp(QMainWindow):
                             if annotation_source == "None": annotation_source = "Automated"
                     
                     if final_label:
-                        # GAC JSON V1 格式要求标签对象中可以包含 confidence_score/logits, 但我们仅写入 label
                         data_item["labels"][head_name] = {"label": final_label}
                         
                 elif definition['type'] == 'multi_label':
-                    # multi_label 仅支持手动标注导出
+                    # Multi-label only supports manual export
                     if manual_result and manual_result.get(head_name) and isinstance(manual_result.get(head_name), list):
                         final_label_list = manual_result[head_name]
                         annotation_source = "Manual"
                     else:
-                        final_label_list = [] # 确保导出空列表而非 None
+                        final_label_list = [] 
                     
-                    # 确保导出的是标签列表
                     data_item["labels"][head_name] = {"labels": final_label_list}
 
             data_item["metadata"]["AnnotationSource"] = annotation_source
 
-            # 填充 inputs (沿用之前的逻辑)
+            # Fill inputs
             action_item = path_to_item_map.get(action_path)
             if action_item:
                 for j in range(action_item.childCount()):
@@ -1144,7 +1126,7 @@ class ActionClassifierApp(QMainWindow):
                         "path": url_path
                     })
 
-            if data_item["labels"]: # 只有当至少有一个标签时才导出该数据项
+            if data_item["labels"]: # Only export if there is at least one label
                 output_data["data"].append(data_item)
 
         try:
@@ -1159,7 +1141,7 @@ class ActionClassifierApp(QMainWindow):
             print(f"Failed to export GAC JSON: {e}")
 
 
-# --- 程序入口 ---
+# --- Program Entry Point ---
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = ActionClassifierApp()
