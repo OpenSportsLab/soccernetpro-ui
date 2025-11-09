@@ -2,12 +2,12 @@ import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QHeaderView, QStyle,
     QProgressBar, QLabel, QTreeWidget, QTreeWidgetItem, QScrollArea, QSizePolicy,
-    QGroupBox, QRadioButton, QButtonGroup, QComboBox,
-    QSlider, QGridLayout # 导入 QGridLayout
+    QGroupBox, QRadioButton, QButtonGroup, QComboBox, QLineEdit, QCheckBox,
+    QSlider, QGridLayout 
 )
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import Qt, QUrl, QTime # 导入 QTime
+from PyQt6.QtCore import Qt, QUrl, QTime 
 from PyQt6.QtCharts import QChartView, QChart, QPieSeries
 from PyQt6.QtGui import QPainter, QColor, QFont, QPen
 
@@ -27,26 +27,23 @@ class VideoViewAndControl(QWidget):
         self.slider.setRange(0, 1000)
         self.slider.setEnabled(False)
         self.clip_name = os.path.basename(clip_path) if clip_path else "No Clip"
-        # 修改点：只显示初始时间，不显示文件名
         self.time_label = QLabel(f"00:00 / 00:00")
         
         # Layout
         self.v_layout = QVBoxLayout(self)
         self.v_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.v_layout.addWidget(self.video_widget, 1) # Video takes up space
+        self.v_layout.addWidget(self.video_widget, 1) 
         
         h_control_layout = QHBoxLayout()
-        # 调整 QLabel 宽度以适应时间，防止挤压 Slider
         self.time_label.setFixedWidth(100) 
         h_control_layout.addWidget(self.time_label)
         h_control_layout.addWidget(self.slider)
         self.v_layout.addLayout(h_control_layout)
         
-        # Data and Connections (to be set by CenterPanel)
         self.total_duration = 0
 
-# --- LeftPanel (不变) ---
+# --- LeftPanel (保持不变) ---
 class LeftPanel(QWidget):
     """Defines the UI for the left panel (file management)."""
     def __init__(self, parent=None):
@@ -61,17 +58,16 @@ class LeftPanel(QWidget):
         self.action_tree = QTreeWidget()
         self.action_tree.setHeaderLabels(["Actions"])
         
-        # 1. 顶部按钮布局 (只保留 Import Annotations)
         top_button_layout = QHBoxLayout()
         self.import_annotations_button = QPushButton("Import Annotations") 
+        self.add_video_button = QPushButton("Add Video")
         
         top_button_layout.addWidget(self.import_annotations_button)
+        top_button_layout.addWidget(self.add_video_button)
         top_button_layout.addStretch()
         
-        # 2. 底部按钮布局 (Filter & Clear List)
         bottom_button_layout = QHBoxLayout()
         
-        # --- 新增筛选器 ---
         self.filter_label = QLabel("Filter:")
         self.filter_combo = QComboBox()
         self.filter_combo.addItem("Show All")
@@ -86,7 +82,6 @@ class LeftPanel(QWidget):
         bottom_button_layout.addWidget(self.clear_button)
         bottom_button_layout.addStretch()
         
-        # 3. 组装布局
         layout.addWidget(title)
         layout.addLayout(top_button_layout)
         layout.addWidget(self.action_tree)
@@ -111,22 +106,21 @@ class LeftPanel(QWidget):
         root = self.action_tree.invisibleRootItem()
         return [root.child(i) for i in range(root.childCount())]
 
-# --- CenterPanel (已修改) ---
+# --- CenterPanel (保持不变) ---
 class CenterPanel(QWidget):
     """Defines the UI for the center panel (video preview)."""
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        self.view_controls = []  # List of VideoViewAndControl instances
+        self.view_controls = [] 
         
         layout = QVBoxLayout(self)
 
         title = QLabel("Video Preview")
         title.setObjectName("titleLabel")
 
-        # 视频/时间条的主容器
         self.video_container = QWidget()
-        self.video_layout = QVBoxLayout(self.video_container) # 使用 QVBoxLayout 作为切换容器
+        self.video_layout = QVBoxLayout(self.video_container) 
         self.video_layout.setContentsMargins(0,0,0,0)
         
         control_layout = QHBoxLayout()
@@ -141,26 +135,23 @@ class CenterPanel(QWidget):
         control_layout.addWidget(self.multi_view_button)
 
         layout.addWidget(title)
-        layout.addWidget(self.video_container, 1) # Video container takes most space
+        layout.addWidget(self.video_container, 1) 
         layout.addLayout(control_layout)
 
         self.show_single_view(None)
 
-    # --- 时间工具函数 ---
     def format_time(self, milliseconds):
         """将毫秒转换为 mm:ss 格式的字符串"""
         t = QTime(0, 0)
         t = t.addMSecs(milliseconds)
         return t.toString('mm:ss')
 
-    # --- 进度条连接和逻辑 ---
     def _setup_controls(self, view_control: VideoViewAndControl):
         """为单个 VideoViewAndControl 实例设置信号连接"""
         player = view_control.player
         slider = view_control.slider
         player_id = id(player)
 
-        # 设置连接
         player.positionChanged.connect(lambda pos: self.update_slider(player_id, pos))
         player.durationChanged.connect(lambda dur: self.update_duration(player_id, dur))
         slider.sliderMoved.connect(lambda value: self.seek_slider(player_id, value))
@@ -168,7 +159,6 @@ class CenterPanel(QWidget):
         self.view_controls.append(view_control)
 
     def _clear_video_layout(self):
-        # 停止所有播放器并清除控件
         for vc in self.view_controls:
             vc.player.stop()
             vc.player.setVideoOutput(None)
@@ -176,20 +166,17 @@ class CenterPanel(QWidget):
             vc.deleteLater()
         self.view_controls.clear()
 
-        # 清除主布局中的所有控件/布局
         while self.video_layout.count():
             item = self.video_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
             elif item.layout():
-                # 递归删除布局中的所有控件
                 while item.layout().count():
                     child = item.layout().takeAt(0)
                     if child.widget():
                         child.widget().deleteLater()
                 item.layout().deleteLater()
                 
-    # --- 进度条更新逻辑 ---
     def _get_control_by_id(self, player_id):
         """通过 player_id 查找对应的 VideoViewAndControl 实例"""
         return next((vc for vc in self.view_controls if id(vc.player) == player_id), None)
@@ -200,8 +187,6 @@ class CenterPanel(QWidget):
         if vc:
             vc.total_duration = duration
             vc.slider.setEnabled(duration > 0)
-            
-            # 修改点：只显示时间
             current_pos = vc.player.position()
             current_time = self.format_time(current_pos)
             total_time = self.format_time(duration)
@@ -213,12 +198,10 @@ class CenterPanel(QWidget):
         if vc and vc.total_duration > 0:
             total_duration = vc.total_duration
             
-            # 只有当用户没有拖动滑块时才自动更新滑块位置
             if not vc.slider.isSliderDown():
                 value = int((position / total_duration) * 1000)
                 vc.slider.setValue(value)
             
-            # 修改点：只显示时间
             current_time = self.format_time(position)
             total_time = self.format_time(total_duration)
             vc.time_label.setText(f"{current_time} / {total_time}")
@@ -228,18 +211,13 @@ class CenterPanel(QWidget):
         vc = self._get_control_by_id(player_id)
         if vc and vc.total_duration > 0:
             total_duration = vc.total_duration
-            # 计算新的播放位置 (毫秒)
             new_position = int((value / 1000) * total_duration)
             vc.player.setPosition(new_position)
 
-
-    # --- 播放逻辑 (保持同步) ---
     def toggle_play_pause(self):
         if not self.view_controls: return
-        # 总是检查第一个播放器状态来同步播放按钮图标
         is_playing = self.view_controls[0].player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
         
-        # 同步播放/暂停状态
         for vc in self.view_controls:
             if is_playing: vc.player.pause()
             else: vc.player.play()
@@ -248,20 +226,15 @@ class CenterPanel(QWidget):
         icon = QStyle.StandardPixmap.SP_MediaPause if state == QMediaPlayer.PlaybackState.PlayingState else QStyle.StandardPixmap.SP_MediaPlay
         self.play_button.setIcon(self.style().standardIcon(icon))
 
-    # --- 视图切换逻辑 ---
     def show_single_view(self, clip_path):
         self._clear_video_layout()
         
         if clip_path:
-            # 1. 创建封装控件
             view_control = VideoViewAndControl(clip_path)
-            
-            # 2. 设置播放源和连接
             view_control.player.setSource(QUrl.fromLocalFile(clip_path))
             view_control.player.playbackStateChanged.connect(self._media_state_changed)
             self._setup_controls(view_control)
 
-            # 3. 添加到主布局
             self.video_layout.addWidget(view_control)
 
             self.play_button.setEnabled(True)
@@ -279,28 +252,22 @@ class CenterPanel(QWidget):
         if num_clips == 0:
             return
             
-        cols = 2 if num_clips > 1 else 1 # 默认使用2列布局，除非只有一个视频
+        cols = 2 if num_clips > 1 else 1 
         rows = (num_clips + cols - 1) // cols
 
         for i, clip_path in enumerate(clip_paths):
             row = i // cols
             col = i % cols
             
-            # 1. 创建封装控件
             view_control = VideoViewAndControl(clip_path)
-            
-            # 2. 设置播放源和连接
             view_control.player.setSource(QUrl.fromLocalFile(clip_path))
             self._setup_controls(view_control)
             
-            # 3. 添加到网格布局
             grid_layout.addWidget(view_control, row, col)
             
-            # 确保只有第一个视频连接到状态变化，避免图标闪烁
             if i == 0:
                 view_control.player.playbackStateChanged.connect(self._media_state_changed)
             
-        # 将网格容器添加到主布局
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(grid_widget)
@@ -308,15 +275,173 @@ class CenterPanel(QWidget):
 
         if self.view_controls:
             self.play_button.setEnabled(True)
-            self.toggle_play_pause() # 开始播放
+            self.toggle_play_pause() 
 
 
+# --- 辅助类: 动态单标签组 (QRadioButton) ---
+class DynamicSingleLabelGroup(QWidget):
+    """封装单个动态单标签头 (single_label) 的 UI 及其管理功能。"""
+    def __init__(self, label_head_name, label_type_definition, parent=None):
+        super().__init__(parent)
+        self.head_name = label_head_name
+        self.definition = label_type_definition
+        self.radio_buttons = {}
+        self.button_group = QButtonGroup(self)
+        self.button_group.setExclusive(True) # 强制单选
+        
+        self.v_layout = QVBoxLayout(self)
+        self.v_layout.setContentsMargins(0, 5, 0, 5)
+
+        # 1. 标签标题 (只显示 Key Name)
+        self.label_title = QLabel(f"{self.head_name.capitalize()}:")
+        self.label_title.setObjectName("subtitleLabel")
+        self.v_layout.addWidget(self.label_title)
+        
+        # 2. 单选按钮容器
+        self.radio_container = QWidget()
+        self.radio_layout = QVBoxLayout(self.radio_container)
+        self.radio_layout.setContentsMargins(0, 0, 0, 0)
+        self.v_layout.addWidget(self.radio_container)
+        
+        # 3. 类型管理 (LineEdit + Buttons)
+        self.manager_group = QGroupBox() 
+        self.manager_group.setFlat(True)
+        h_layout = QHBoxLayout(self.manager_group)
+        h_layout.setContentsMargins(0, 10, 0, 5)
+
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText(f"New {self.head_name} type...")
+        self.add_btn = QPushButton("Add")
+        self.remove_btn = QPushButton("Remove Selected") # 移除选中的单选按钮项
+        
+        h_layout.addWidget(self.input_field, 1)
+        h_layout.addWidget(self.add_btn)
+        h_layout.addWidget(self.remove_btn)
+        self.v_layout.addWidget(self.manager_group)
+
+        # 初始化按钮
+        self.update_radios(self.definition.get("labels", []))
+
+    def update_radios(self, new_types):
+        """根据新的类型列表重建单选按钮"""
+        self.button_group.setExclusive(False)
+        
+        for name, rb in self.radio_buttons.items():
+            self.button_group.removeButton(rb)
+            self.radio_layout.removeWidget(rb)
+            rb.deleteLater()
+            
+        self.radio_buttons.clear()
+        
+        for type_name in sorted(list(set(new_types))): 
+            rb = QRadioButton(type_name)
+            self.radio_buttons[type_name] = rb
+            self.button_group.addButton(rb)
+            self.radio_layout.addWidget(rb)
+            
+        self.button_group.setExclusive(True)
+        
+    def get_checked_label(self):
+        """获取当前选中项的文本"""
+        checked_btn = self.button_group.checkedButton()
+        return checked_btn.text() if checked_btn else None
+
+    def set_checked_label(self, label_name):
+        """设置当前选中项"""
+        self.button_group.setExclusive(False)
+        for rb in self.radio_buttons.values():
+            rb.setChecked(False)
+        self.button_group.setExclusive(True)
+        
+        if label_name in self.radio_buttons:
+            self.radio_buttons[label_name].setChecked(True)
+
+# --- 新增辅助类: 动态多标签组 (QCheckBox) ---
+class DynamicMultiLabelGroup(QWidget):
+    """封装单个动态多标签头 (multi_label) 的 UI 及其管理功能。"""
+    def __init__(self, label_head_name, label_type_definition, parent=None):
+        super().__init__(parent)
+        self.head_name = label_head_name
+        self.definition = label_type_definition
+        # 存储 QCheckBox 实例
+        self.checkboxes = {}
+        
+        self.v_layout = QVBoxLayout(self)
+        self.v_layout.setContentsMargins(0, 5, 0, 5)
+
+        # 1. 标签标题
+        self.label_title = QLabel(f"{self.head_name.capitalize()}:")
+        self.label_title.setObjectName("subtitleLabel")
+        self.v_layout.addWidget(self.label_title)
+        
+        # 2. 复选框容器
+        self.checkbox_container = QWidget()
+        self.checkbox_layout = QVBoxLayout(self.checkbox_container)
+        self.checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        self.v_layout.addWidget(self.checkbox_container)
+        
+        # 3. 类型管理 (LineEdit + Buttons)
+        self.manager_group = QGroupBox() 
+        self.manager_group.setFlat(True)
+        h_layout = QHBoxLayout(self.manager_group)
+        h_layout.setContentsMargins(0, 10, 0, 5)
+
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText(f"New {self.head_name} type...")
+        self.add_btn = QPushButton("Add")
+        self.remove_btn = QPushButton("Remove Checked") # 移除勾选的复选框项
+        
+        h_layout.addWidget(self.input_field, 1)
+        h_layout.addWidget(self.add_btn)
+        h_layout.addWidget(self.remove_btn)
+        self.v_layout.addWidget(self.manager_group)
+
+        # 初始化复选框
+        self.update_checkboxes(self.definition.get("labels", []))
+
+    def update_checkboxes(self, new_types):
+        """根据新的类型列表重建复选框"""
+        
+        # 清理旧复选框
+        for name, cb in self.checkboxes.items():
+            self.checkbox_layout.removeWidget(cb)
+            cb.deleteLater()
+            
+        self.checkboxes.clear()
+        
+        # 创建新复选框
+        for type_name in sorted(list(set(new_types))): 
+            cb = QCheckBox(type_name)
+            self.checkboxes[type_name] = cb
+            self.checkbox_layout.addWidget(cb)
+            
+    def get_checked_labels(self):
+        """获取所有选中复选框的标签列表"""
+        return [cb.text() for cb in self.checkboxes.values() if cb.isChecked()]
+    
+    def get_all_checkbox_labels(self):
+        """获取所有可用的复选框标签及其状态"""
+        return self.checkboxes.items()
+
+    def set_checked_labels(self, label_list):
+        """根据传入的标签列表设置复选框状态"""
+        checked_set = set(label_list)
+        for cb_name, cb in self.checkboxes.items():
+            cb.setChecked(cb_name in checked_set)
+
+
+# --- RightPanel (动态化) ---
 class RightPanel(QWidget):
     """Defines the UI for the right panel (Annotation & Analysis)."""
+    
+    DEFAULT_TASK_NAME = "N/A (Import JSON)" 
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(400)
         
+        self.label_groups = {} 
+
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -333,45 +458,32 @@ class RightPanel(QWidget):
         title = QLabel("Annotation & Analysis")
         title.setObjectName("titleLabel")
         layout.addWidget(title)
+        
+        # Task Label (将在 main.py 中动态更新)
+        self.task_label = QLabel(f"Task: {self.DEFAULT_TASK_NAME}")
+        self.task_label.setObjectName("subtitleLabel")
+        layout.addWidget(self.task_label)
 
-        # --- 1. 手动标注模块 ---
+        # --- 3. Annotation/Analysis 主容器 ---
+        self.annotation_content_widget = QWidget()
+        self.annotation_content_layout = QVBoxLayout(self.annotation_content_widget)
+        self.annotation_content_layout.setContentsMargins(0, 0, 0, 0)
+
+
+        # --- 1. 手动标注模块 (内容动态化) ---
         self.manual_group_box = QGroupBox("Manual Annotation")
-        self.manual_group_box.setCheckable(True)
-        self.manual_group_box.setChecked(False)
+        # FIX: 移除可折叠属性，强制展开
         self.manual_group_box.setEnabled(False)
         manual_layout = QVBoxLayout(self.manual_group_box)
-
-        foul_label = QLabel("Foul Type:")
-        foul_label.setObjectName("subtitleLabel")
-        manual_layout.addWidget(foul_label)
         
-        self.foul_button_group = QButtonGroup(self)
-        self.foul_radio_buttons = {}
-        foul_types = [
-            "Tackling", "Standing Tackling", "Holding", "Pushing", 
-            "Challenge", "Elbowing", "High Leg", "Dive"
-        ]
-        for foul in foul_types:
-            rb = QRadioButton(foul)
-            self.foul_radio_buttons[foul] = rb
-            self.foul_button_group.addButton(rb)
-            manual_layout.addWidget(rb)
-
-        severity_label = QLabel("Severity:")
-        severity_label.setObjectName("subtitleLabel")
-        manual_layout.addWidget(severity_label, 0, Qt.AlignmentFlag.AlignTop)
+        # 动态标签区域的容器
+        self.dynamic_label_container = QWidget()
+        self.dynamic_label_layout = QVBoxLayout(self.dynamic_label_container)
+        self.dynamic_label_layout.setContentsMargins(0, 0, 0, 0)
+        manual_layout.addWidget(self.dynamic_label_container)
         
-        self.sev_button_group = QButtonGroup(self)
-        self.sev_radio_buttons = {}
-        sev_types = ["Offence + Red Card", "Offence + Yellow Card", "Offence + No Card", "No Offence"]
-        for sev in sev_types:
-            rb = QRadioButton(sev)
-            self.sev_radio_buttons[sev] = rb
-            self.sev_button_group.addButton(rb)
-            manual_layout.addWidget(rb)
-        
+        # 确认/清除按钮
         manual_layout.addStretch()
-
         manual_button_layout = QHBoxLayout()
         self.confirm_manual_button = QPushButton("Confirm Annotation")
         self.clear_manual_button = QPushButton("Clear Selection") 
@@ -379,11 +491,12 @@ class RightPanel(QWidget):
         manual_button_layout.addWidget(self.clear_manual_button)
         manual_layout.addLayout(manual_button_layout) 
         
-        layout.addWidget(self.manual_group_box)
+        self.annotation_content_layout.addWidget(self.manual_group_box) 
 
-        # --- 2. 自动分析模块 ---
+        # --- 2. 自动分析模块 (结果动态化) ---
         self.auto_group_box = QGroupBox("Automated Annotation")
-        self.auto_group_box.setCheckable(True)
+        # 自动分析模块保留折叠功能
+        self.auto_group_box.setCheckable(True) 
         self.auto_group_box.setChecked(False)
         auto_layout = QVBoxLayout(self.auto_group_box)
 
@@ -397,40 +510,17 @@ class RightPanel(QWidget):
         auto_layout.addWidget(self.progress_bar)
 
         self.results_widget = QWidget()
-        results_layout = QVBoxLayout(self.results_widget)
-        results_layout.setContentsMargins(0, 10, 0, 0)
+        self.results_layout = QVBoxLayout(self.results_widget) # 动态结果布局
+        self.results_layout.setContentsMargins(0, 10, 0, 0)
         self.results_widget.setVisible(False)
-
-        foul_type_title = QLabel("Foul Type Prediction:")
-        foul_type_title.setObjectName("subtitleLabel")
-        self.foul_type_1_label = QLabel("1. -")
-        self.foul_type_2_label = QLabel("2. -")
-        
-        severity_title = QLabel("Severity Prediction:")
-        severity_title.setObjectName("subtitleLabel")
-        self.severity_1_label = QLabel("1. -")
-        self.severity_2_label = QLabel("2. -")
-
-        self.foul_chart_view = QChartView()
-        self.severity_chart_view = QChartView()
-        self.foul_chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self.severity_chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self.foul_chart_view.setMinimumHeight(250)
-        self.severity_chart_view.setMinimumHeight(250)
-        
-        results_layout.addWidget(foul_type_title)
-        results_layout.addWidget(self.foul_type_1_label)
-        results_layout.addWidget(self.foul_type_2_label)
-        results_layout.addWidget(self.foul_chart_view)
-        results_layout.addWidget(severity_title)
-        results_layout.addWidget(self.severity_1_label)
-        results_layout.addWidget(self.severity_2_label)
-        results_layout.addWidget(self.severity_chart_view)
         
         auto_layout.addWidget(self.results_widget)
-        layout.addWidget(self.auto_group_box)
+        self.annotation_content_layout.addWidget(self.auto_group_box) 
+        
+        layout.addWidget(self.annotation_content_widget) 
 
-        # --- 3. 底部控件 (重构) ---
+
+        # --- 4. 底部控件 (不变) ---
         layout.addStretch() 
         
         bottom_button_layout = QHBoxLayout()
@@ -444,8 +534,112 @@ class RightPanel(QWidget):
         bottom_button_layout.addWidget(self.export_button)
         
         layout.addLayout(bottom_button_layout)
+        
+        self.annotation_content_widget.setVisible(True)
+        
+    def setup_dynamic_labels(self, labels_definition):
+        """
+        根据 JSON 中的 'labels' 定义创建动态 UI 元素。
+        """
+        # 清除现有动态 UI
+        for group in self.label_groups.values():
+            self.dynamic_label_layout.removeWidget(group)
+            group.deleteLater()
+        self.label_groups.clear()
+        
+        # 存储并创建新的标签组
+        for head_name, definition in labels_definition.items():
+            if definition.get("type") == "single_label":
+                group = DynamicSingleLabelGroup(head_name, definition, self.dynamic_label_container)
+                self.label_groups[head_name] = group
+                self.dynamic_label_layout.addWidget(group)
+            elif definition.get("type") == "multi_label":
+                group = DynamicMultiLabelGroup(head_name, definition, self.dynamic_label_container)
+                self.label_groups[head_name] = group
+                self.dynamic_label_layout.addWidget(group)
+
+        self.dynamic_label_layout.addStretch()
+
+    # --- 手动标注 API ---
+    def get_manual_annotation(self):
+        """获取当前手动标注的值 (返回 {head_name: label_name/label_list, ...})"""
+        annotations = {}
+        for head_name, group in self.label_groups.items():
+            if isinstance(group, DynamicSingleLabelGroup):
+                annotations[head_name] = group.get_checked_label()
+            elif isinstance(group, DynamicMultiLabelGroup):
+                # 对于 multi_label，返回标签列表
+                annotations[head_name] = group.get_checked_labels()
+        return annotations
+
+    def clear_manual_selection(self):
+        """清除所有手动标注 (单选或复选)"""
+        for group in self.label_groups.values():
+            if isinstance(group, DynamicSingleLabelGroup):
+                group.set_checked_label(None)
+            elif isinstance(group, DynamicMultiLabelGroup):
+                group.set_checked_labels([])
+
+    def set_manual_annotation(self, data):
+        """根据传入的数据设置手动标注"""
+        self.clear_manual_selection()
+        for head_name, label_data in data.items():
+            if head_name in self.label_groups:
+                group = self.label_groups[head_name]
+                if isinstance(group, DynamicSingleLabelGroup):
+                    if isinstance(label_data, str):
+                        group.set_checked_label(label_data)
+                elif isinstance(group, DynamicMultiLabelGroup):
+                    if isinstance(label_data, list):
+                        group.set_checked_labels(label_data)
+
+    # --- 自动分析结果 UI API ---
+    def clear_results_ui(self):
+        """清理自动分析结果区域的 UI 元素"""
+        while self.results_layout.count():
+            item = self.results_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                item.layout().deleteLater()
+
+    def update_results(self, result):
+        """动态填充自动分析结果 (仅展示 single_label 的分布)"""
+        self.clear_results_ui()
+        
+        for head_name, data in result.items():
+            # 仅处理具有分布结果的单标签头
+            if 'distribution' not in data or head_name not in self.label_groups or not isinstance(self.label_groups[head_name], DynamicSingleLabelGroup):
+                continue
+
+            dist = data['distribution']
+            
+            # 1. 结果标题
+            title = QLabel(f"{head_name.capitalize()} Prediction:")
+            title.setObjectName("subtitleLabel")
+            self.results_layout.addWidget(title)
+            
+            # 2. Top 2 文本结果
+            sorted_dist = sorted(dist.items(), key=lambda item: item[1], reverse=True)
+            
+            if len(sorted_dist) > 0:
+                label_1 = QLabel(f"1. {sorted_dist[0][0]} - {sorted_dist[0][1]:.1%}")
+                self.results_layout.addWidget(label_1)
+            
+            if len(sorted_dist) > 1:
+                label_2 = QLabel(f"2. {sorted_dist[1][0]} - {sorted_dist[1][1]:.1%}")
+                self.results_layout.addWidget(label_2)
+
+            # 3. 饼图
+            chart_view = QChartView()
+            chart = self._create_pie_chart(dist, f"{head_name.capitalize()} Distribution")
+            chart_view.setChart(chart)
+            chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
+            chart_view.setMinimumHeight(250)
+            self.results_layout.addWidget(chart_view)
 
     def _create_pie_chart(self, distribution, title):
+        """Creates a QChart Pie Chart from a distribution dictionary."""
         series = QPieSeries()
         series.setHoleSize(0.35)
 
@@ -493,55 +687,6 @@ class RightPanel(QWidget):
             marker.setLabel(marker.slice().label())
 
         return chart
-
-    def update_results(self, result):
-        """Populates text labels and pie charts with new analysis data."""
-        foul_dist = result['foul_distribution']
-        sev_dist = result['severity_distribution']
-
-        sorted_fouls = sorted(foul_dist.items(), key=lambda item: item[1], reverse=True)
-        self.foul_type_1_label.setText(f"1. {sorted_fouls[0][0]} - {sorted_fouls[0][1]:.1%}")
-        self.foul_type_2_label.setText(f"2. {sorted_fouls[1][0]} - {sorted_fouls[1][1]:.1%}")
-
-        sorted_sev = sorted(sev_dist.items(), key=lambda item: item[1], reverse=True)
-        self.severity_1_label.setText(f"1. {sorted_sev[0][0]} - {sorted_sev[0][1]:.1%}")
-        self.severity_2_label.setText(f"2. {sorted_sev[1][0]} - {sorted_sev[1][1]:.1%}")
-
-        foul_chart = self._create_pie_chart(foul_dist, "Foul Type Distribution")
-        self.foul_chart_view.setChart(foul_chart)
-        
-        sev_chart = self._create_pie_chart(sev_dist, "Severity Distribution")
-        self.severity_chart_view.setChart(sev_chart)
-
-    def get_manual_annotation(self):
-        """获取当前手动标注的值"""
-        foul_btn = self.foul_button_group.checkedButton()
-        sev_btn = self.sev_button_group.checkedButton()
-        return {
-            "foul": foul_btn.text() if foul_btn else None,
-            "severity": sev_btn.text() if sev_btn else None
-        }
-
-    def clear_manual_selection(self):
-        """清除所有手动标注单选按钮"""
-        self.foul_button_group.setExclusive(False)
-        for rb in self.foul_radio_buttons.values():
-            rb.setChecked(False)
-        self.foul_button_group.setExclusive(True)
-
-        self.sev_button_group.setExclusive(False)
-        for rb in self.sev_radio_buttons.values():
-            rb.setChecked(False)
-        self.sev_button_group.setExclusive(True)
-
-    def set_manual_annotation(self, data):
-        """根据传入的数据设置手动标注"""
-        self.clear_manual_selection()
-        if data and data.get("foul") in self.foul_radio_buttons:
-            self.foul_radio_buttons[data["foul"]].setChecked(True)
-        
-        if data and data.get("severity") in self.sev_radio_buttons:
-            self.sev_radio_buttons[data["severity"]].setChecked(True)
 
 
 class MainWindowUI(QWidget):
