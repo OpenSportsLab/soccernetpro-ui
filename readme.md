@@ -37,3 +37,28 @@
 - Large videos are **copied** into your working directory during import — this may take time and use disk space.  
 - A progress bar and messages will indicate import status.  
 - The app supports **dynamic label heads** defined by your JSON file.
+
+
+## ⚙️ How to Run the Python Code
+
+### 1. Download and Extract the Project
+- Download the `.zip` file of **Tool** from the repository.
+- Unzip it to your desired location (e.g., `~/Downloads/Tool`).
+
+### 2. Open a Terminal and Navigate to the Project Directory
+```bash
+cd /path/to/Tool
+```
+
+### 3. Activate the Virtual Environment
+If you already have a virtual environment inside the project (e.g., .venv):
+```bash
+source .venv/bin/activate
+```
+
+
+### 4. Run the Application
+Once the environment is activated, start the app:
+```bash
+python main.py
+```
