@@ -3,7 +3,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QHeaderView, QStyle,
     QProgressBar, QLabel, QTreeWidget, QTreeWidgetItem, QScrollArea, QSizePolicy,
     QGroupBox, QRadioButton, QButtonGroup, QComboBox, QLineEdit, QCheckBox,
-    QSlider, QGridLayout 
+    QSlider, QGridLayout, QDialog, QFormLayout, QDialogButtonBox, QTableWidget, 
+    QTableWidgetItem, QAbstractItemView
 )
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -11,7 +12,7 @@ from PyQt6.QtCore import Qt, QUrl, QTime, QSize, pyqtSignal
 from PyQt6.QtCharts import QChartView, QChart, QPieSeries
 from PyQt6.QtGui import QPainter, QColor, QFont, QPen, QPixmap
 
-# Define all supported media extensions for file filtering (Moved outside LeftPanel for easier import in main.py)
+# Define all supported media extensions for file filtering
 SUPPORTED_EXTENSIONS = (
     '.mp4', '.avi', '.mov',  # Video
     '.jpg', '.jpeg', '.png', '.bmp', # Image
@@ -50,6 +51,137 @@ class VideoViewAndControl(QWidget):
         
         self.total_duration = 0
 
+# --- NEW CLASS: Create Project Dialog ---
+class CreateProjectDialog(QDialog):
+    """Dialog to initialize a new JSON project structure."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create New Annotation Project")
+        self.resize(600, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        # 1. Basic Info
+        form_group = QGroupBox("Project Metadata")
+        form_layout = QFormLayout(form_group)
+        self.task_name_edit = QLineEdit()
+        self.task_name_edit.setPlaceholderText("e.g., Soccer Foul Detection")
+        self.desc_edit = QLineEdit()
+        self.desc_edit.setPlaceholderText("Optional description...")
+        
+        form_layout.addRow("Task Name:", self.task_name_edit)
+        form_layout.addRow("Description:", self.desc_edit)
+        layout.addWidget(form_group)
+        
+        # 2. Modalities
+        mod_group = QGroupBox("Modalities")
+        mod_layout = QHBoxLayout(mod_group)
+        self.mod_video = QCheckBox("Video")
+        self.mod_video.setChecked(True)
+        self.mod_image = QCheckBox("Image")
+        self.mod_audio = QCheckBox("Audio")
+        
+        mod_layout.addWidget(self.mod_video)
+        mod_layout.addWidget(self.mod_image)
+        mod_layout.addWidget(self.mod_audio)
+        layout.addWidget(mod_group)
+        
+        # 3. Categories / Labels Definition
+        cat_group = QGroupBox("Label Categories (Heads)")
+        cat_layout = QVBoxLayout(cat_group)
+        
+        # Input area for new category
+        input_layout = QHBoxLayout()
+        self.cat_name_edit = QLineEdit()
+        self.cat_name_edit.setPlaceholderText("Category Name (e.g., Severity)")
+        
+        self.cat_type_combo = QComboBox()
+        self.cat_type_combo.addItems(["single_label", "multi_label"])
+        
+        self.cat_labels_edit = QLineEdit()
+        self.cat_labels_edit.setPlaceholderText("Labels (comma separated, e.g., Low,High)")
+        
+        add_btn = QPushButton("Add Category")
+        add_btn.clicked.connect(self.add_category_to_table)
+        
+        input_layout.addWidget(self.cat_name_edit, 2)
+        input_layout.addWidget(self.cat_type_combo, 1)
+        input_layout.addWidget(self.cat_labels_edit, 2)
+        input_layout.addWidget(add_btn)
+        cat_layout.addLayout(input_layout)
+        
+        # Table to show added categories
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Name", "Type", "Initial Labels", "Action"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        cat_layout.addWidget(self.table)
+        
+        layout.addWidget(cat_group)
+        
+        # 4. Dialog Buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.validate_and_accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def add_category_to_table(self):
+        name = self.cat_name_edit.text().strip().replace(" ", "_")
+        c_type = self.cat_type_combo.currentText()
+        labels_str = self.cat_labels_edit.text().strip()
+        
+        if not name:
+            return 
+
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        
+        self.table.setItem(row, 0, QTableWidgetItem(name))
+        self.table.setItem(row, 1, QTableWidgetItem(c_type))
+        self.table.setItem(row, 2, QTableWidgetItem(labels_str))
+        
+        remove_btn = QPushButton("Remove")
+        remove_btn.clicked.connect(lambda: self.table.removeRow(self.table.currentRow()))
+        self.table.setCellWidget(row, 3, remove_btn)
+        
+        # Clear inputs
+        self.cat_name_edit.clear()
+        self.cat_labels_edit.clear()
+
+    def validate_and_accept(self):
+        if not self.task_name_edit.text().strip():
+            self.task_name_edit.setPlaceholderText("NAME REQUIRED!")
+            self.task_name_edit.setFocus()
+            return
+        self.accept()
+
+    def get_data(self):
+        modalities = []
+        if self.mod_video.isChecked(): modalities.append("video")
+        if self.mod_image.isChecked(): modalities.append("image")
+        if self.mod_audio.isChecked(): modalities.append("audio")
+        
+        labels_def = {}
+        for row in range(self.table.rowCount()):
+            name = self.table.item(row, 0).text()
+            c_type = self.table.item(row, 1).text()
+            raw_labels = self.table.item(row, 2).text()
+            
+            label_list = [l.strip() for l in raw_labels.split(',') if l.strip()]
+            labels_def[name] = {
+                "type": c_type,
+                "labels": sorted(list(set(label_list)))
+            }
+            
+        return {
+            "task": self.task_name_edit.text().strip(),
+            "description": self.desc_edit.text().strip(),
+            "modalities": modalities,
+            "labels": labels_def
+        }
+
 # --- LeftPanel (File Management) ---
 class LeftPanel(QWidget):
     """Defines the UI for the left panel (file management)."""
@@ -70,12 +202,20 @@ class LeftPanel(QWidget):
         self.action_tree = QTreeWidget()
         self.action_tree.setHeaderLabels(["Actions"])
         
-        top_button_layout = QHBoxLayout()
-        self.import_annotations_button = QPushButton("Import Annotations") 
-        # Renamed button text to English 'Add Data'
+        # --- UPDATED BUTTON LAYOUT ---
+        top_button_layout = QVBoxLayout() 
+        
+        # Row 1: Import and Create
+        row1 = QHBoxLayout()
+        self.import_annotations_button = QPushButton("Import JSON") 
+        self.create_json_button = QPushButton("Create JSON") 
+        row1.addWidget(self.import_annotations_button)
+        row1.addWidget(self.create_json_button)
+        
+        # Row 2: Add Data
         self.add_data_button = QPushButton("Add Data")
         
-        top_button_layout.addWidget(self.import_annotations_button)
+        top_button_layout.addLayout(row1)
         top_button_layout.addWidget(self.add_data_button)
         top_button_layout.addStretch()
         
@@ -103,7 +243,6 @@ class LeftPanel(QWidget):
 
         self.import_button = self.import_annotations_button 
         # Alias for main.py compatibility
-        # Keep add_video_button alias for backward compatibility with main.py's connect_signals
         self.add_video_button = self.add_data_button 
 
 
@@ -792,7 +931,7 @@ class RightPanel(QWidget):
         self.remove_head_combo.setItemData(0, QSize(0,0), Qt.ItemDataRole.SizeHintRole)
         for name in sorted(category_names):
             self.remove_head_combo.addItem(name)
-        self.remove_head_combo.setCurrentIndex(0) # Select placeholder
+        self.remove_head_combo.setCurrentIndex(0)
 
     # --- Manual Annotation API ---
     def get_manual_annotation(self):
