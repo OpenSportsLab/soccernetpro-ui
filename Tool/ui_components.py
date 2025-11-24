@@ -4,12 +4,12 @@ from PyQt6.QtWidgets import (
     QProgressBar, QLabel, QTreeWidget, QTreeWidgetItem, QScrollArea, QSizePolicy,
     QGroupBox, QRadioButton, QButtonGroup, QComboBox, QLineEdit, QCheckBox,
     QSlider, QGridLayout, QDialog, QFormLayout, QDialogButtonBox, QTableWidget, 
-    QTableWidgetItem, QAbstractItemView
+    QTableWidgetItem, QAbstractItemView, QListWidget, QListWidgetItem, QFrame,
+    QMessageBox
 )
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QUrl, QTime, QSize, pyqtSignal
-from PyQt6.QtCharts import QChartView, QChart, QPieSeries
 from PyQt6.QtGui import QPainter, QColor, QFont, QPen, QPixmap
 
 # Define all supported media extensions for file filtering
@@ -51,13 +51,13 @@ class VideoViewAndControl(QWidget):
         
         self.total_duration = 0
 
-# --- NEW CLASS: Create Project Dialog ---
+# --- Create Project Dialog ---
 class CreateProjectDialog(QDialog):
-    """Dialog to initialize a new JSON project structure."""
+    """Dialog to initialize a new JSON project structure with improved UX."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Create New Annotation Project")
-        self.resize(600, 500)
+        self.resize(700, 600)
         
         layout = QVBoxLayout(self)
         
@@ -87,37 +87,65 @@ class CreateProjectDialog(QDialog):
         layout.addWidget(mod_group)
         
         # 3. Categories / Labels Definition
-        cat_group = QGroupBox("Label Categories (Heads)")
+        cat_group = QGroupBox("Create a Heads")
         cat_layout = QVBoxLayout(cat_group)
         
-        # Input area for new category
-        input_layout = QHBoxLayout()
+        # --- Input Area ---
+        input_frame = QFrame()
+        input_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        input_layout = QVBoxLayout(input_frame)
+        
+        # Row A: Name and Type
+        row_a = QHBoxLayout()
         self.cat_name_edit = QLineEdit()
-        self.cat_name_edit.setPlaceholderText("Category Name (e.g., Severity)")
+        self.cat_name_edit.setPlaceholderText("Category Name (e.g., Color)")
         
         self.cat_type_combo = QComboBox()
         self.cat_type_combo.addItems(["single_label", "multi_label"])
         
-        self.cat_labels_edit = QLineEdit()
-        self.cat_labels_edit.setPlaceholderText("Labels (comma separated, e.g., Low,High)")
+        row_a.addWidget(QLabel("Name:"))
+        row_a.addWidget(self.cat_name_edit, 2)
+        row_a.addWidget(QLabel("Type:"))
+        row_a.addWidget(self.cat_type_combo, 1)
+        input_layout.addLayout(row_a)
         
-        add_btn = QPushButton("Add Category")
-        add_btn.clicked.connect(self.add_category_to_table)
+        # Row B: Label Adding (Tags style)
+        row_b = QHBoxLayout()
+        self.current_labels_list = QListWidget() 
+        self.current_labels_list.setMaximumHeight(120) 
+        self.current_labels_list.setToolTip("Labels added for this category will appear here")
+        self.current_labels_list.setAlternatingRowColors(True)
         
-        input_layout.addWidget(self.cat_name_edit, 2)
-        input_layout.addWidget(self.cat_type_combo, 1)
-        input_layout.addWidget(self.cat_labels_edit, 2)
-        input_layout.addWidget(add_btn)
-        cat_layout.addLayout(input_layout)
+        label_input_layout = QVBoxLayout()
+        h_label_in = QHBoxLayout()
+        self.single_label_input = QLineEdit()
+        self.single_label_input.setPlaceholderText("Type a label (e.g., Yellow) ")
+        self.single_label_input.returnPressed.connect(self.add_label_to_temp_list)
         
-        # Table to show added categories
-        self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Name", "Type", "Initial Labels", "Action"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        cat_layout.addWidget(self.table)
+        self.add_label_btn = QPushButton("Add Label")
+        self.add_label_btn.clicked.connect(self.add_label_to_temp_list)
+        
+        h_label_in.addWidget(self.single_label_input)
+        h_label_in.addWidget(self.add_label_btn)
+        
+        label_input_layout.addLayout(h_label_in)
+        label_input_layout.addWidget(QLabel("Current Labels:"))
+        label_input_layout.addWidget(self.current_labels_list)
+        
+        input_layout.addLayout(label_input_layout)
+        
+        # Row C: Add Category Button
+        self.add_category_btn = QPushButton("Add Category to Project")
+        self.add_category_btn.setStyleSheet("font-weight: bold; padding: 5px;")
+        self.add_category_btn.clicked.connect(self.add_category_to_main_list)
+        input_layout.addWidget(self.add_category_btn)
+        
+        cat_layout.addWidget(input_frame)
+        
+        # --- Main List of Added Categories ---
+        cat_layout.addWidget(QLabel("Pre-defined Categories:"))
+        self.categories_list_widget = QListWidget() 
+        cat_layout.addWidget(self.categories_list_widget)
         
         layout.addWidget(cat_group)
         
@@ -127,28 +155,125 @@ class CreateProjectDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
-    def add_category_to_table(self):
-        name = self.cat_name_edit.text().strip().replace(" ", "_")
-        c_type = self.cat_type_combo.currentText()
-        labels_str = self.cat_labels_edit.text().strip()
-        
-        if not name:
-            return 
+        self.final_categories = {}
 
-        row = self.table.rowCount()
-        self.table.insertRow(row)
+    def add_label_to_temp_list(self):
+        txt = self.single_label_input.text().strip()
+        if not txt: return
         
-        self.table.setItem(row, 0, QTableWidgetItem(name))
-        self.table.setItem(row, 1, QTableWidgetItem(c_type))
-        self.table.setItem(row, 2, QTableWidgetItem(labels_str))
+        for i in range(self.current_labels_list.count()):
+            item = self.current_labels_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == txt:
+                self.single_label_input.clear()
+                return
+            
+        item = QListWidgetItem(self.current_labels_list)
+        item.setData(Qt.ItemDataRole.UserRole, txt)
+        
+        item_widget = QWidget()
+        h_layout = QHBoxLayout(item_widget)
+        h_layout.setContentsMargins(5, 2, 5, 2)
+        
+        lbl = QLabel(txt)
         
         remove_btn = QPushButton("Remove")
-        remove_btn.clicked.connect(lambda: self.table.removeRow(self.table.currentRow()))
-        self.table.setCellWidget(row, 3, remove_btn)
+        remove_btn.setFixedSize(75, 25)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffcccc; 
+                color: #cc0000; 
+                border: 1px solid #cc0000; 
+                border-radius: 3px;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #ffaaaa;
+            }
+        """)
+        remove_btn.clicked.connect(lambda _, it=item: self.remove_temp_label(it))
         
-        # Clear inputs
+        h_layout.addWidget(lbl, 1)
+        h_layout.addWidget(remove_btn)
+        
+        item.setSizeHint(item_widget.sizeHint())
+        self.current_labels_list.setItemWidget(item, item_widget)
+        
+        self.single_label_input.clear()
+        self.single_label_input.setFocus()
+
+    def remove_temp_label(self, item):
+        row = self.current_labels_list.row(item)
+        self.current_labels_list.takeItem(row)
+
+    def add_category_to_main_list(self):
+        cat_name = self.cat_name_edit.text().strip().replace(" ", "_")
+        if not cat_name:
+            self.cat_name_edit.setPlaceholderText("NAME REQUIRED!")
+            return
+            
+        if cat_name in self.final_categories:
+            QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_name}' already exists.")
+            self.cat_name_edit.selectAll()
+            self.cat_name_edit.setFocus()
+            return
+            
+        for i in range(self.categories_list_widget.count()):
+            item = self.categories_list_widget.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == cat_name:
+                QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_name}' already exists.")
+                return
+
+        cat_type = self.cat_type_combo.currentText()
+        
+        labels = []
+        for i in range(self.current_labels_list.count()):
+            item = self.current_labels_list.item(i)
+            label_text = item.data(Qt.ItemDataRole.UserRole)
+            if label_text:
+                labels.append(label_text)
+        
+        self.final_categories[cat_name] = {
+            "type": cat_type,
+            "labels": sorted(list(set(labels)))
+        }
+        
+        item_widget = QWidget()
+        item_layout = QHBoxLayout(item_widget)
+        item_layout.setContentsMargins(5, 2, 5, 2)
+        
+        info_text = f"<b>{cat_name}</b> ({cat_type}) - {len(labels)} labels"
+        label_info = QLabel(info_text)
+        
+        delete_btn = QPushButton("Remove")
+        delete_btn.setFixedSize(70, 25)
+        # --- 修改处：增加了 font-size: 10px ---
+        delete_btn.setStyleSheet("background-color: #ffcccc; color: #cc0000; border: 1px solid #cc0000; border-radius: 3px; font-size: 10px;")
+        
+        delete_btn.clicked.connect(lambda _, n=cat_name: self.remove_category(n))
+        
+        item_layout.addWidget(label_info, 1)
+        item_layout.addWidget(delete_btn)
+        
+        list_item = QListWidgetItem(self.categories_list_widget)
+        list_item.setSizeHint(item_widget.sizeHint())
+        list_item.setData(Qt.ItemDataRole.UserRole, cat_name)
+        
+        self.categories_list_widget.addItem(list_item)
+        self.categories_list_widget.setItemWidget(list_item, item_widget)
+        
         self.cat_name_edit.clear()
-        self.cat_labels_edit.clear()
+        self.current_labels_list.clear()
+        self.single_label_input.clear()
+
+    def remove_category(self, cat_name):
+        if cat_name in self.final_categories:
+            del self.final_categories[cat_name]
+        
+        for i in range(self.categories_list_widget.count()):
+            item = self.categories_list_widget.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == cat_name:
+                self.categories_list_widget.takeItem(i)
+                break
 
     def validate_and_accept(self):
         if not self.task_name_edit.text().strip():
@@ -162,31 +287,18 @@ class CreateProjectDialog(QDialog):
         if self.mod_video.isChecked(): modalities.append("video")
         if self.mod_image.isChecked(): modalities.append("image")
         if self.mod_audio.isChecked(): modalities.append("audio")
-        
-        labels_def = {}
-        for row in range(self.table.rowCount()):
-            name = self.table.item(row, 0).text()
-            c_type = self.table.item(row, 1).text()
-            raw_labels = self.table.item(row, 2).text()
-            
-            label_list = [l.strip() for l in raw_labels.split(',') if l.strip()]
-            labels_def[name] = {
-                "type": c_type,
-                "labels": sorted(list(set(label_list)))
-            }
             
         return {
             "task": self.task_name_edit.text().strip(),
             "description": self.desc_edit.text().strip(),
             "modalities": modalities,
-            "labels": labels_def
+            "labels": self.final_categories
         }
 
 # --- LeftPanel (File Management) ---
 class LeftPanel(QWidget):
     """Defines the UI for the left panel (file management)."""
     
-    # Expose the global constant locally for easy access by its methods
     SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS
     
     def __init__(self, parent=None):
@@ -195,24 +307,47 @@ class LeftPanel(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # English UI
+        # --- UPDATED HEADER WITH UNDO/REDO BUTTONS ---
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+
         title = QLabel("Scenes / Clips")
         title.setObjectName("titleLabel")
+        
+        # Undo Button
+        self.undo_button = QPushButton()
+        self.undo_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
+        self.undo_button.setToolTip("Undo (Ctrl+Z)")
+        self.undo_button.setFixedSize(28, 28)
+        self.undo_button.setEnabled(False) 
+
+        # Redo Button
+        self.redo_button = QPushButton()
+        self.redo_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
+        self.redo_button.setToolTip("Redo (Ctrl+Y)")
+        self.redo_button.setFixedSize(28, 28)
+        self.redo_button.setEnabled(False)
+
+        header_layout.addWidget(title)
+        header_layout.addStretch() 
+        header_layout.addWidget(self.undo_button)
+        header_layout.addWidget(self.redo_button)
+        
+        layout.addWidget(header_widget)
+        # ---------------------------------------------
 
         self.action_tree = QTreeWidget()
         self.action_tree.setHeaderLabels(["Actions"])
         
-        # --- UPDATED BUTTON LAYOUT ---
         top_button_layout = QVBoxLayout() 
         
-        # Row 1: Import and Create
         row1 = QHBoxLayout()
         self.import_annotations_button = QPushButton("Import JSON") 
         self.create_json_button = QPushButton("Create JSON") 
         row1.addWidget(self.import_annotations_button)
         row1.addWidget(self.create_json_button)
         
-        # Row 2: Add Data
         self.add_data_button = QPushButton("Add Data")
         
         top_button_layout.addLayout(row1)
@@ -221,7 +356,6 @@ class LeftPanel(QWidget):
         
         bottom_button_layout = QHBoxLayout()
         
-        # English UI
         self.filter_label = QLabel("Filter:")
         self.filter_combo = QComboBox()
         self.filter_combo.addItem("Show All")
@@ -236,40 +370,36 @@ class LeftPanel(QWidget):
         bottom_button_layout.addWidget(self.clear_button)
         bottom_button_layout.addStretch()
         
-        layout.addWidget(title)
         layout.addLayout(top_button_layout)
         layout.addWidget(self.action_tree)
         layout.addLayout(bottom_button_layout)
 
         self.import_button = self.import_annotations_button 
-        # Alias for main.py compatibility
         self.add_video_button = self.add_data_button 
 
-
-    def add_action_item(self, name, path):
-        """Adds a parent item for an action and its child clip items."""
+    def add_action_item(self, name, path, explicit_files=None):
         action_item = QTreeWidgetItem(self.action_tree, [name])
         action_item.setData(0, Qt.ItemDataRole.UserRole, path)
         
-        # If the path is a directory (Virtual Folder), scan its children
-        if os.path.isdir(path):
-            # Scan for all supported media types
+        if explicit_files:
+            for file_path in explicit_files:
+                if os.path.exists(file_path):
+                    clip_name = os.path.basename(file_path)
+                    clip_item = QTreeWidgetItem(action_item, [clip_name])
+                    clip_item.setData(0, Qt.ItemDataRole.UserRole, file_path)
+
+        elif path and os.path.isdir(path):
             try:
                 for sub_entry in sorted(os.scandir(path), key=lambda e: e.name):
-                    # Use the class constant (which points to the global one)
                     if sub_entry.is_file() and sub_entry.name.lower().endswith(self.SUPPORTED_EXTENSIONS):
                         clip_item = QTreeWidgetItem(action_item, [os.path.basename(sub_entry.path)])
                         clip_item.setData(0, Qt.ItemDataRole.UserRole, sub_entry.path)
-            except FileNotFoundError:
-                 print(f"Warning: Directory not found during tree population: {path}")
             except Exception as e:
                 print(f"Error scanning directory {path}: {e}")
-        # If the path is a file (Single file import), do nothing, as it is the leaf node itself
         
         return action_item
 
     def get_all_action_items(self):
-        """Returns a list of all top-level action items."""
         root = self.action_tree.invisibleRootItem()
         return [root.child(i) for i in range(root.childCount())]
 
@@ -277,7 +407,6 @@ class LeftPanel(QWidget):
 class CenterPanel(QWidget):
     """Defines the UI for the center panel (media preview)."""
     
-    # Helper class to handle image scaling within a scroll area on resize
     class ImageScrollArea(QScrollArea):
         def __init__(self, pixmap, parent=None):
             super().__init__(parent)
@@ -292,7 +421,6 @@ class CenterPanel(QWidget):
             if self.pixmap.isNull():
                 self.image_label.setText("Image not loaded")
                 return
-            # Scale pixmap to fit the viewport while maintaining aspect ratio
             self.image_label.setPixmap(self.pixmap.scaled(
                 self.viewport().size(),
                 Qt.AspectRatioMode.KeepAspectRatio,
@@ -310,7 +438,6 @@ class CenterPanel(QWidget):
         
         layout = QVBoxLayout(self)
 
-        # English UI
         title = QLabel("Media Preview")
         title.setObjectName("titleLabel")
 
@@ -323,7 +450,6 @@ class CenterPanel(QWidget):
         self.play_button.setEnabled(False)
         self.play_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
-        # English UI
         self.multi_view_button = QPushButton("Sync-Play All Views")
         self.multi_view_button.setEnabled(False)
 
@@ -337,13 +463,11 @@ class CenterPanel(QWidget):
         self.show_single_view(None)
 
     def format_time(self, milliseconds):
-        """Converts milliseconds to mm:ss format."""
         t = QTime(0, 0)
         t = t.addMSecs(milliseconds)
         return t.toString('mm:ss')
 
     def _setup_controls(self, view_control: VideoViewAndControl):
-        """Sets up signal connections for a single VideoViewAndControl instance."""
         player = view_control.player
         slider = view_control.slider
         player_id = id(player)
@@ -355,7 +479,6 @@ class CenterPanel(QWidget):
         self.view_controls.append(view_control)
 
     def _clear_video_layout(self):
-        # Cleans up all existing media and controls
         for vc in self.view_controls:
             vc.player.stop()
             vc.player.setVideoOutput(None)
@@ -375,11 +498,9 @@ class CenterPanel(QWidget):
                 item.layout().deleteLater()
                 
     def _get_control_by_id(self, player_id):
-        """Finds the VideoViewAndControl instance by player_id."""
         return next((vc for vc in self.view_controls if id(vc.player) == player_id), None)
 
     def update_duration(self, player_id, duration):
-        """Updates total video duration and enables the Slider."""
         vc = self._get_control_by_id(player_id)
         if vc:
             vc.total_duration = duration
@@ -390,7 +511,6 @@ class CenterPanel(QWidget):
             vc.time_label.setText(f"{current_time} / {total_time}")
             
     def update_slider(self, player_id, position):
-        """Updates the Slider position and time label when playback position changes."""
         vc = self._get_control_by_id(player_id)
         if vc and vc.total_duration > 0:
             total_duration = vc.total_duration
@@ -404,7 +524,6 @@ class CenterPanel(QWidget):
             vc.time_label.setText(f"{current_time} / {total_time}")
             
     def seek_slider(self, player_id, value):
-        """Sets the video playback position when the user drags the Slider."""
         vc = self._get_control_by_id(player_id)
         if vc and vc.total_duration > 0:
             total_duration = vc.total_duration
@@ -424,12 +543,10 @@ class CenterPanel(QWidget):
         self.play_button.setIcon(self.style().standardIcon(icon))
 
     def show_single_view(self, clip_path):
-        """Displays a single media file (video, image, or audio)."""
         self._clear_video_layout()
         
         if not clip_path or not os.path.exists(clip_path):
             self.play_button.setEnabled(False)
-            # English UI
             placeholder = QLabel("No media selected or file not found.")
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.video_layout.addWidget(placeholder)
@@ -437,9 +554,6 @@ class CenterPanel(QWidget):
 
         ext = os.path.splitext(clip_path)[1].lower()
 
-        # -----------------------------------------------
-        # Mode A: Video or Audio (using QMediaPlayer)
-        # -----------------------------------------------
         if ext in ('.mp4', '.avi', '.mov', '.wav', '.mp3', '.aac'):
             view_control = VideoViewAndControl(clip_path)
             view_control.player.setSource(QUrl.fromLocalFile(clip_path))
@@ -449,37 +563,27 @@ class CenterPanel(QWidget):
             self.video_layout.addWidget(view_control)
 
             self.play_button.setEnabled(True)
-            # Hide video widget if it's only audio
             if ext in ('.wav', '.mp3', '.aac'):
                  view_control.video_widget.setStyleSheet("background-color: black;")
             
             view_control.player.play()
         
-        # -----------------------------------------------
-        # Mode B: Image (using QLabel and QPixmap)
-        # -----------------------------------------------
         elif ext in ('.jpg', '.jpeg', '.png', '.bmp'):
             
             pixmap = QPixmap(clip_path)
             
             if pixmap.isNull():
-                # English UI
                 image_label = QLabel(f"Failed to load image:\n{os.path.basename(clip_path)}")
                 image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.video_layout.addWidget(image_label)
             else:
-                # Use ImageScrollArea for dynamic scaling and scrolling
                 scroll_area = self.ImageScrollArea(pixmap)
                 self.video_layout.addWidget(scroll_area)
             
-            self.play_button.setEnabled(False) # Disable play button for static image
-            self._media_state_changed(QMediaPlayer.PlaybackState.StoppedState) # Reset icon
+            self.play_button.setEnabled(False)
+            self._media_state_changed(QMediaPlayer.PlaybackState.StoppedState)
 
-        # -----------------------------------------------
-        # Mode C: Unsupported file
-        # -----------------------------------------------
         else:
-            # English UI
             placeholder = QLabel(f"Unsupported file type:\n{os.path.basename(clip_path)}")
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.video_layout.addWidget(placeholder)
@@ -487,7 +591,6 @@ class CenterPanel(QWidget):
 
 
     def show_all_views(self, clip_paths):
-        """Displays multiple video views in a grid (only for video clips)."""
         self._clear_video_layout()
         
         grid_widget = QWidget()
@@ -522,10 +625,12 @@ class CenterPanel(QWidget):
             self.play_button.setEnabled(True)
             self.toggle_play_pause() 
 
-
-# --- Helper Class: Dynamic Single Label Group (QRadioButton) ---
+# --- Helper Class: Dynamic Single Label Group ---
 class DynamicSingleLabelGroup(QWidget):
-    """Wraps the UI and management for a single_label group."""
+    
+    remove_category_signal = pyqtSignal(str) # Signal to request removal of this category (Head)
+    remove_label_signal = pyqtSignal(str) # Signal to request removal of a specific label option
+
     def __init__(self, label_head_name, label_type_definition, parent=None):
         super().__init__(parent)
         self.head_name = label_head_name
@@ -537,24 +642,40 @@ class DynamicSingleLabelGroup(QWidget):
         self.v_layout = QVBoxLayout(self)
         self.v_layout.setContentsMargins(0, 5, 0, 5)
 
-        # English UI
+        # --- HEADER (Name + Trash Button) ---
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+
         self.label_title = QLabel(f"{self.head_name.capitalize()}:")
         self.label_title.setObjectName("subtitleLabel")
-        self.v_layout.addWidget(self.label_title)
         
-        # Radio button container
+        self.trash_btn = QPushButton()
+        self.trash_btn.setFixedSize(24, 24)
+        self.trash_btn.setFlat(True)
+        self.trash_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.trash_btn.setToolTip("Remove this category")
+        self.trash_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+        self.trash_btn.clicked.connect(self._on_remove_category_clicked)
+        
+        header_layout.addWidget(self.label_title)
+        header_layout.addStretch()
+        header_layout.addWidget(self.trash_btn)
+        
+        self.v_layout.addWidget(header_widget)
+        
+        # --- Labels Container ---
         self.radio_container = QWidget()
         self.radio_layout = QVBoxLayout(self.radio_container)
         self.radio_layout.setContentsMargins(0, 0, 0, 0)
         self.v_layout.addWidget(self.radio_container)
         
-        # Type management (LineEdit + Buttons)
+        # --- Bottom Controls (Add New Label) ---
         self.manager_group = QGroupBox() 
         self.manager_group.setFlat(True)
         v_manager_layout = QVBoxLayout(self.manager_group)
         v_manager_layout.setContentsMargins(0, 10, 0, 5)
         
-        # --- 1. Add New Label Widget ---
         h_add_layout = QHBoxLayout()
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText(f"New {self.head_name} type...")
@@ -562,67 +683,68 @@ class DynamicSingleLabelGroup(QWidget):
         h_add_layout.addWidget(self.input_field, 1)
         h_add_layout.addWidget(self.add_btn)
         
-        # --- 2. Remove Label Widget (QComboBox + Button) ---
-        h_remove_layout = QHBoxLayout()
-        self.remove_combo = QComboBox() 
-        self.remove_combo.setPlaceholderText("Select label to remove")
-        self.remove_btn = QPushButton("Remove Label") # English UI
-        h_remove_layout.addWidget(self.remove_combo, 1)
-        h_remove_layout.addWidget(self.remove_btn)
-        
-        # Add layouts to manager group
         v_manager_layout.addLayout(h_add_layout)
-        v_manager_layout.addLayout(h_remove_layout)
-
+        # Removed the removal combo/button from here
+        
         self.v_layout.addWidget(self.manager_group)
 
-        # Initialize buttons
         self.update_radios(self.definition.get("labels", []))
 
+    def _on_remove_category_clicked(self):
+        self.remove_category_signal.emit(self.head_name)
+
     def update_radios(self, new_types):
-        """Rebuilds radio buttons and updates the remove combo box based on the new list of types."""
         self.button_group.setExclusive(False)
         
-        # 1. Update Radio Buttons
-        for name, rb in self.radio_buttons.items():
-            self.button_group.removeButton(rb)
-            self.radio_layout.removeWidget(rb)
-            rb.deleteLater()
-            
+        # Clear existing widgets
+        while self.radio_layout.count():
+            item = self.radio_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
         self.radio_buttons.clear()
         
+        # Create rows: [RadioButton] [Spacer] [Delete Button]
         sorted_types = sorted(list(set(new_types)))
         for type_name in sorted_types: 
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 2, 0, 2)
+            
             rb = QRadioButton(type_name)
             self.radio_buttons[type_name] = rb
             self.button_group.addButton(rb)
-            self.radio_layout.addWidget(rb)
+            
+            del_label_btn = QPushButton()
+            del_label_btn.setFixedSize(30, 30)
+            del_label_btn.setFlat(True)
+            del_label_btn.setToolTip(f"Remove '{type_name}'")
+            # Use 'x' or a small icon
+
+            del_label_btn.setText("x")
+            font = del_label_btn.font()
+            font.setPointSize(25)  # 改这里：数字越大，x 越大，比如 10、12、14、18...
+            del_label_btn.setFont(font)
+
+            del_label_btn.setStyleSheet("color: #888; font-weight: bold;")
+            del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            
+            # Connect signal with specific name
+            del_label_btn.clicked.connect(lambda _, n=type_name: self.remove_label_signal.emit(n))
+            
+            row_layout.addWidget(rb)
+            row_layout.addStretch()
+            row_layout.addWidget(del_label_btn)
+            
+            self.radio_layout.addWidget(row_widget)
             
         self.button_group.setExclusive(True)
-        
-        # 2. Update Remove ComboBox
-        self.remove_combo.clear()
-        # Add a placeholder/instruction item
-        self.remove_combo.addItem("Select label to remove")
-        self.remove_combo.setItemData(0, QSize(0,0), Qt.ItemDataRole.SizeHintRole) # Hide item to ensure user selects a real one
-        for type_name in sorted_types:
-            self.remove_combo.addItem(type_name)
-        self.remove_combo.setCurrentIndex(0)
 
     def get_checked_label(self):
-        """Returns the text of the currently checked item."""
         checked_btn = self.button_group.checkedButton()
         return checked_btn.text() if checked_btn else None
 
-    def get_selected_label_to_remove(self):
-        """Returns the text of the item selected in the removal combo box."""
-        # Index 0 is the placeholder
-        if self.remove_combo.currentIndex() > 0:
-            return self.remove_combo.currentText()
-        return None
-
     def set_checked_label(self, label_name):
-        """Sets the currently checked item."""
         self.button_group.setExclusive(False)
         for rb in self.radio_buttons.values():
             rb.setChecked(False)
@@ -631,9 +753,12 @@ class DynamicSingleLabelGroup(QWidget):
         if label_name in self.radio_buttons:
             self.radio_buttons[label_name].setChecked(True)
 
-# --- Helper Class: Dynamic Multi Label Group (QCheckBox) ---
+# --- Helper Class: Dynamic Multi Label Group ---
 class DynamicMultiLabelGroup(QWidget):
-    """Wraps the UI and management for a multi_label group."""
+    
+    remove_category_signal = pyqtSignal(str) 
+    remove_label_signal = pyqtSignal(str) # Signal to request removal of a specific label option
+
     def __init__(self, label_head_name, label_type_definition, parent=None):
         super().__init__(parent)
         self.head_name = label_head_name
@@ -643,80 +768,108 @@ class DynamicMultiLabelGroup(QWidget):
         self.v_layout = QVBoxLayout(self)
         self.v_layout.setContentsMargins(0, 5, 0, 5)
 
-        # English UI
+        # --- HEADER ---
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+
         self.label_title = QLabel(f"{self.head_name.capitalize()}:")
         self.label_title.setObjectName("subtitleLabel")
-        self.v_layout.addWidget(self.label_title)
         
-        # Checkbox container
+        self.trash_btn = QPushButton()
+        self.trash_btn.setFixedSize(24, 24)
+        self.trash_btn.setFlat(True)
+        self.trash_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.trash_btn.setToolTip("Remove this category")
+        self.trash_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+        self.trash_btn.clicked.connect(self._on_remove_category_clicked)
+        
+        header_layout.addWidget(self.label_title)
+        header_layout.addStretch()
+        header_layout.addWidget(self.trash_btn)
+        
+        self.v_layout.addWidget(header_widget)
+        
+        # --- Checkbox Container ---
         self.checkbox_container = QWidget()
         self.checkbox_layout = QVBoxLayout(self.checkbox_container)
         self.checkbox_layout.setContentsMargins(0, 0, 0, 0)
         self.v_layout.addWidget(self.checkbox_container)
         
-        # Type management (LineEdit + Buttons)
+        # --- Bottom Controls ---
         self.manager_group = QGroupBox() 
         self.manager_group.setFlat(True)
         h_layout = QHBoxLayout(self.manager_group)
         h_layout.setContentsMargins(0, 10, 0, 5)
         
-        # --- Add New Label Widget ---
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText(f"New {self.head_name} type...")
         self.add_btn = QPushButton("Add")
         
-        # --- Remove Label Widget (QComboBox + Button) ---
-        # For multi-label, removal is via checked boxes.
-        self.remove_btn = QPushButton("Remove Checked") # English UI - Renamed for clarity
-        
-        # Group Add elements
         h_layout.addWidget(self.input_field, 1)
         h_layout.addWidget(self.add_btn)
-        h_layout.addWidget(self.remove_btn) # Keep the remove button here
+        # Removed 'Remove Checked' button
         
-        self.v_layout.addWidget(self.manager_group) # Add the combined management group
+        self.v_layout.addWidget(self.manager_group) 
 
-        # Initialize checkboxes
         self.update_checkboxes(self.definition.get("labels", []))
 
+    def _on_remove_category_clicked(self):
+        self.remove_category_signal.emit(self.head_name)
+
     def update_checkboxes(self, new_types):
-        """Rebuilds checkboxes based on the new list of types."""
-        
-        for name, cb in self.checkboxes.items():
-            self.checkbox_layout.removeWidget(cb)
-            cb.deleteLater()
+        # Clear existing
+        while self.checkbox_layout.count():
+            item = self.checkbox_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
             
         self.checkboxes.clear()
         
+        # Create rows: [CheckBox] [Spacer] [Delete Button]
         for type_name in sorted(list(set(new_types))): 
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 2, 0, 2)
+
             cb = QCheckBox(type_name)
             self.checkboxes[type_name] = cb
-            self.checkbox_layout.addWidget(cb)
+            
+            del_label_btn = QPushButton()
+            del_label_btn.setFixedSize(20, 20)
+            del_label_btn.setFlat(True)
+            del_label_btn.setToolTip(f"Remove '{type_name}'")
+            del_label_btn.setText("x")
+            del_label_btn.setStyleSheet("color: #888; font-weight: bold;")
+            del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            
+            del_label_btn.clicked.connect(lambda _, n=type_name: self.remove_label_signal.emit(n))
+
+            row_layout.addWidget(cb)
+            row_layout.addStretch()
+            row_layout.addWidget(del_label_btn)
+
+            self.checkbox_layout.addWidget(row_widget)
             
     def get_checked_labels(self):
-        """Returns a list of labels for all checked checkboxes."""
         return [cb.text() for cb in self.checkboxes.values() if cb.isChecked()]
     
     def get_all_checkbox_labels(self):
-        """Returns all available labels and their states."""
         return self.checkboxes.items()
 
     def set_checked_labels(self, label_list):
-        """Sets the checked state based on the input list."""
         checked_set = set(label_list)
         for cb_name, cb in self.checkboxes.items():
             cb.setChecked(cb_name in checked_set)
 
 
-# --- RightPanel (Annotation & Analysis) ---
+# --- RightPanel (Annotation Only) ---
 class RightPanel(QWidget):
-    """Defines the UI for the right panel (Annotation & Analysis)."""
+    """Defines the UI for the right panel (Annotation Only)."""
     
     DEFAULT_TASK_NAME = "N/A (Please Import JSON)" 
     
-    # Signal to notify main.py to change the stylesheet
     style_mode_changed = pyqtSignal(str) 
-    # New signals for managing label heads
     add_head_clicked = pyqtSignal(str) 
     remove_head_clicked = pyqtSignal(str) 
 
@@ -729,16 +882,14 @@ class RightPanel(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # --- Top Header and Mode Toggle Container ---
+        # --- Top Header ---
         header_widget = QWidget()
         header_h_layout = QHBoxLayout(header_widget)
         header_h_layout.setContentsMargins(0, 0, 0, 0)
 
-        # English UI
-        title = QLabel("Annotation & Analysis")
+        title = QLabel("Annotation")
         title.setObjectName("titleLabel")
         
-        # Mode toggle button (English UI)
         self.mode_toggle_button = QPushButton("Day Mode") 
         self.mode_toggle_button.setObjectName("modeToggleButton")
         self.mode_toggle_button.setFixedSize(QSize(100, 30))
@@ -749,8 +900,6 @@ class RightPanel(QWidget):
         header_h_layout.addWidget(self.mode_toggle_button)
 
         main_layout.addWidget(header_widget)
-        # --- End Top Header ---
-
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -761,66 +910,42 @@ class RightPanel(QWidget):
 
         layout = QVBoxLayout(content_widget)
         
-        # Task Label (updated dynamically in main.py)
         self.task_label = QLabel(f"Task: {self.DEFAULT_TASK_NAME}")
         self.task_label.setObjectName("subtitleLabel")
         layout.addWidget(self.task_label)
 
-        # --- NEW: Label Head Management ---
-        # English UI
-        self.head_manager_group = QGroupBox("Add/Remove Category") # Renamed title
-        self.head_manager_group.setCheckable(False)
-        self.head_manager_group.setChecked(True)
-        head_manager_layout = QVBoxLayout(self.head_manager_group)
-        
-        # --- Row 1: Add Category ---
-        h_add_head_layout = QHBoxLayout()
-        self.new_head_input = QLineEdit()
-        self.new_head_input.setPlaceholderText("Enter category name")
-        
-        self.add_head_btn = QPushButton("Add Category")
-        self.add_head_btn.clicked.connect(self._emit_add_head_signal)
-        
-        h_add_head_layout.addWidget(self.new_head_input, 1)
-        h_add_head_layout.addWidget(self.add_head_btn)
-
-        # --- Row 2: Remove Category (using QComboBox) ---
-        h_remove_head_layout = QHBoxLayout()
-        # Dropdown for selecting category to remove
-        self.remove_head_combo = QComboBox() 
-        self.remove_head_combo.setPlaceholderText("Select category to remove")
-        
-        self.remove_head_btn = QPushButton("Remove Category")
-        self.remove_head_btn.clicked.connect(self._emit_remove_head_signal)
-        
-        h_remove_head_layout.addWidget(self.remove_head_combo, 1)
-        h_remove_head_layout.addWidget(self.remove_head_btn)
-        
-        head_manager_layout.addLayout(h_add_head_layout)
-        head_manager_layout.addLayout(h_remove_head_layout) 
-        
-        layout.addWidget(self.head_manager_group)
-        # --- END NEW: Label Head Management ---
-
-        # --- 3. Annotation/Analysis Main Container ---
+        # --- Annotation Content ---
         self.annotation_content_widget = QWidget()
         self.annotation_content_layout = QVBoxLayout(self.annotation_content_widget)
         self.annotation_content_layout.setContentsMargins(0, 0, 0, 0)
 
-
-        # --- 1. Manual Annotation Module ---
-        # English UI
+        # 1. Manual Annotation
         self.manual_group_box = QGroupBox("Manual Annotation")
         self.manual_group_box.setEnabled(False)
         manual_layout = QVBoxLayout(self.manual_group_box)
         
-        # Dynamic label area container
         self.dynamic_label_container = QWidget()
         self.dynamic_label_layout = QVBoxLayout(self.dynamic_label_container)
         self.dynamic_label_layout.setContentsMargins(0, 0, 0, 0)
         manual_layout.addWidget(self.dynamic_label_container)
         
-        # Confirm/Clear buttons (English UI)
+        # --- Add Category Section at BOTTOM ---
+        self.add_cat_container = QWidget()
+        add_cat_layout = QHBoxLayout(self.add_cat_container)
+        add_cat_layout.setContentsMargins(0, 20, 0, 10)
+        
+        self.new_head_input = QLineEdit()
+        self.new_head_input.setPlaceholderText("New Category Name")
+        
+        self.add_head_btn = QPushButton("Add Category")
+        self.add_head_btn.clicked.connect(self._emit_add_head_signal)
+        
+        add_cat_layout.addWidget(self.new_head_input, 1)
+        add_cat_layout.addWidget(self.add_head_btn)
+        
+        manual_layout.addWidget(self.add_cat_container)
+        # -------------------------------------------
+        
         manual_layout.addStretch()
         manual_button_layout = QHBoxLayout()
         self.confirm_manual_button = QPushButton("Confirm Annotation")
@@ -831,34 +956,10 @@ class RightPanel(QWidget):
         
         self.annotation_content_layout.addWidget(self.manual_group_box) 
 
-        # --- 2. Automated Analysis Module ---
-        # English UI
-        self.auto_group_box = QGroupBox("Automated Annotation")
-        self.auto_group_box.setCheckable(True) 
-        self.auto_group_box.setChecked(False)
-        auto_layout = QVBoxLayout(self.auto_group_box)
-
-        self.start_button = QPushButton("Analyze Selected Scene")
-        self.start_button.setObjectName("startButton")
-        self.start_button.setEnabled(False)
-        auto_layout.addWidget(self.start_button)
-        
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        auto_layout.addWidget(self.progress_bar)
-
-        self.results_widget = QWidget()
-        self.results_layout = QVBoxLayout(self.results_widget) 
-        self.results_layout.setContentsMargins(0, 10, 0, 0)
-        self.results_widget.setVisible(False)
-        
-        auto_layout.addWidget(self.results_widget)
-        self.annotation_content_layout.addWidget(self.auto_group_box) 
-        
         layout.addWidget(self.annotation_content_widget) 
 
 
-        # --- 4. Bottom Controls ---
+        # --- Bottom Controls ---
         layout.addStretch() 
         
         bottom_button_layout = QHBoxLayout()
@@ -878,7 +979,6 @@ class RightPanel(QWidget):
         main_layout.addWidget(scroll_area, 1)
 
     def _toggle_style_mode(self):
-        """Toggles Day/Night mode and emits a signal."""
         if self.mode_toggle_button.text() == "Day Mode":
             self.mode_toggle_button.setText("Night Mode")
             self.style_mode_changed.emit("Day") 
@@ -887,55 +987,39 @@ class RightPanel(QWidget):
             self.style_mode_changed.emit("Night")
             
     def _emit_add_head_signal(self):
-        """Emits the signal with the text from the input field."""
         head_name = self.new_head_input.text().strip()
         if head_name:
             self.add_head_clicked.emit(head_name)
 
-    def _emit_remove_head_signal(self):
-        """Emits the signal with the text from the removal combo box."""
-        head_name = self.remove_head_combo.currentText()
-        if head_name and self.remove_head_combo.currentIndex() > 0: # Ensure not placeholder
-            self.remove_head_clicked.emit(head_name)
+    def _emit_remove_head_signal(self, head_name):
+        self.remove_head_clicked.emit(head_name)
 
 
     def setup_dynamic_labels(self, labels_definition):
-        """Creates dynamic UI elements based on 'labels' definition in JSON and updates comboboxes."""
+        while self.dynamic_label_layout.count():
+            item = self.dynamic_label_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                pass
         
-        # 1. Clear existing dynamic groups
-        for group in self.label_groups.values():
-            self.dynamic_label_layout.removeWidget(group)
-            group.deleteLater()
         self.label_groups.clear()
         
-        category_names = []
-        
-        # 2. Re-add groups based on the updated dictionary order
         for head_name, definition in labels_definition.items(): 
-            category_names.append(head_name)
             if definition.get("type") == "single_label":
                 group = DynamicSingleLabelGroup(head_name, definition, self.dynamic_label_container)
+                group.remove_category_signal.connect(self._emit_remove_head_signal)
                 self.label_groups[head_name] = group
                 self.dynamic_label_layout.addWidget(group)
             elif definition.get("type") == "multi_label":
                 group = DynamicMultiLabelGroup(head_name, definition, self.dynamic_label_container)
+                group.remove_category_signal.connect(self._emit_remove_head_signal)
                 self.label_groups[head_name] = group
                 self.dynamic_label_layout.addWidget(group)
 
         self.dynamic_label_layout.addStretch()
-        
-        # 3. Update Category Removal ComboBox
-        self.remove_head_combo.clear()
-        self.remove_head_combo.addItem("Select category to remove") # Placeholder
-        # Use an empty size hint to make the placeholder effectively hidden/unselectable as data
-        self.remove_head_combo.setItemData(0, QSize(0,0), Qt.ItemDataRole.SizeHintRole)
-        for name in sorted(category_names):
-            self.remove_head_combo.addItem(name)
-        self.remove_head_combo.setCurrentIndex(0)
 
-    # --- Manual Annotation API ---
     def get_manual_annotation(self):
-        """Retrieves the current manual annotation values."""
         annotations = {}
         for head_name, group in self.label_groups.items():
             if isinstance(group, DynamicSingleLabelGroup):
@@ -945,7 +1029,6 @@ class RightPanel(QWidget):
         return annotations
 
     def clear_manual_selection(self):
-        """Clears all manual annotation selections."""
         for group in self.label_groups.values():
             if isinstance(group, DynamicSingleLabelGroup):
                 group.set_checked_label(None)
@@ -953,7 +1036,6 @@ class RightPanel(QWidget):
                 group.set_checked_labels([])
 
     def set_manual_annotation(self, data):
-        """Sets the manual annotation based on the provided data."""
         self.clear_manual_selection()
         for head_name, label_data in data.items():
             if head_name in self.label_groups:
@@ -964,100 +1046,6 @@ class RightPanel(QWidget):
                 elif isinstance(group, DynamicMultiLabelGroup):
                     if isinstance(label_data, list):
                         group.set_checked_labels(label_data)
-
-    # --- Automated Analysis Results UI API ---
-    def clear_results_ui(self):
-        """Cleans up the automated analysis results area."""
-        while self.results_layout.count():
-            item = self.results_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                item.layout().deleteLater()
-
-    def update_results(self, result):
-        """Dynamically populates automated analysis results (single_label distribution only)."""
-        self.clear_results_ui()
-        
-        for head_name, data in result.items():
-            if 'distribution' not in data or head_name not in self.label_groups or not isinstance(self.label_groups[head_name], DynamicSingleLabelGroup):
-                continue
-
-            dist = data['distribution']
-            
-            # English UI
-            title = QLabel(f"{head_name.capitalize()} Prediction:")
-            title.setObjectName("subtitleLabel")
-            self.results_layout.addWidget(title)
-            
-            # Top 2 text results
-            sorted_dist = sorted(dist.items(), key=lambda item: item[1], reverse=True)
-            
-            if len(sorted_dist) > 0:
-                label_1 = QLabel(f"1. {sorted_dist[0][0]} - {sorted_dist[0][1]:.1%}")
-                self.results_layout.addWidget(label_1)
-            
-            if len(sorted_dist) > 1:
-                label_2 = QLabel(f"2. {sorted_dist[1][0]} - {sorted_dist[1][1]:.1%}")
-                self.results_layout.addWidget(label_2)
-
-            # Pie Chart
-            chart_view = QChartView()
-            chart = self._create_pie_chart(dist, f"{head_name.capitalize()} Distribution")
-            chart_view.setChart(chart)
-            chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
-            chart_view.setMinimumHeight(250)
-            self.results_layout.addWidget(chart_view)
-
-    def _create_pie_chart(self, distribution, title):
-        """Creates a QChart Pie Chart from a distribution dictionary."""
-        series = QPieSeries()
-        series.setHoleSize(0.35)
-
-        sorted_dist = sorted(distribution.items(), key=lambda item: item[1], reverse=True)
-        
-        for i, (label, value) in enumerate(sorted_dist):
-            slice = series.append(label, value)
-            slice.setLabelVisible(False)
-            if i == 0:
-                slice.setExploded(True)
-                pen = QPen(QColor("#d0d0d0"), 2)
-                slice.setPen(pen)
-
-        def on_hover(slice, state):
-            if state:
-                label_font = QFont("Arial", 8)
-                slice.setLabelFont(label_font)
-                slice.setLabelBrush(QColor("#ffffff"))
-                slice.setLabel(f"{slice.label()} ({slice.percentage():.1%})")
-                slice.setLabelVisible(True)
-            else:
-                slice.setLabelVisible(False)
-        series.hovered.connect(on_hover)
-
-        chart = QChart()
-        chart.addSeries(series)
-        chart.setTitle(title)
-        chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
-        chart.setTheme(QChart.ChartTheme.ChartThemeDark)
-        
-        legend = chart.legend()
-        legend.setAlignment(Qt.AlignmentFlag.AlignRight)
-        
-        chart.setBackgroundBrush(QColor("#2E2E2E"))
-        title_font = QFont("Arial", 12, QFont.Weight.Bold)
-        chart.setTitleFont(title_font)
-        chart.setTitleBrush(QColor("#f0f0f0"))
-        
-        legend_font = legend.font()
-        legend_font.setPointSize(9)
-        legend.setFont(legend_font)
-        legend.setLabelColor(QColor("#f0f0f0"))
-
-        for marker in legend.markers():
-            marker.setLabel(marker.slice().label())
-
-        return chart
 
 
 class MainWindowUI(QWidget):
