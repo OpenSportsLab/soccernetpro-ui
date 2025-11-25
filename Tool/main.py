@@ -6,12 +6,18 @@ import json
 import datetime 
 import shutil
 import copy
+import re
+from enum import Enum, auto
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMessageBox, QStyle, 
-    QTreeWidgetItem, QRadioButton, QProgressDialog
+    QTreeWidgetItem, QRadioButton, QProgressDialog, QAbstractItemView,
+    QDialog, QVBoxLayout, QTreeView, QDialogButtonBox, QHBoxLayout, QPushButton
 )
-from PyQt6.QtCore import Qt, QTimer, QPointF, QSize
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen, QKeySequence, QShortcut
+from PyQt6.QtCore import Qt, QTimer, QPointF, QSize, QDir
+from PyQt6.QtGui import (
+    QIcon, QPixmap, QPainter, QColor, QPen, QKeySequence, QShortcut, 
+    QFileSystemModel
+)
 
 # Explicit import of ui_components
 from ui_components import MainWindowUI, RightPanel, DynamicSingleLabelGroup, DynamicMultiLabelGroup, LeftPanel, SUPPORTED_EXTENSIONS, CreateProjectDialog
@@ -23,19 +29,59 @@ def resource_path(relative_path):
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
-
     return os.path.join(base_path, relative_path)
 
-def get_action_number(entry):
-    try:
-        parts = entry.name.split('_')
-        if len(parts) > 1 and parts[-1].isdigit():
-            return int(parts[-1])
-        if len(parts) > 2 and parts[-2].isdigit():
-             return int(parts[-2])
-        return float('inf')
-    except (IndexError, ValueError, AttributeError):
-        return float('inf')
+# --- Custom Folder Picker (Multi-Select without Ctrl) ---
+class FolderPickerDialog(QDialog):
+    def __init__(self, initial_dir="", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Scene Folders (Click to Toggle Multiple)")
+        self.resize(900, 600)
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.addWidget(QRadioButton("Tip: Click multiple folders to select them. No need to hold Ctrl."))
+        
+        self.model = QFileSystemModel()
+        self.model.setRootPath(QDir.rootPath())
+        self.model.setFilter(QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot)
+        
+        self.tree = QTreeView()
+        self.tree.setModel(self.model)
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        
+        self.tree.setColumnWidth(0, 400)
+        for i in range(1, 4):
+            self.tree.hideColumn(i)
+        
+        start_path = initial_dir if initial_dir and os.path.exists(initial_dir) else QDir.currentPath()
+        root_idx = self.model.index(start_path)
+        self.tree.scrollTo(root_idx)
+        self.tree.expand(root_idx)
+        
+        self.layout.addWidget(self.tree)
+        
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        self.layout.addWidget(self.button_box)
+
+    def get_selected_paths(self):
+        paths = []
+        indexes = self.tree.selectionModel().selectedRows()
+        for idx in indexes:
+            file_path = self.model.filePath(idx)
+            if file_path:
+                paths.append(file_path)
+        return paths
+
+# --- Undo Command Types ---
+class CmdType(Enum):
+    ANNOTATION_CONFIRM = auto()  # Confirming data to storage
+    UI_CHANGE = auto()           # Fine-grained UI toggle (radio/checkbox)
+    SCHEMA_ADD_CAT = auto()      # Add Category
+    SCHEMA_DEL_CAT = auto()      # Delete Category
+    SCHEMA_ADD_LBL = auto()      # Add Label option
+    SCHEMA_DEL_LBL = auto()      # Delete Label option
 
 # --- Main Application Logic Class ---
 class ActionClassifierApp(QMainWindow):
@@ -46,8 +92,9 @@ class ActionClassifierApp(QMainWindow):
     
     SINGLE_VIDEO_PREFIX = "Annotation_" 
     
+    # Default Definitions (Keys must be lowercase to be consistent)
     DEFAULT_LABEL_DEFINITIONS = {
-        "Label_type": {"type": "single_label", "labels": []}, 
+        "label_type": {"type": "single_label", "labels": []}, 
     }
     
     def __init__(self):
@@ -63,6 +110,9 @@ class ActionClassifierApp(QMainWindow):
         # --- Undo/Redo Stacks ---
         self.undo_stack = [] 
         self.redo_stack = []
+        
+        # Flag to prevent recursive signals during undo/redo
+        self._is_undoing_redoing = False
         
         self.action_path_to_name = {}
         self.action_item_data = [] 
@@ -187,7 +237,7 @@ class ActionClassifierApp(QMainWindow):
         msg_box.exec()
 
     def connect_signals(self):
-        self.ui.left_panel.clear_button.clicked.connect(self.clear_action_list)
+        self.ui.left_panel.clear_button.clicked.connect(self.on_clear_list_clicked)
         self.ui.left_panel.import_button.clicked.connect(self.import_annotations) 
         self.ui.left_panel.create_json_button.clicked.connect(self.create_new_project)
         self.ui.left_panel.add_data_button.clicked.connect(self._dynamic_data_import) 
@@ -218,16 +268,9 @@ class ActionClassifierApp(QMainWindow):
         self.redo_shortcut.activated.connect(self.perform_redo)
 
     # --- UNDO / REDO LOGIC ---
-    def _push_undo_command(self, action_path, old_data, new_data):
-        """Records an action to the undo stack."""
-        if old_data == new_data:
-            return
-
-        command = {
-            'path': action_path,
-            'old': copy.deepcopy(old_data),
-            'new': copy.deepcopy(new_data)
-        }
+    def _push_undo_command(self, cmd_type, **kwargs):
+        if self._is_undoing_redoing: return
+        command = {'type': cmd_type, **kwargs}
         self.undo_stack.append(command)
         self.redo_stack.clear() 
         self._update_undo_redo_buttons()
@@ -235,59 +278,178 @@ class ActionClassifierApp(QMainWindow):
         self.update_save_export_button_state()
 
     def perform_undo(self):
-        if not self.undo_stack:
-            return
+        if not self.undo_stack: return
+        
+        self._is_undoing_redoing = True
+        try:
+            command = self.undo_stack.pop()
+            self.redo_stack.append(command)
+            
+            ctype = command['type']
+            
+            if ctype == CmdType.ANNOTATION_CONFIRM:
+                path = command['path']
+                old = command['old_data']
+                if old is None:
+                    if path in self.manual_annotations: del self.manual_annotations[path]
+                else:
+                    self.manual_annotations[path] = copy.deepcopy(old)
+                self._refresh_ui_after_undo_redo(path)
+                
+            elif ctype == CmdType.UI_CHANGE:
+                path = command['path']
+                if self._get_current_action_path() == path:
+                    head = command['head']
+                    old_val = command['old_val']
+                    self._update_ui_widget(head, old_val)
+            
+            elif ctype == CmdType.SCHEMA_ADD_CAT:
+                head = command['head']
+                if head in self.label_definitions:
+                    del self.label_definitions[head]
+                    self._setup_dynamic_ui()
+                    self._refresh_ui_after_undo_redo(self._get_current_action_path())
 
-        command = self.undo_stack.pop()
-        self.redo_stack.append(command)
+            elif ctype == CmdType.SCHEMA_DEL_CAT:
+                head = command['head']
+                defn = command['definition']
+                affected = command['affected_data']
+                self.label_definitions[head] = defn
+                for p, val in affected.items():
+                    if p not in self.manual_annotations: self.manual_annotations[p] = {}
+                    self.manual_annotations[p][head] = val
+                self._setup_dynamic_ui()
+                self._refresh_ui_after_undo_redo(self._get_current_action_path())
 
-        action_path = command['path']
-        old_data = command['old']
+            elif ctype == CmdType.SCHEMA_ADD_LBL:
+                head = command['head']
+                lbl = command['label']
+                if head in self.label_definitions and lbl in self.label_definitions[head]['labels']:
+                    self.label_definitions[head]['labels'].remove(lbl)
+                    self._update_ui_group_labels(head)
 
-        if old_data is None:
-            if action_path in self.manual_annotations:
-                del self.manual_annotations[action_path]
-        else:
-            self.manual_annotations[action_path] = copy.deepcopy(old_data)
+            elif ctype == CmdType.SCHEMA_DEL_LBL:
+                head = command['head']
+                lbl = command['label']
+                affected = command['affected_data']
+                if head in self.label_definitions:
+                    self.label_definitions[head]['labels'].append(lbl)
+                    self.label_definitions[head]['labels'].sort()
+                    for p, val in affected.items():
+                        if p not in self.manual_annotations: self.manual_annotations[p] = {}
+                        if self.label_definitions[head]['type'] == 'single_label':
+                            self.manual_annotations[p][head] = val
+                        else:
+                             if head not in self.manual_annotations[p] or not self.manual_annotations[p][head]:
+                                 self.manual_annotations[p][head] = [lbl]
+                             elif lbl not in self.manual_annotations[p][head]:
+                                 self.manual_annotations[p][head].append(lbl)
+                    self._update_ui_group_labels(head)
+                    self._refresh_ui_after_undo_redo(self._get_current_action_path())
 
-        self._refresh_ui_after_undo_redo(action_path)
-        self._update_undo_redo_buttons()
-        self._show_temp_message_box("Undo", "Action undone.", duration_ms=500)
+            self._update_undo_redo_buttons()
+        finally:
+            self._is_undoing_redoing = False
 
     def perform_redo(self):
-        if not self.redo_stack:
-            return
+        if not self.redo_stack: return
+        
+        self._is_undoing_redoing = True
+        try:
+            command = self.redo_stack.pop()
+            self.undo_stack.append(command)
+            
+            ctype = command['type']
+            
+            if ctype == CmdType.ANNOTATION_CONFIRM:
+                path = command['path']
+                new_d = command['new_data']
+                if new_d is None:
+                    if path in self.manual_annotations: del self.manual_annotations[path]
+                else:
+                    self.manual_annotations[path] = copy.deepcopy(new_d)
+                self._refresh_ui_after_undo_redo(path)
 
-        command = self.redo_stack.pop()
-        self.undo_stack.append(command)
+            elif ctype == CmdType.UI_CHANGE:
+                path = command['path']
+                if self._get_current_action_path() == path:
+                    head = command['head']
+                    new_val = command['new_val']
+                    self._update_ui_widget(head, new_val)
 
-        action_path = command['path']
-        new_data = command['new']
+            elif ctype == CmdType.SCHEMA_ADD_CAT:
+                head = command['head']
+                defn = command['definition']
+                self.label_definitions[head] = defn
+                self._setup_dynamic_ui()
+                self._refresh_ui_after_undo_redo(self._get_current_action_path())
 
-        if new_data is None:
-            if action_path in self.manual_annotations:
-                del self.manual_annotations[action_path]
-        else:
-            self.manual_annotations[action_path] = copy.deepcopy(new_data)
+            elif ctype == CmdType.SCHEMA_DEL_CAT:
+                head = command['head']
+                if head in self.label_definitions:
+                    del self.label_definitions[head]
+                    for anno in self.manual_annotations.values():
+                        if head in anno: del anno[head]
+                    self._setup_dynamic_ui()
+                    self._refresh_ui_after_undo_redo(self._get_current_action_path())
 
-        self._refresh_ui_after_undo_redo(action_path)
-        self._update_undo_redo_buttons()
-        self._show_temp_message_box("Redo", "Action redone.", duration_ms=500)
+            elif ctype == CmdType.SCHEMA_ADD_LBL:
+                head = command['head']
+                lbl = command['label']
+                if head in self.label_definitions:
+                    self.label_definitions[head]['labels'].append(lbl)
+                    self.label_definitions[head]['labels'].sort()
+                    self._update_ui_group_labels(head)
+
+            elif ctype == CmdType.SCHEMA_DEL_LBL:
+                head = command['head']
+                lbl = command['label']
+                if head in self.label_definitions and lbl in self.label_definitions[head]['labels']:
+                    self.label_definitions[head]['labels'].remove(lbl)
+                    for anno in self.manual_annotations.values():
+                        if self.label_definitions[head]['type'] == 'single_label':
+                            if anno.get(head) == lbl: anno[head] = None
+                        else:
+                            if head in anno and isinstance(anno[head], list) and lbl in anno[head]:
+                                anno[head].remove(lbl)
+                    self._update_ui_group_labels(head)
+                    self._refresh_ui_after_undo_redo(self._get_current_action_path())
+
+            self._update_undo_redo_buttons()
+        finally:
+            self._is_undoing_redoing = False
 
     def _refresh_ui_after_undo_redo(self, action_path):
+        if not action_path: return
         self.update_action_item_status(action_path)
-        
-        # If possible, select the item in the tree to show the change
         if action_path in self.action_item_map:
              item = self.action_item_map[action_path]
-             self.ui.left_panel.action_tree.setCurrentItem(item)
-
+             if self.ui.left_panel.action_tree.currentItem() != item:
+                 self.ui.left_panel.action_tree.setCurrentItem(item)
+        
         current_path = self._get_current_action_path()
         if current_path == action_path:
             self.display_manual_annotation(action_path)
             
         self.is_data_dirty = True
         self.update_save_export_button_state()
+
+    def _update_ui_widget(self, head, value):
+        if head in self.ui.right_panel.label_groups:
+            group = self.ui.right_panel.label_groups[head]
+            if isinstance(group, DynamicSingleLabelGroup):
+                group.set_checked_label(value)
+            elif isinstance(group, DynamicMultiLabelGroup):
+                group.set_checked_labels(value)
+
+    def _update_ui_group_labels(self, head):
+        if head in self.ui.right_panel.label_groups and head in self.label_definitions:
+            group = self.ui.right_panel.label_groups[head]
+            labels = self.label_definitions[head]['labels']
+            if isinstance(group, DynamicSingleLabelGroup):
+                group.update_radios(labels)
+            elif isinstance(group, DynamicMultiLabelGroup):
+                group.update_checkboxes(labels)
 
     def _update_undo_redo_buttons(self):
         self.ui.left_panel.undo_button.setEnabled(len(self.undo_stack) > 0)
@@ -301,185 +463,150 @@ class ActionClassifierApp(QMainWindow):
             self._show_temp_message_box("Warning", "Category name cannot be empty.", QMessageBox.Icon.Warning, 1500)
             return
         if clean_name in self.label_definitions:
-            self._show_temp_message_box("Warning", f"Category '{head_name}' already exists.", QMessageBox.Icon.Warning, 1500)
+            self._show_temp_message_box("Warning", f"Category '{head_name}' already exists (Case Insensitive).", QMessageBox.Icon.Warning, 1500)
             return
 
-        # --- TYPE SELECTION DIALOG ---
         msg = QMessageBox(self)
         msg.setWindowTitle("Select Category Type")
         msg.setText(f"Select the annotation type for the new category: '{head_name}'")
         msg.setIcon(QMessageBox.Icon.Question)
-        
         btn_single = msg.addButton("Single Label", QMessageBox.ButtonRole.ActionRole)
         btn_multi = msg.addButton("Multi Label", QMessageBox.ButtonRole.ActionRole)
         btn_cancel = msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        
         msg.exec()
         clicked = msg.clickedButton()
         
         selected_type = None
-        if clicked == btn_single:
-            selected_type = "single_label"
-        elif clicked == btn_multi:
-            selected_type = "multi_label"
-        else:
-            return 
+        if clicked == btn_single: selected_type = "single_label"
+        elif clicked == btn_multi: selected_type = "multi_label"
+        else: return 
 
-        new_head_definition = {
-            "type": selected_type, 
-            "labels": [] 
-        }
-        self.label_definitions[clean_name] = new_head_definition
+        new_def = {"type": selected_type, "labels": []}
+        
+        self._push_undo_command(CmdType.SCHEMA_ADD_CAT, head=clean_name, definition=new_def)
+        
+        self.label_definitions[clean_name] = new_def
         self.ui.right_panel.new_head_input.clear()
-        
         self._setup_dynamic_ui()
-        
-        type_display = "Single Label" if selected_type == "single_label" else "Multi Label"
-        self._show_temp_message_box("Success", f"Added '{head_name}' as {type_display}.", QMessageBox.Icon.Information, 2000)
-        self.is_data_dirty = True
-        self.update_save_export_button_state()
+        self._show_temp_message_box("Success", f"Added '{clean_name}'.", QMessageBox.Icon.Information, 1000)
 
     def _handle_remove_label_head(self, head_name):
         clean_name = head_name.strip().replace(' ', '_').lower()
-        if clean_name not in self.label_definitions:
-            self._show_temp_message_box("Warning", f"Category '{head_name}' not found.", QMessageBox.Icon.Warning, 1500)
-            return
+        if clean_name not in self.label_definitions: return
         if clean_name in self.DEFAULT_LABEL_DEFINITIONS:
-            self._show_temp_message_box("Warning", f"Cannot remove default imported category '{head_name}'.", QMessageBox.Icon.Warning, 2500)
+            self._show_temp_message_box("Warning", "Cannot remove default category.", QMessageBox.Icon.Warning, 2500)
             return
 
-        reply = QMessageBox.question(self, 'Confirm Removal',
-            f"Are you sure you want to remove the category '{head_name}'? All annotations will be lost.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-            QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(self, 'Confirm', f"Remove category '{clean_name}'? Annotations will be lost.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.No: return
 
-        if reply == QMessageBox.StandardButton.No:
-            return
+        affected_data = {}
+        for path, anno in self.manual_annotations.items():
+            if clean_name in anno:
+                affected_data[path] = copy.deepcopy(anno[clean_name])
 
-        try:
-            del self.label_definitions[clean_name]
-            paths_to_update = set()
-            keys_to_delete = []
-            for path, anno in list(self.manual_annotations.items()):
-                if clean_name in anno:
-                    del anno[clean_name]
-                    paths_to_update.add(path)
-                if not any(v for k, v in anno.items() if k in self.label_definitions and v):
-                    keys_to_delete.append(path)
+        self._push_undo_command(CmdType.SCHEMA_DEL_CAT, head=clean_name, definition=copy.deepcopy(self.label_definitions[clean_name]), affected_data=affected_data)
 
-            for path in keys_to_delete:
-                del self.manual_annotations[path]
-                paths_to_update.add(path)
+        del self.label_definitions[clean_name]
+        for path in affected_data:
+            del self.manual_annotations[path][clean_name]
+            if not any(self.manual_annotations[path].values()):
+                 del self.manual_annotations[path]
+            self.update_action_item_status(path)
 
-            for path in paths_to_update:
-                self.update_action_item_status(path)
-
-            self.ui.right_panel.new_head_input.clear()
-            self._setup_dynamic_ui() 
-            
-            current_path = self._get_current_action_path()
-            if current_path:
-                 self.display_manual_annotation(current_path)
-
-            self._show_temp_message_box("Success", f"Category '{head_name}' removed.", QMessageBox.Icon.Information, 2500)
-            self.is_data_dirty = True
-            self.update_save_export_button_state()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred: {e}")
+        self._setup_dynamic_ui()
+        current_path = self._get_current_action_path()
+        if current_path: self.display_manual_annotation(current_path)
+        self._show_temp_message_box("Success", "Category removed.", QMessageBox.Icon.Information, 1000)
 
     def _connect_dynamic_type_buttons(self):
         for head_name, group in self.ui.right_panel.label_groups.items():
-            try:
-                group.add_btn.clicked.disconnect()
-            except (TypeError, AttributeError):
-                pass 
+            try: group.add_btn.clicked.disconnect()
+            except: pass 
+            try: group.remove_label_signal.disconnect()
+            except: pass
+            try: group.value_changed.disconnect()
+            except: pass
             
-            # 1. Connect Add Label
             group.add_btn.clicked.connect(lambda _, h=head_name: self.add_custom_type(h))
-            
-            # 2. Connect Remove Label (Label Trash Button)
-            # The signal is emitted from the group with the label name string
             group.remove_label_signal.connect(lambda label_name, h=head_name: self.remove_custom_type(h, label_name))
+            group.value_changed.connect(self._handle_ui_selection_change)
+
+    def _handle_ui_selection_change(self, head_name, new_val):
+        if self._is_undoing_redoing: return
+        current_path = self._get_current_action_path()
+        if not current_path: return
+
+        old_val = None
+        # Find last UI_CHANGE for this head to determine "old" value, fallback to saved annotations
+        found_in_stack = False
+        for cmd in reversed(self.undo_stack):
+            if cmd['type'] == CmdType.UI_CHANGE and cmd['path'] == current_path and cmd['head'] == head_name:
+                old_val = cmd['new_val']
+                found_in_stack = True
+                break
+        
+        if not found_in_stack:
+            saved = self.manual_annotations.get(current_path, {})
+            old_val = saved.get(head_name)
+            
+        self._push_undo_command(CmdType.UI_CHANGE, path=current_path, head=head_name, old_val=old_val, new_val=new_val)
 
     def add_custom_type(self, head_name):
         group = self.ui.right_panel.label_groups.get(head_name)
         if not group: return
-
         new_type = group.input_field.text().strip()
-        if not new_type:
-            self._show_temp_message_box("Warning", "Type name cannot be empty.", QMessageBox.Icon.Warning, 1500)
-            return
+        if not new_type: return
         type_set = set(self.label_definitions[head_name]['labels'])
-        if new_type in type_set:
-            self._show_temp_message_box("Warning", f"'{new_type}' already exists in {head_name}.", QMessageBox.Icon.Warning, 1500)
-            group.input_field.clear()
-            return
+        if new_type in type_set: return
+        
+        self._push_undo_command(CmdType.SCHEMA_ADD_LBL, head=head_name, label=new_type)
         
         self.label_definitions[head_name]['labels'].append(new_type)
         self.label_definitions[head_name]['labels'].sort()
-        
-        if isinstance(group, DynamicSingleLabelGroup):
-             group.update_radios(self.label_definitions[head_name]['labels'])
-        elif isinstance(group, DynamicMultiLabelGroup):
-             group.update_checkboxes(self.label_definitions[head_name]['labels'])
-        
-        self.is_data_dirty = True
-        self._show_temp_message_box("Success", f"'{new_type}' added.", QMessageBox.Icon.Information, 1000)
+        if isinstance(group, DynamicSingleLabelGroup): group.update_radios(self.label_definitions[head_name]['labels'])
+        elif isinstance(group, DynamicMultiLabelGroup): group.update_checkboxes(self.label_definitions[head_name]['labels'])
         group.input_field.clear()
-        self.update_save_export_button_state()
+        self._show_temp_message_box("Success", "Label added.", QMessageBox.Icon.Information, 500)
 
     def remove_custom_type(self, head_name, type_to_remove):
-        # Updated signature to accept specific label name from signal
         group = self.ui.right_panel.label_groups.get(head_name)
         if not group: return
-        
         definition = self.label_definitions[head_name]
-        type_set = set(definition['labels'])
+        if len(definition['labels']) <= 1: return
 
-        if len(definition['labels']) <= 1:
-             self._show_temp_message_box("Warning", f"Cannot remove the last label in {head_name}.", QMessageBox.Icon.Warning, 1500)
-             return
-
-        if type_to_remove in type_set:
-            self.label_definitions[head_name]['labels'].remove(type_to_remove)
-            
-        if isinstance(group, DynamicSingleLabelGroup):
-            group.update_radios(self.label_definitions[head_name]['labels'])
-        elif isinstance(group, DynamicMultiLabelGroup):
-            group.update_checkboxes(self.label_definitions[head_name]['labels'])
-            
-        paths_to_update = set()
-        keys_to_delete = []
+        affected_data = {}
         for path, anno in self.manual_annotations.items():
-            # Handle single label removal
+             if definition['type'] == 'single_label' and anno.get(head_name) == type_to_remove:
+                 affected_data[path] = type_to_remove
+             elif definition['type'] == 'multi_label' and head_name in anno:
+                 if isinstance(anno[head_name], list) and type_to_remove in anno[head_name]:
+                     affected_data[path] = copy.deepcopy(anno[head_name]) 
+
+        self._push_undo_command(CmdType.SCHEMA_DEL_LBL, head=head_name, label=type_to_remove, affected_data=affected_data)
+
+        if type_to_remove in definition['labels']:
+            definition['labels'].remove(type_to_remove)
+
+        paths_to_update = set()
+        for path, anno in self.manual_annotations.items():
             if definition['type'] == 'single_label' and anno.get(head_name) == type_to_remove:
                 anno[head_name] = None
                 paths_to_update.add(path)
-            # Handle multi label removal
             elif definition['type'] == 'multi_label' and head_name in anno:
                 if isinstance(anno[head_name], list) and type_to_remove in anno[head_name]:
                     anno[head_name].remove(type_to_remove)
-                    if not anno[head_name]: 
-                        anno[head_name] = None
+                    if not anno[head_name]: anno[head_name] = None
                     paths_to_update.add(path)
-
             if not any(v for k, v in anno.items() if k in self.label_definitions and v):
-                 keys_to_delete.append(path)
+                 del self.manual_annotations[path]
+                 paths_to_update.add(path)
 
-        for path in keys_to_delete:
-            del self.manual_annotations[path]
-            paths_to_update.add(path)
-
-        for path in paths_to_update:
-            self.update_action_item_status(path)
-        current_path = self._get_current_action_path()
-        if current_path:
-             self.display_manual_annotation(current_path)
-
-        self.is_data_dirty = True
-        self._show_temp_message_box("Success", f"'{type_to_remove}' removed.", QMessageBox.Icon.Information, 1000)
-        self.update_save_export_button_state()
+        if isinstance(group, DynamicSingleLabelGroup): group.update_radios(definition['labels'])
+        elif isinstance(group, DynamicMultiLabelGroup): group.update_checkboxes(definition['labels'])
+        
+        for p in paths_to_update: self.update_action_item_status(p)
+        self._show_temp_message_box("Success", "Label removed.", QMessageBox.Icon.Information, 500)
             
     def _setup_dynamic_ui(self):
         self.ui.right_panel.setup_dynamic_labels(self.label_definitions)
@@ -491,184 +618,133 @@ class ActionClassifierApp(QMainWindow):
         qss_path_name = "style.qss" if mode == "Night" else "style_day.qss"
         qss_path = resource_path(qss_path_name) 
         try:
-            with open(qss_path, "r", encoding="utf-8") as f:
-                self.setStyleSheet(f.read())
+            with open(qss_path, "r", encoding="utf-8") as f: self.setStyleSheet(f.read())
             self.current_style_mode = mode
-            print(f"Applied style: {mode}")
-        except FileNotFoundError:
-             print(f"Warning: {qss_path_name} not found.")
-        except Exception as e:
-             print(f"Error loading stylesheet: {e}")
+        except FileNotFoundError: print(f"Warning: {qss_path_name} not found.")
+        except Exception as e: print(f"Error loading stylesheet: {e}")
 
-    def change_style_mode(self, mode):
-        self.apply_stylesheet(mode)
+    def change_style_mode(self, mode): self.apply_stylesheet(mode)
 
     def apply_action_filter(self):
         current_filter = self.ui.left_panel.filter_combo.currentIndex()
         if current_filter == self.FILTER_ALL:
-            for item in self.action_item_map.values():
-                item.setHidden(False)
+            for item in self.action_item_map.values(): item.setHidden(False)
             return
         for action_path, item in self.action_item_map.items():
             is_done = (action_path in self.manual_annotations and bool(self.manual_annotations[action_path]))
-            if current_filter == self.FILTER_DONE:
-                item.setHidden(not is_done)
-            elif current_filter == self.FILTER_NOT_DONE:
-                item.setHidden(is_done)
+            if current_filter == self.FILTER_DONE: item.setHidden(not is_done)
+            elif current_filter == self.FILTER_NOT_DONE: item.setHidden(is_done)
 
-    # --- Data Import Logic ---
     def _dynamic_data_import(self):
         if not self.json_loaded:
              self._show_temp_message_box("Action Blocked", "Please import or create a GAC JSON project first.", QMessageBox.Icon.Warning, 2000)
              return
-             
-        if not self.current_working_directory:
-             pass
-                 
+        if not self.current_working_directory: pass
         has_video = 'video' in self.modalities
         has_image_or_audio = any(m in ['image', 'audio'] for m in self.modalities)
-
         if has_video and not has_image_or_audio:
             self._show_temp_message_box("Import Mode", "Detected: Video-Only.", QMessageBox.Icon.Information, 1500)
             self._prompt_media_import_options()
         elif has_video and has_image_or_audio:
             self._show_temp_message_box("Import Mode", "Detected: Multi-Modal.", QMessageBox.Icon.Information, 1500)
             self._prompt_multi_modal_directory_import()
-        else:
-             self._show_temp_message_box("Import Blocked", "Unsupported modalities.", QMessageBox.Icon.Warning, 2500)
+        else: self._show_temp_message_box("Import Blocked", "Unsupported modalities.", QMessageBox.Icon.Warning, 2500)
 
     def _prompt_media_import_options(self):
         msg = QMessageBox(self)
-        msg.setWindowTitle("Video File Import Options")
+        msg.setWindowTitle("Video File Import")
         msg.setText("How do you want to import video files?")
-        
-        btn_link = msg.addButton("Link / Reference Only (Recommended)", QMessageBox.ButtonRole.ActionRole)
-        btn_copy = msg.addButton("Copy Files (Legacy)", QMessageBox.ButtonRole.ActionRole)
+        btn_upload = msg.addButton("Upload video(s)", QMessageBox.ButtonRole.ActionRole)
         btn_cancel = msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        
         msg.setIcon(QMessageBox.Icon.Question)
         msg.exec()
-        
         clicked = msg.clickedButton()
-        
-        if clicked == btn_link:
+        if clicked == btn_upload: 
             self._import_files_as_virtual_actions(copy_mode=False)
-        elif clicked == btn_copy:
-            if not self.current_working_directory:
-                 self.current_working_directory = QFileDialog.getExistingDirectory(self, "Select Working Directory to Store Copies")
-                 if not self.current_working_directory: return
-            self._import_files_as_virtual_actions(copy_mode=True)
             
     def _import_files_as_virtual_actions(self, copy_mode=False):
         video_ext_str = ' '.join(ext for ext in SUPPORTED_EXTENSIONS if ext in ('.mp4', '.avi', '.mov')).replace('.', '*')
         video_formats = f"Video Files ({video_ext_str})" 
-        
         start_dir = self.current_working_directory if self.current_working_directory else ""
         files, _ = QFileDialog.getOpenFileNames(self, "Select Video Files", start_dir, video_formats)
         if not files: return
-
         max_counter = 0
         for name in self.action_path_to_name.values():
             if name.startswith(self.SINGLE_VIDEO_PREFIX):
                 try:
                     parts = name.split('_')
-                    if len(parts) > 1 and parts[-1].isdigit():
-                        max_counter = max(max_counter, int(parts[-1]))
-                except ValueError:
-                    continue
+                    if len(parts) > 1 and parts[-1].isdigit(): max_counter = max(max_counter, int(parts[-1]))
+                except ValueError: continue
         counter = max_counter + 1
-        
         added_count = 0
-        
         for fpath in files:
             action_name = f"{self.SINGLE_VIDEO_PREFIX}{counter:03d}"
-            
             if copy_mode:
                 virtual_action_path = os.path.join(self.current_working_directory, action_name)
                 try:
                     os.makedirs(virtual_action_path, exist_ok=True)
                     shutil.copy2(fpath, os.path.join(virtual_action_path, os.path.basename(fpath)))
-                    
                     self.action_item_data.append({'name': action_name, 'path': virtual_action_path})
                     self.action_path_to_name[virtual_action_path] = action_name
                     added_count += 1
-                except Exception as e:
-                    print(f"Copy failed: {e}")
+                except Exception as e: print(f"Copy failed: {e}")
             else:
                 virtual_key = f"VIRTUAL_ID::{action_name}"
-                
-                self.action_item_data.append({
-                    'name': action_name, 
-                    'path': virtual_key,
-                    'source_files': [fpath] 
-                })
+                self.action_item_data.append({'name': action_name, 'path': virtual_key, 'source_files': [fpath]})
                 self.action_path_to_name[virtual_key] = action_name
                 added_count += 1
-
             counter += 1
-
         if added_count > 0:
             self._populate_action_tree()
             self.is_data_dirty = True
             self.update_save_export_button_state()
-            mode_text = "Linked" if not copy_mode else "Copied"
-            self._show_temp_message_box("Import Complete", f"Successfully {mode_text} {added_count} videos.", QMessageBox.Icon.Information)
+            self._show_temp_message_box("Import Complete", f"Successfully {added_count} videos.", QMessageBox.Icon.Information)
 
     def _prompt_multi_modal_directory_import(self):
         msg = QMessageBox(self)
         msg.setWindowTitle("Multi-modal Scene Import")
         msg.setText("How do you want to import the scene folders?")
-        
-        btn_batch = msg.addButton("Batch Import (Select Root Folder)", QMessageBox.ButtonRole.ActionRole)
-        btn_single = msg.addButton("Import Single Scene Folder", QMessageBox.ButtonRole.ActionRole)
+        btn_batch = msg.addButton("Scan Root Folder (Batch)", QMessageBox.ButtonRole.ActionRole)
+        btn_select = msg.addButton("Select Folder(s)", QMessageBox.ButtonRole.ActionRole)
         btn_cancel = msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        
         msg.setIcon(QMessageBox.Icon.Question)
         msg.exec()
-        
         clicked = msg.clickedButton()
-        
         if clicked == btn_batch:
             root_dir_path = QFileDialog.getExistingDirectory(self, "Select Root Directory", self.current_working_directory or "")
             if not root_dir_path: return
-
-            dir_paths = [
-                os.path.join(root_dir_path, name) 
-                for name in os.listdir(root_dir_path)
-                if os.path.isdir(os.path.join(root_dir_path, name))
-            ]
+            dir_paths = [os.path.join(root_dir_path, name) for name in os.listdir(root_dir_path) if os.path.isdir(os.path.join(root_dir_path, name))]
             if not dir_paths: return
             self._process_multi_modal_directories(dir_paths)
-            
-        elif clicked == btn_single:
-            specific_dir_path = QFileDialog.getExistingDirectory(self, "Select Scene Directory", self.current_working_directory or "")
-            if not specific_dir_path: return
-            self._process_multi_modal_directories([specific_dir_path])
+        elif clicked == btn_select:
+            dirs = self._pick_multiple_folders()
+            if dirs:
+                self._process_multi_modal_directories(dirs)
+
+    def _pick_multiple_folders(self):
+        dialog = FolderPickerDialog(self.current_working_directory or "", self)
+        if dialog.exec():
+            return dialog.get_selected_paths()
+        return []
 
     def _process_multi_modal_directories(self, dir_paths):
         all_added_actions = []
         total_dirs = len(dir_paths)
-        
         progress = QProgressDialog(f"Processing {total_dirs} directories...", "Cancel", 0, total_dirs, self)
         progress.setWindowTitle("Importing")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setValue(0)
         progress.show()
-
         for i, dir_path in enumerate(dir_paths):
             if progress.wasCanceled(): break
             progress.setLabelText(f"Processing: {os.path.basename(dir_path)}...")
             QApplication.processEvents()
-
             action_name = os.path.basename(dir_path)
             self.action_item_data.append({'name': action_name, 'path': dir_path})
             self.action_path_to_name[dir_path] = action_name
             all_added_actions.append(True)
-
             progress.setValue(i + 1)
-
         progress.close()
-        
         if all_added_actions:
             self._populate_action_tree()
             self.is_data_dirty = True
@@ -677,129 +753,171 @@ class ActionClassifierApp(QMainWindow):
     def _populate_action_tree(self):
         self.ui.left_panel.action_tree.clear()
         self.action_item_map.clear()
-        
-        def sort_key(d):
-            try:
-                parts = d['name'].split('_')
-                if len(parts) > 1 and parts[-1].isdigit():
-                    return int(parts[-1])
-                return float('inf')
-            except:
-                return float('inf')
-
-        sorted_list = sorted(self.action_item_data, key=sort_key)
-
+        def natural_sort_key(d):
+            name = d.get('name', '')
+            return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', name)]
+        sorted_list = sorted(self.action_item_data, key=natural_sort_key)
         for data in sorted_list:
             explicit_files = data.get('source_files', None)
-            
-            action_item = self.ui.left_panel.add_action_item(
-                data['name'], 
-                data['path'], 
-                explicit_files=explicit_files
-            )
+            action_item = self.ui.left_panel.add_action_item(data['name'], data['path'], explicit_files=explicit_files)
             self.action_item_map[data['path']] = action_item
-            
         for path in self.action_item_map.keys():
             self.update_action_item_status(path)
         self.apply_action_filter()
             
     def _validate_gac_json(self, data):
-        if 'modalities' not in data:
-            return False, "Missing 'modalities' field."
-        if not isinstance(data['modalities'], list):
-            return False, "'modalities' must be a list."
-        if 'labels' not in data:
-            return False, "Missing 'labels' field."
-        if not isinstance(data['labels'], dict):
-            return False, "'labels' must be a dictionary."
+        if 'modalities' not in data: return False, "Missing 'modalities' field."
+        if not isinstance(data['modalities'], list): return False, "'modalities' must be a list."
+        if 'labels' not in data: return False, "Missing 'labels' field."
+        if not isinstance(data['labels'], dict): return False, "'labels' must be a dictionary."
         return True, None
 
+    # --- [NEW] Handler for Clear List Button ---
+    def on_clear_list_clicked(self):
+        if not self.json_loaded and not self.action_item_data:
+            return 
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Clear Workspace")
+        msg_box.setText("Are you sure you want to clear the entire workspace?")
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        
+        if self.is_data_dirty:
+            msg_box.setInformativeText("You have unsaved changes that will be lost.")
+            
+        btn_yes = msg_box.addButton("Yes, Clear All", QMessageBox.ButtonRole.DestructiveRole)
+        # [Fixed] Use standard RejectRole
+        btn_cancel = msg_box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        msg_box.setDefaultButton(btn_cancel)
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == btn_yes:
+            self.clear_action_list(clear_working_dir=True, full_reset=True)
+
+    # --- [MODIFIED] Check and Confirm Project Close ---
+    def check_and_close_current_project(self):
+        if self.json_loaded:
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Open New Project")
+            msg_box.setText("Opening a new project will clear the current workspace. Continue?")
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            
+            if self.is_data_dirty:
+                msg_box.setInformativeText("You have unsaved changes in the current project.")
+                
+            btn_yes = msg_box.addButton("Yes", QMessageBox.ButtonRole.AcceptRole)
+            btn_no = msg_box.addButton("No", QMessageBox.ButtonRole.RejectRole)
+            msg_box.setDefaultButton(btn_no)
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == btn_yes:
+                self.clear_action_list(clear_working_dir=False, full_reset=True)
+                return True
+            else:
+                return False
+        return True
+
     def import_annotations(self):
-        self.clear_action_list(clear_working_dir=False) 
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select GAC JSON Annotation File", "", "JSON Files (*.json)")
-        if not file_path:
+        if not self.check_and_close_current_project():
             return
+
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select GAC JSON Annotation File", "", "JSON Files (*.json)")
+        if not file_path: return
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            with open(file_path, 'r', encoding='utf-8') as f: data = json.load(f)
         except Exception as e:
             QMessageBox.critical(self, "Import Error", f"Failed to parse JSON: {e}")
             return
         is_valid, error_msg = self._validate_gac_json(data)
         if not is_valid:
             QMessageBox.critical(self, "JSON Format Error", error_msg)
-            self.clear_action_list()
             return
         
+        if not self.json_loaded:
+             self.clear_action_list(clear_working_dir=False, full_reset=True)
+
         imported_count = 0
         self.modalities = data.get('modalities', [])
         self.current_working_directory = os.path.dirname(file_path)
         self.current_task_name = data.get('task', RightPanel.DEFAULT_TASK_NAME)
+        
         self.label_definitions.clear()
         if 'labels' in data and isinstance(data['labels'], dict):
             for head_name, definition in data['labels'].items():
+                clean_head_key = head_name.strip().replace(' ', '_').lower()
                 label_type = definition.get('type')
                 if label_type in ['single_label', 'multi_label']:
                     labels = sorted(list(set(definition.get('labels', []))))
-                    self.label_definitions[head_name] = {'type': label_type, 'labels': labels}
+                    self.label_definitions[clean_head_key] = {'type': label_type, 'labels': labels}
         self._setup_dynamic_ui()
         
+        grouped_data = {}
         for item in data.get('data', []):
             action_id = item.get('id')
             if not action_id: continue
-            
             inputs = item.get('inputs', [])
-            is_virtual = False
-            explicit_files = []
-            
+            video_paths_for_item = []
+            parent_folder_name = None
+            abs_parent_path = None
+
             for inp in inputs:
                 path_str = inp.get('path', '')
-                if os.path.isabs(path_str) and os.path.exists(path_str):
-                    explicit_files.append(path_str)
-                    is_virtual = True
+                if not os.path.isabs(path_str):
+                     full_path = os.path.normpath(os.path.join(self.current_working_directory, path_str))
                 else:
-                    full_path = os.path.join(self.current_working_directory, path_str)
-                    if os.path.exists(full_path) and not is_virtual:
-                        pass 
+                     full_path = path_str
+                video_paths_for_item.append(full_path)
+                if parent_folder_name is None:
+                    parent_dir = os.path.dirname(full_path)
+                    parent_folder_name = os.path.basename(parent_dir)
+                    abs_parent_path = parent_dir
 
-            action_key = None
-            if is_virtual:
-                action_key = f"VIRTUAL_ID::{action_id}"
-                self.action_item_data.append({
-                    'name': action_id,
-                    'path': action_key,
-                    'source_files': explicit_files
-                })
-            else:
-                potential_dir = os.path.join(self.current_working_directory, action_id)
-                if os.path.isdir(potential_dir):
-                    action_key = potential_dir
-                    self.action_item_data.append({'name': action_id, 'path': action_key})
-                else:
-                    action_key = f"VIRTUAL_ID::{action_id}"
-                    self.action_item_data.append({'name': action_id, 'path': action_key, 'source_files': []})
-            
-            self.action_path_to_name[action_key] = action_id
-            self.imported_action_metadata[action_key] = item.get('metadata', {})
+            if not parent_folder_name:
+                parent_folder_name = action_id
+                abs_parent_path = f"VIRTUAL_ID::{action_id}"
+
+            if parent_folder_name not in grouped_data:
+                grouped_data[parent_folder_name] = {
+                    'path': abs_parent_path, 'source_files': [], 'labels': {}, 'metadata': {}
+                }
+            for v_path in video_paths_for_item:
+                if v_path not in grouped_data[parent_folder_name]['source_files']:
+                    grouped_data[parent_folder_name]['source_files'].append(v_path)
 
             item_labels = item.get('labels', {})
+            if not grouped_data[parent_folder_name]['labels'] and item_labels:
+                grouped_data[parent_folder_name]['labels'] = item_labels
+                grouped_data[parent_folder_name]['metadata'] = item.get('metadata', {})
+
+        for group_name, group_info in grouped_data.items():
+            action_key = group_info['path']
+            self.action_item_data.append({
+                'name': group_name,
+                'path': action_key,
+                'source_files': sorted(group_info['source_files'])
+            })
+            self.action_path_to_name[action_key] = group_name
+            self.imported_action_metadata[action_key] = group_info['metadata']
+
+            item_labels = group_info['labels']
             manual_labels = {}
             has_label = False
-            for head_name, definition in self.label_definitions.items():
-                if head_name in item_labels:
-                    label_content = item_labels[head_name]
+            for head_name_json in item_labels:
+                clean_head_key = head_name_json.strip().replace(' ', '_').lower()
+                if clean_head_key in self.label_definitions:
+                    definition = self.label_definitions[clean_head_key]
+                    label_content = item_labels[head_name_json]
                     if isinstance(label_content, dict):
                         if definition['type'] == 'single_label' and 'label' in label_content:
                             val = label_content['label']
                             if val in definition['labels']:
-                                manual_labels[head_name] = val
+                                manual_labels[clean_head_key] = val
                                 has_label = True
                         elif definition['type'] == 'multi_label' and 'labels' in label_content:
                              vals = [l for l in label_content['labels'] if l in definition['labels']]
                              if vals:
-                                 manual_labels[head_name] = vals
+                                 manual_labels[clean_head_key] = vals
                                  has_label = True
-            
             if has_label:
                 self.manual_annotations[action_key] = manual_labels
                 imported_count += 1
@@ -811,44 +929,30 @@ class ActionClassifierApp(QMainWindow):
         self.ui.right_panel.manual_group_box.setEnabled(True)
         self.toggle_annotation_view() 
         self.update_save_export_button_state()
-        self._show_temp_message_box("Import Complete", f"Imported {imported_count} annotations.", QMessageBox.Icon.Information, 2000)
+        self._show_temp_message_box("Import Complete", f"Imported {imported_count} actions (grouped).", QMessageBox.Icon.Information, 2000)
 
     def create_new_project(self):
-        if self.is_data_dirty:
-            reply = QMessageBox.question(
-                self, "Unsaved Changes",
-                "You have unsaved changes in the current project. Creating a new project will clear them.\nDo you want to continue?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.No:
-                return
+        if not self.check_and_close_current_project():
+            return
 
         dialog = CreateProjectDialog(self)
         if dialog.exec():
-            new_project_data = dialog.get_data()
-            self.clear_action_list(clear_working_dir=False)
+            self.clear_action_list(clear_working_dir=False, full_reset=True)
             
+            new_project_data = dialog.get_data()
             self.current_task_name = new_project_data['task']
             self.modalities = new_project_data['modalities']
             self.label_definitions = new_project_data['labels']
             self.project_description = new_project_data['description']
-            
             self.json_loaded = True
             self.current_json_path = None 
             self.is_data_dirty = True 
-            
             self._setup_dynamic_ui()
             self.update_save_export_button_state()
             self.toggle_annotation_view()
-            
-            self._show_temp_message_box(
-                "Project Created", 
-                f"Project '{self.current_task_name}' created.\nYou can now Add Data.", 
-                QMessageBox.Icon.Information, 
-                2500
-            )
+            self._show_temp_message_box("Project Created", f"Project '{self.current_task_name}' created.\nYou can now Add Data.", QMessageBox.Icon.Information, 2500)
 
-    def clear_action_list(self, clear_working_dir=True):
+    def clear_action_list(self, clear_working_dir=True, full_reset=False):
         self.ui.left_panel.action_tree.clear()
         self.manual_annotations.clear()
         
@@ -859,26 +963,32 @@ class ActionClassifierApp(QMainWindow):
         self.action_item_map.clear()
         self.action_item_data.clear()
         self.action_path_to_name.clear()
-        self.modalities.clear() 
         self.imported_action_metadata.clear() 
         self.imported_input_metadata.clear()  
+        
         self.current_json_path = None
-        self.json_loaded = False 
         self.is_data_dirty = False 
-        self.project_description = "" 
+        
+        if full_reset:
+             self.json_loaded = False 
+             self.label_definitions = self.DEFAULT_LABEL_DEFINITIONS.copy()
+             self.current_task_name = RightPanel.DEFAULT_TASK_NAME
+             self.project_description = ""
+             self._setup_dynamic_ui()
+
         if clear_working_dir:
             self.current_working_directory = None
+            
         self.update_save_export_button_state()
         self.ui.right_panel.manual_group_box.setEnabled(False) 
-        self.current_task_name = RightPanel.DEFAULT_TASK_NAME
-        self.label_definitions = self.DEFAULT_LABEL_DEFINITIONS.copy()
-        self._setup_dynamic_ui()
+        
+        self.ui.center_panel.show_single_view(None)
 
+    # ... (Rest remains unchanged)
     def toggle_annotation_view(self):
         can_annotate = False 
         current_item = self.ui.left_panel.action_tree.currentItem()
-        if current_item and current_item.childCount() > 0 and self.json_loaded:
-            can_annotate = True
+        if current_item and current_item.childCount() > 0 and self.json_loaded: can_annotate = True
         self.ui.right_panel.manual_group_box.setEnabled(bool(can_annotate))
 
     def on_item_selected(self, current_item, _):
@@ -901,37 +1011,29 @@ class ActionClassifierApp(QMainWindow):
                 action_path = current_item.parent().data(0, Qt.ItemDataRole.UserRole)
             self.ui.center_panel.multi_view_button.setEnabled(False) 
         self.toggle_annotation_view()
-        if action_path:
-            self.display_manual_annotation(action_path)
+        if action_path: self.display_manual_annotation(action_path)
         self.update_save_export_button_state() 
             
-    def play_video(self):
-        self.ui.center_panel.toggle_play_pause()
+    def play_video(self): self.ui.center_panel.toggle_play_pause()
 
     def show_all_views(self):
         current_item = self.ui.left_panel.action_tree.currentItem()
-        if not current_item:
-            return
-        if current_item.parent() is not None:
-             current_item = current_item.parent()
+        if not current_item: return
+        if current_item.parent() is not None: current_item = current_item.parent()
         action_path = current_item.data(0, Qt.ItemDataRole.UserRole)
         if current_item.childCount() > 0:
             clip_paths = []
             for j in range(current_item.childCount()):
                 clip_path = current_item.child(j).data(0, Qt.ItemDataRole.UserRole)
-                if clip_path.lower().endswith(('.mp4', '.avi', '.mov')):
-                     clip_paths.append(clip_path)
-        else:
-            return 
+                if clip_path.lower().endswith(('.mp4', '.avi', '.mov')): clip_paths.append(clip_path)
+        else: return 
         self.ui.center_panel.show_all_views(clip_paths)
 
     def _get_current_action_path(self):
         current_item = self.ui.left_panel.action_tree.currentItem()
         if not current_item: return None
-        if current_item.parent() is None:
-            return current_item.data(0, Qt.ItemDataRole.UserRole)
-        else:
-            return current_item.parent().data(0, Qt.ItemDataRole.UserRole)
+        if current_item.parent() is None: return current_item.data(0, Qt.ItemDataRole.UserRole)
+        else: return current_item.parent().data(0, Qt.ItemDataRole.UserRole)
 
     def save_manual_annotation(self):
         if not self.json_loaded:
@@ -941,23 +1043,16 @@ class ActionClassifierApp(QMainWindow):
         if not action_path: return
         data = self.ui.right_panel.get_manual_annotation()
         action_name = self.action_path_to_name.get(action_path)
-        
         cleaned_data = {}
         for k, v in data.items():
-            if isinstance(v, list) and v: 
-                cleaned_data[k] = v
-            elif isinstance(v, str) and v: 
-                cleaned_data[k] = v
-        
-        if not cleaned_data:
-            cleaned_data = None
-
+            if isinstance(v, list) and v: cleaned_data[k] = v
+            elif isinstance(v, str) and v: cleaned_data[k] = v
+        if not cleaned_data: cleaned_data = None
         old_data = None
-        if action_path in self.manual_annotations:
-            old_data = copy.deepcopy(self.manual_annotations[action_path])
+        if action_path in self.manual_annotations: old_data = copy.deepcopy(self.manual_annotations[action_path])
         
-        self._push_undo_command(action_path, old_data, cleaned_data)
-
+        self._push_undo_command(CmdType.ANNOTATION_CONFIRM, path=action_path, old_data=old_data, new_data=cleaned_data)
+        
         if cleaned_data:
             self.manual_annotations[action_path] = cleaned_data
             self.is_data_dirty = True
@@ -966,26 +1061,19 @@ class ActionClassifierApp(QMainWindow):
             del self.manual_annotations[action_path]
             self.is_data_dirty = True
             self._show_temp_message_box("Success", f"Annotation cleared for {action_name}.", QMessageBox.Icon.Information, 1000)
-        else:
-            self._show_temp_message_box("No Selection", "Please select at least one label.", QMessageBox.Icon.Warning, 1500)
-            
+        else: self._show_temp_message_box("No Selection", "Please select at least one label.", QMessageBox.Icon.Warning, 1500)
         self.update_save_export_button_state()
         self.update_action_item_status(action_path)
 
     def clear_current_manual_annotation(self):
         action_path = self._get_current_action_path()
         if not action_path: return
-        
         old_data = None
-        if action_path in self.manual_annotations:
-            old_data = copy.deepcopy(self.manual_annotations[action_path])
-            
+        if action_path in self.manual_annotations: old_data = copy.deepcopy(self.manual_annotations[action_path])
         if old_data is None:
              self.ui.right_panel.clear_manual_selection()
              return
-
-        self._push_undo_command(action_path, old_data, None)
-
+        self._push_undo_command(CmdType.ANNOTATION_CONFIRM, path=action_path, old_data=old_data, new_data=None)
         self.ui.right_panel.clear_manual_selection()
         action_name = self.action_path_to_name.get(action_path)
         if action_path in self.manual_annotations:
@@ -996,10 +1084,10 @@ class ActionClassifierApp(QMainWindow):
         self.update_action_item_status(action_path)
 
     def display_manual_annotation(self, action_path):
-        if action_path in self.manual_annotations:
-            self.ui.right_panel.set_manual_annotation(self.manual_annotations[action_path])
-        else:
-            self.ui.right_panel.clear_manual_selection()
+        self._is_undoing_redoing = True
+        if action_path in self.manual_annotations: self.ui.right_panel.set_manual_annotation(self.manual_annotations[action_path])
+        else: self.ui.right_panel.clear_manual_selection()
+        self._is_undoing_redoing = False
 
     def update_save_export_button_state(self):
         can_export = self.json_loaded and bool(self.manual_annotations)
@@ -1011,10 +1099,8 @@ class ActionClassifierApp(QMainWindow):
         if not self.json_loaded:
              self._show_temp_message_box("Action Blocked", "Please import a GAC JSON file first.", QMessageBox.Icon.Warning, 2000)
              return
-        if self.current_json_path:
-            self._write_gac_json(self.current_json_path)
-        else:
-            self.export_results_to_json()
+        if self.current_json_path: self._write_gac_json(self.current_json_path)
+        else: self.export_results_to_json()
 
     def export_results_to_json(self):
         if not self.json_loaded:
@@ -1042,39 +1128,33 @@ class ActionClassifierApp(QMainWindow):
             "labels": self.label_definitions.copy(),
             "data": []
         }
-
         path_to_item_map = {}
         root = self.ui.left_panel.action_tree.invisibleRootItem()
         for i in range(root.childCount()):
             item = root.child(i)
             path_to_item_map[item.data(0, Qt.ItemDataRole.UserRole)] = item
-
         all_keys = set(self.action_path_to_name.keys())
         all_keys.update(self.manual_annotations.keys())
-        
         sorted_keys = sorted(list(all_keys), key=lambda p: self.action_path_to_name.get(p, ""))
+        json_dir = os.path.dirname(file_path)
 
         for action_key in sorted_keys:
             action_name = self.action_path_to_name.get(action_key)
             if not action_name: continue
-                
             manual_result = self.manual_annotations.get(action_key, {})
             stored_metadata = self.imported_action_metadata.get(action_key, {})
-            
             data_item = {
                 "id": action_name,
                 "inputs": [],
                 "labels": {},
                 "metadata": stored_metadata 
             }
-            
             for head_name, definition in self.label_definitions.items():
                 if definition['type'] == 'single_label':
                     final_label = None
                     if manual_result and manual_result.get(head_name) and isinstance(manual_result.get(head_name), str):
                         final_label = manual_result.get(head_name)
-                    if final_label:
-                        data_item["labels"][head_name] = {"label": final_label}
+                    if final_label: data_item["labels"][head_name] = {"label": final_label}
                 elif definition['type'] == 'multi_label':
                     final_label_list = []
                     if manual_result and manual_result.get(head_name) and isinstance(manual_result.get(head_name), list):
@@ -1087,27 +1167,29 @@ class ActionClassifierApp(QMainWindow):
                     clip_item = action_item.child(j)
                     abs_clip_path = clip_item.data(0, Qt.ItemDataRole.UserRole)
                     clip_name = os.path.basename(abs_clip_path)
-                    
                     file_ext = os.path.splitext(clip_name)[1].lower()
                     modality_type = "unknown"
                     if file_ext in ('.mp4', '.avi', '.mov'): modality_type = "video"
                     elif file_ext in ('.jpg', '.jpeg', '.png'): modality_type = "image"
                     elif file_ext in ('.wav', '.mp3'): modality_type = "audio"
-                    
                     input_meta = self.imported_input_metadata.get((action_key, clip_name), {})
+                    
+                    try:
+                        rel_path = os.path.relpath(abs_clip_path, json_dir)
+                        rel_path = rel_path.replace(os.sep, '/')
+                    except ValueError:
+                        rel_path = abs_clip_path
                     
                     data_item["inputs"].append({
                         "type": modality_type,
-                        "path": abs_clip_path, 
+                        "path": rel_path, 
                         "metadata": input_meta 
                     })
 
-            if data_item["labels"] or data_item["inputs"]: 
-                output_data["data"].append(data_item)
+            if data_item["labels"] or data_item["inputs"]: output_data["data"].append(data_item)
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(output_data, f, indent=2, ensure_ascii=False)
+            with open(file_path, 'w', encoding='utf-8') as f: json.dump(output_data, f, indent=2, ensure_ascii=False)
             self.is_data_dirty = False
             self._show_temp_message_box("Save Complete", f"Saved to {os.path.basename(file_path)}", QMessageBox.Icon.Information, 2000)
             return True
