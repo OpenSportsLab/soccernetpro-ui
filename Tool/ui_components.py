@@ -206,21 +206,24 @@ class CreateProjectDialog(QDialog):
         self.current_labels_list.takeItem(row)
 
     def add_category_to_main_list(self):
-        cat_name = self.cat_name_edit.text().strip().replace(" ", "_")
-        if not cat_name:
+        raw_name = self.cat_name_edit.text().strip()
+        if not raw_name:
             self.cat_name_edit.setPlaceholderText("NAME REQUIRED!")
             return
+        
+        # Case Insensitive: Convert to lowercase for key
+        cat_key = raw_name.replace(" ", "_").lower()
             
-        if cat_name in self.final_categories:
-            QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_name}' already exists.")
+        if cat_key in self.final_categories:
+            QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_key}' already exists (Case Insensitive).")
             self.cat_name_edit.selectAll()
             self.cat_name_edit.setFocus()
             return
             
         for i in range(self.categories_list_widget.count()):
             item = self.categories_list_widget.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == cat_name:
-                QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_name}' already exists.")
+            if item.data(Qt.ItemDataRole.UserRole) == cat_key:
+                QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_key}' already exists.")
                 return
 
         cat_type = self.cat_type_combo.currentText()
@@ -232,7 +235,7 @@ class CreateProjectDialog(QDialog):
             if label_text:
                 labels.append(label_text)
         
-        self.final_categories[cat_name] = {
+        self.final_categories[cat_key] = {
             "type": cat_type,
             "labels": sorted(list(set(labels)))
         }
@@ -241,22 +244,21 @@ class CreateProjectDialog(QDialog):
         item_layout = QHBoxLayout(item_widget)
         item_layout.setContentsMargins(5, 2, 5, 2)
         
-        info_text = f"<b>{cat_name}</b> ({cat_type}) - {len(labels)} labels"
+        info_text = f"<b>{cat_key}</b> ({cat_type}) - {len(labels)} labels"
         label_info = QLabel(info_text)
         
         delete_btn = QPushButton("Remove")
         delete_btn.setFixedSize(70, 25)
-        # --- 修改处：增加了 font-size: 10px ---
         delete_btn.setStyleSheet("background-color: #ffcccc; color: #cc0000; border: 1px solid #cc0000; border-radius: 3px; font-size: 10px;")
         
-        delete_btn.clicked.connect(lambda _, n=cat_name: self.remove_category(n))
+        delete_btn.clicked.connect(lambda _, n=cat_key: self.remove_category(n))
         
         item_layout.addWidget(label_info, 1)
         item_layout.addWidget(delete_btn)
         
         list_item = QListWidgetItem(self.categories_list_widget)
         list_item.setSizeHint(item_widget.sizeHint())
-        list_item.setData(Qt.ItemDataRole.UserRole, cat_name)
+        list_item.setData(Qt.ItemDataRole.UserRole, cat_key)
         
         self.categories_list_widget.addItem(list_item)
         self.categories_list_widget.setItemWidget(list_item, item_widget)
@@ -307,7 +309,7 @@ class LeftPanel(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # --- UPDATED HEADER WITH UNDO/REDO BUTTONS ---
+        # --- HEADER WITH UNDO/REDO BUTTONS ---
         header_widget = QWidget()
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -630,6 +632,7 @@ class DynamicSingleLabelGroup(QWidget):
     
     remove_category_signal = pyqtSignal(str) # Signal to request removal of this category (Head)
     remove_label_signal = pyqtSignal(str) # Signal to request removal of a specific label option
+    value_changed = pyqtSignal(str, object) # [NEW] Signal to report value changes
 
     def __init__(self, label_head_name, label_type_definition, parent=None):
         super().__init__(parent)
@@ -684,7 +687,6 @@ class DynamicSingleLabelGroup(QWidget):
         h_add_layout.addWidget(self.add_btn)
         
         v_manager_layout.addLayout(h_add_layout)
-        # Removed the removal combo/button from here
         
         self.v_layout.addWidget(self.manager_group)
 
@@ -712,6 +714,9 @@ class DynamicSingleLabelGroup(QWidget):
             row_layout.setContentsMargins(0, 2, 0, 2)
             
             rb = QRadioButton(type_name)
+            # [NEW] Connect clicked signal to handler
+            rb.clicked.connect(self._on_radio_clicked)
+
             self.radio_buttons[type_name] = rb
             self.button_group.addButton(rb)
             
@@ -719,11 +724,10 @@ class DynamicSingleLabelGroup(QWidget):
             del_label_btn.setFixedSize(30, 30)
             del_label_btn.setFlat(True)
             del_label_btn.setToolTip(f"Remove '{type_name}'")
-            # Use 'x' or a small icon
 
             del_label_btn.setText("x")
             font = del_label_btn.font()
-            font.setPointSize(25)  # 改这里：数字越大，x 越大，比如 10、12、14、18...
+            font.setPointSize(25) 
             del_label_btn.setFont(font)
 
             del_label_btn.setStyleSheet("color: #888; font-weight: bold;")
@@ -739,12 +743,18 @@ class DynamicSingleLabelGroup(QWidget):
             self.radio_layout.addWidget(row_widget)
             
         self.button_group.setExclusive(True)
+    
+    # [NEW] Handler for radio clicks
+    def _on_radio_clicked(self):
+        self.value_changed.emit(self.head_name, self.get_checked_label())
 
     def get_checked_label(self):
         checked_btn = self.button_group.checkedButton()
         return checked_btn.text() if checked_btn else None
 
     def set_checked_label(self, label_name):
+        # [NEW] Block signals to prevent recursion when setting programmatically (e.g. undo)
+        self.blockSignals(True)
         self.button_group.setExclusive(False)
         for rb in self.radio_buttons.values():
             rb.setChecked(False)
@@ -752,12 +762,14 @@ class DynamicSingleLabelGroup(QWidget):
         
         if label_name in self.radio_buttons:
             self.radio_buttons[label_name].setChecked(True)
+        self.blockSignals(False)
 
 # --- Helper Class: Dynamic Multi Label Group ---
 class DynamicMultiLabelGroup(QWidget):
     
     remove_category_signal = pyqtSignal(str) 
-    remove_label_signal = pyqtSignal(str) # Signal to request removal of a specific label option
+    remove_label_signal = pyqtSignal(str) 
+    value_changed = pyqtSignal(str, object) # [NEW] Signal
 
     def __init__(self, label_head_name, label_type_definition, parent=None):
         super().__init__(parent)
@@ -808,7 +820,6 @@ class DynamicMultiLabelGroup(QWidget):
         
         h_layout.addWidget(self.input_field, 1)
         h_layout.addWidget(self.add_btn)
-        # Removed 'Remove Checked' button
         
         self.v_layout.addWidget(self.manager_group) 
 
@@ -818,7 +829,6 @@ class DynamicMultiLabelGroup(QWidget):
         self.remove_category_signal.emit(self.head_name)
 
     def update_checkboxes(self, new_types):
-        # Clear existing
         while self.checkbox_layout.count():
             item = self.checkbox_layout.takeAt(0)
             if item.widget():
@@ -826,13 +836,15 @@ class DynamicMultiLabelGroup(QWidget):
             
         self.checkboxes.clear()
         
-        # Create rows: [CheckBox] [Spacer] [Delete Button]
         for type_name in sorted(list(set(new_types))): 
             row_widget = QWidget()
             row_layout = QHBoxLayout(row_widget)
             row_layout.setContentsMargins(0, 2, 0, 2)
 
             cb = QCheckBox(type_name)
+            # [NEW] Connect signal
+            cb.clicked.connect(self._on_box_clicked)
+
             self.checkboxes[type_name] = cb
             
             del_label_btn = QPushButton()
@@ -851,6 +863,10 @@ class DynamicMultiLabelGroup(QWidget):
 
             self.checkbox_layout.addWidget(row_widget)
             
+    # [NEW] Handler
+    def _on_box_clicked(self):
+        self.value_changed.emit(self.head_name, self.get_checked_labels())
+
     def get_checked_labels(self):
         return [cb.text() for cb in self.checkboxes.values() if cb.isChecked()]
     
@@ -858,9 +874,12 @@ class DynamicMultiLabelGroup(QWidget):
         return self.checkboxes.items()
 
     def set_checked_labels(self, label_list):
+        # [NEW] Block signals
+        self.blockSignals(True)
         checked_set = set(label_list)
         for cb_name, cb in self.checkboxes.items():
             cb.setChecked(cb_name in checked_set)
+        self.blockSignals(False)
 
 
 # --- RightPanel (Annotation Only) ---
@@ -963,8 +982,8 @@ class RightPanel(QWidget):
         layout.addStretch() 
         
         bottom_button_layout = QHBoxLayout()
-        self.save_button = QPushButton("Save (JSON)")
-        self.export_button = QPushButton("Save As... (JSON)") 
+        self.save_button = QPushButton("Save")
+        self.export_button = QPushButton("Export") 
         
         self.save_button.setEnabled(False)
         self.export_button.setEnabled(False)
