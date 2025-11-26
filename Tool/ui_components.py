@@ -5,12 +5,12 @@ from PyQt6.QtWidgets import (
     QGroupBox, QRadioButton, QButtonGroup, QComboBox, QLineEdit, QCheckBox,
     QSlider, QGridLayout, QDialog, QFormLayout, QDialogButtonBox, QTableWidget, 
     QTableWidgetItem, QAbstractItemView, QListWidget, QListWidgetItem, QFrame,
-    QMessageBox
+    QMessageBox, QMenu
 )
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QUrl, QTime, QSize, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QFont, QPen, QPixmap
+from PyQt6.QtGui import QPainter, QColor, QFont, QPen, QPixmap, QAction
 
 # Define all supported media extensions for file filtering
 SUPPORTED_EXTENSIONS = (
@@ -18,6 +18,28 @@ SUPPORTED_EXTENSIONS = (
     '.jpg', '.jpeg', '.png', '.bmp', # Image
     '.wav', '.mp3', '.aac'  # Audio
 )
+
+# --- Helper Style for the "Small Square with Cross" Button ---
+# Optimized for perfect centering and size (16px Arial)
+def get_square_remove_btn_style():
+    return """
+        QPushButton {
+            background-color: transparent;
+            border: 1px solid #999999;
+            border-radius: 3px;
+            color: #999999;
+            font-family: Arial;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 0px;
+            margin: 0px;
+        }
+        QPushButton:hover {
+            border-color: #FF4444;
+            color: #FF4444;
+            background-color: rgba(255, 68, 68, 0.1);
+        }
+    """
 
 # --- Helper Class: Wrapper for a single video view and its controls ---
 class VideoViewAndControl(QWidget):
@@ -101,7 +123,8 @@ class CreateProjectDialog(QDialog):
         self.cat_name_edit.setPlaceholderText("Category Name (e.g., Color)")
         
         self.cat_type_combo = QComboBox()
-        self.cat_type_combo.addItems(["single_label", "multi_label"])
+        # [MODIFIED] Display cleaner names (removed underscores)
+        self.cat_type_combo.addItems(["Single Label", "Multi Label"])
         
         row_a.addWidget(QLabel("Name:"))
         row_a.addWidget(self.cat_name_edit, 2)
@@ -157,6 +180,14 @@ class CreateProjectDialog(QDialog):
 
         self.final_categories = {}
 
+    # Intercept Key Presses to prevent Enter from closing the dialog unless intentional
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if self.single_label_input.hasFocus():
+                self.add_label_to_temp_list()
+            return 
+        super().keyPressEvent(event)
+
     def add_label_to_temp_list(self):
         txt = self.single_label_input.text().strip()
         if not txt: return
@@ -176,20 +207,13 @@ class CreateProjectDialog(QDialog):
         
         lbl = QLabel(txt)
         
-        remove_btn = QPushButton("Remove")
-        remove_btn.setFixedSize(75, 25)
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ffcccc; 
-                color: #cc0000; 
-                border: 1px solid #cc0000; 
-                border-radius: 3px;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #ffaaaa;
-            }
-        """)
+        # Small Square X Button for labels in dialog
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(20, 20)
+        remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        remove_btn.setToolTip("Remove label")
+        remove_btn.setStyleSheet(get_square_remove_btn_style())
+        
         remove_btn.clicked.connect(lambda _, it=item: self.remove_temp_label(it))
         
         h_layout.addWidget(lbl, 1)
@@ -211,7 +235,7 @@ class CreateProjectDialog(QDialog):
             self.cat_name_edit.setPlaceholderText("NAME REQUIRED!")
             return
         
-        # Case Insensitive: Convert to lowercase for key
+        # Case Insensitive: Convert to lowercase for internal key (snake_case)
         cat_key = raw_name.replace(" ", "_").lower()
             
         if cat_key in self.final_categories:
@@ -226,7 +250,9 @@ class CreateProjectDialog(QDialog):
                 QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_key}' already exists.")
                 return
 
-        cat_type = self.cat_type_combo.currentText()
+        cat_type_disp = self.cat_type_combo.currentText()
+        # Map display text back to internal key for JSON
+        cat_type_internal = "single_label" if "Single" in cat_type_disp else "multi_label"
         
         labels = []
         for i in range(self.current_labels_list.count()):
@@ -235,8 +261,9 @@ class CreateProjectDialog(QDialog):
             if label_text:
                 labels.append(label_text)
         
+        # Store using internal keys
         self.final_categories[cat_key] = {
-            "type": cat_type,
+            "type": cat_type_internal,
             "labels": sorted(list(set(labels)))
         }
         
@@ -244,12 +271,18 @@ class CreateProjectDialog(QDialog):
         item_layout = QHBoxLayout(item_widget)
         item_layout.setContentsMargins(5, 2, 5, 2)
         
-        info_text = f"<b>{cat_key}</b> ({cat_type}) - {len(labels)} labels"
+        # [MODIFIED] Display Clean Title (No underscores)
+        clean_title = cat_key.replace('_', ' ').title()
+        info_text = f"<b>{clean_title}</b> ({cat_type_disp}) - {len(labels)} labels"
         label_info = QLabel(info_text)
         
-        delete_btn = QPushButton("Remove")
-        delete_btn.setFixedSize(70, 25)
-        delete_btn.setStyleSheet("background-color: #ffcccc; color: #cc0000; border: 1px solid #cc0000; border-radius: 3px; font-size: 10px;")
+        # Trash Icon Button for Categories
+        delete_btn = QPushButton()
+        delete_btn.setFixedSize(24, 24)
+        delete_btn.setFlat(True)
+        delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        delete_btn.setToolTip(f"Remove '{cat_key}'")
+        delete_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
         
         delete_btn.clicked.connect(lambda _, n=cat_key: self.remove_category(n))
         
@@ -302,12 +335,15 @@ class LeftPanel(QWidget):
     """Defines the UI for the left panel (file management)."""
     
     SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS
+    request_remove_item = pyqtSignal(object) 
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(300)
 
         layout = QVBoxLayout(self)
+        # [MODIFIED] Reduced spacing to keep Action Tree close to Add Data
+        layout.setSpacing(10) 
 
         # --- HEADER WITH UNDO/REDO BUTTONS ---
         header_widget = QWidget()
@@ -342,7 +378,15 @@ class LeftPanel(QWidget):
         self.action_tree = QTreeWidget()
         self.action_tree.setHeaderLabels(["Actions"])
         
+        # Enable Custom Context Menu
+        self.action_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.action_tree.customContextMenuRequested.connect(self._show_context_menu)
+        
         top_button_layout = QVBoxLayout() 
+        # [MODIFIED] Ensure zero bottom margin so Tree sits right against it
+        top_button_layout.setContentsMargins(0, 0, 0, 0)
+        # [MODIFIED] Added Spacing between "Import/Create" row and "Add Data" button
+        top_button_layout.setSpacing(10) 
         
         row1 = QHBoxLayout()
         self.import_annotations_button = QPushButton("Import JSON") 
@@ -354,7 +398,6 @@ class LeftPanel(QWidget):
         
         top_button_layout.addLayout(row1)
         top_button_layout.addWidget(self.add_data_button)
-        top_button_layout.addStretch()
         
         bottom_button_layout = QHBoxLayout()
         
@@ -379,16 +422,28 @@ class LeftPanel(QWidget):
         self.import_button = self.import_annotations_button 
         self.add_video_button = self.add_data_button 
 
+    def _show_context_menu(self, position):
+        item = self.action_tree.itemAt(position)
+        if item:
+            menu = QMenu()
+            remove_action = QAction("Remove", self)
+            remove_action.triggered.connect(lambda: self.request_remove_item.emit(item))
+            menu.addAction(remove_action)
+            menu.exec(self.action_tree.viewport().mapToGlobal(position))
+
     def add_action_item(self, name, path, explicit_files=None):
         action_item = QTreeWidgetItem(self.action_tree, [name])
         action_item.setData(0, Qt.ItemDataRole.UserRole, path)
         
         if explicit_files:
             for file_path in explicit_files:
-                if os.path.exists(file_path):
-                    clip_name = os.path.basename(file_path)
-                    clip_item = QTreeWidgetItem(action_item, [clip_name])
-                    clip_item.setData(0, Qt.ItemDataRole.UserRole, file_path)
+                clip_name = os.path.basename(file_path)
+                clip_item = QTreeWidgetItem(action_item, [clip_name])
+                clip_item.setData(0, Qt.ItemDataRole.UserRole, file_path)
+                
+                if not os.path.exists(file_path):
+                    clip_item.setForeground(0, QColor("red"))
+                    clip_item.setToolTip(0, f"File not found: {file_path}")
 
         elif path and os.path.isdir(path):
             try:
@@ -549,7 +604,11 @@ class CenterPanel(QWidget):
         
         if not clip_path or not os.path.exists(clip_path):
             self.play_button.setEnabled(False)
-            placeholder = QLabel("No media selected or file not found.")
+            msg = "No media selected or file not found."
+            if clip_path:
+                msg += f"\nPath: {clip_path}"
+                
+            placeholder = QLabel(msg)
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.video_layout.addWidget(placeholder)
             return
@@ -650,7 +709,8 @@ class DynamicSingleLabelGroup(QWidget):
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.label_title = QLabel(f"{self.head_name.capitalize()}:")
+        # [MODIFIED] Display clean title
+        self.label_title = QLabel(f"{self.head_name.replace('_', ' ').title()}:")
         self.label_title.setObjectName("subtitleLabel")
         
         self.trash_btn = QPushButton()
@@ -698,7 +758,6 @@ class DynamicSingleLabelGroup(QWidget):
     def update_radios(self, new_types):
         self.button_group.setExclusive(False)
         
-        # Clear existing widgets
         while self.radio_layout.count():
             item = self.radio_layout.takeAt(0)
             if item.widget():
@@ -706,7 +765,6 @@ class DynamicSingleLabelGroup(QWidget):
         
         self.radio_buttons.clear()
         
-        # Create rows: [RadioButton] [Spacer] [Delete Button]
         sorted_types = sorted(list(set(new_types)))
         for type_name in sorted_types: 
             row_widget = QWidget()
@@ -714,26 +772,18 @@ class DynamicSingleLabelGroup(QWidget):
             row_layout.setContentsMargins(0, 2, 0, 2)
             
             rb = QRadioButton(type_name)
-            # [NEW] Connect clicked signal to handler
             rb.clicked.connect(self._on_radio_clicked)
 
             self.radio_buttons[type_name] = rb
             self.button_group.addButton(rb)
             
-            del_label_btn = QPushButton()
-            del_label_btn.setFixedSize(30, 30)
-            del_label_btn.setFlat(True)
-            del_label_btn.setToolTip(f"Remove '{type_name}'")
-
-            del_label_btn.setText("x")
-            font = del_label_btn.font()
-            font.setPointSize(25) 
-            del_label_btn.setFont(font)
-
-            del_label_btn.setStyleSheet("color: #888; font-weight: bold;")
+            # [MODIFIED] Small Square X Button
+            del_label_btn = QPushButton("×")
+            del_label_btn.setFixedSize(20, 20)
             del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            del_label_btn.setToolTip(f"Remove '{type_name}'")
+            del_label_btn.setStyleSheet(get_square_remove_btn_style())
             
-            # Connect signal with specific name
             del_label_btn.clicked.connect(lambda _, n=type_name: self.remove_label_signal.emit(n))
             
             row_layout.addWidget(rb)
@@ -744,7 +794,6 @@ class DynamicSingleLabelGroup(QWidget):
             
         self.button_group.setExclusive(True)
     
-    # [NEW] Handler for radio clicks
     def _on_radio_clicked(self):
         self.value_changed.emit(self.head_name, self.get_checked_label())
 
@@ -753,7 +802,6 @@ class DynamicSingleLabelGroup(QWidget):
         return checked_btn.text() if checked_btn else None
 
     def set_checked_label(self, label_name):
-        # [NEW] Block signals to prevent recursion when setting programmatically (e.g. undo)
         self.blockSignals(True)
         self.button_group.setExclusive(False)
         for rb in self.radio_buttons.values():
@@ -769,7 +817,7 @@ class DynamicMultiLabelGroup(QWidget):
     
     remove_category_signal = pyqtSignal(str) 
     remove_label_signal = pyqtSignal(str) 
-    value_changed = pyqtSignal(str, object) # [NEW] Signal
+    value_changed = pyqtSignal(str, object) 
 
     def __init__(self, label_head_name, label_type_definition, parent=None):
         super().__init__(parent)
@@ -785,7 +833,8 @@ class DynamicMultiLabelGroup(QWidget):
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.label_title = QLabel(f"{self.head_name.capitalize()}:")
+        # [MODIFIED] Display clean title
+        self.label_title = QLabel(f"{self.head_name.replace('_', ' ').title()}:")
         self.label_title.setObjectName("subtitleLabel")
         
         self.trash_btn = QPushButton()
@@ -842,18 +891,16 @@ class DynamicMultiLabelGroup(QWidget):
             row_layout.setContentsMargins(0, 2, 0, 2)
 
             cb = QCheckBox(type_name)
-            # [NEW] Connect signal
             cb.clicked.connect(self._on_box_clicked)
 
             self.checkboxes[type_name] = cb
             
-            del_label_btn = QPushButton()
+            # [MODIFIED] Small Square X Button
+            del_label_btn = QPushButton("×")
             del_label_btn.setFixedSize(20, 20)
-            del_label_btn.setFlat(True)
-            del_label_btn.setToolTip(f"Remove '{type_name}'")
-            del_label_btn.setText("x")
-            del_label_btn.setStyleSheet("color: #888; font-weight: bold;")
             del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            del_label_btn.setToolTip(f"Remove '{type_name}'")
+            del_label_btn.setStyleSheet(get_square_remove_btn_style())
             
             del_label_btn.clicked.connect(lambda _, n=type_name: self.remove_label_signal.emit(n))
 
@@ -863,7 +910,6 @@ class DynamicMultiLabelGroup(QWidget):
 
             self.checkbox_layout.addWidget(row_widget)
             
-    # [NEW] Handler
     def _on_box_clicked(self):
         self.value_changed.emit(self.head_name, self.get_checked_labels())
 
@@ -874,7 +920,6 @@ class DynamicMultiLabelGroup(QWidget):
         return self.checkboxes.items()
 
     def set_checked_labels(self, label_list):
-        # [NEW] Block signals
         self.blockSignals(True)
         checked_set = set(label_list)
         for cb_name, cb in self.checkboxes.items():
