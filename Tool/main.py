@@ -241,6 +241,8 @@ class ActionClassifierApp(QMainWindow):
         self.ui.left_panel.import_button.clicked.connect(self.import_annotations) 
         self.ui.left_panel.create_json_button.clicked.connect(self.create_new_project)
         self.ui.left_panel.add_data_button.clicked.connect(self._dynamic_data_import) 
+        # [NEW] Connect the remove item signal
+        self.ui.left_panel.request_remove_item.connect(self.remove_single_action_item)
         
         self.ui.left_panel.action_tree.currentItemChanged.connect(self.on_item_selected)
         self.ui.left_panel.filter_combo.currentIndexChanged.connect(self.apply_action_filter)
@@ -259,6 +261,54 @@ class ActionClassifierApp(QMainWindow):
         self.ui.right_panel.add_head_clicked.connect(self._handle_add_label_head)
         self.ui.right_panel.remove_head_clicked.connect(self._handle_remove_label_head) 
         self.ui.right_panel.style_mode_changed.connect(self.change_style_mode)
+
+    # [NEW] Handler for single item removal
+    def remove_single_action_item(self, item):
+        if not item: return
+        
+        target_item = item
+        if item.parent() is not None:
+             target_item = item.parent()
+             
+        action_path = target_item.data(0, Qt.ItemDataRole.UserRole)
+        action_name = target_item.text(0)
+        
+        reply = QMessageBox.question(
+            self, 
+            'Remove Item', 
+            f"Are you sure you want to remove '{action_name}' from the list?\nAnnotations associated with it will be discarded from memory.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # 1. Clean up Data
+            if action_path in self.manual_annotations:
+                del self.manual_annotations[action_path]
+            
+            if action_path in self.action_item_map:
+                del self.action_item_map[action_path]
+                
+            if action_path in self.action_path_to_name:
+                del self.action_path_to_name[action_path]
+
+            if action_path in self.imported_action_metadata:
+                del self.imported_action_metadata[action_path]
+            
+            self.action_item_data = [d for d in self.action_item_data if d['path'] != action_path]
+
+            # 2. Remove UI Item
+            root = self.ui.left_panel.action_tree.invisibleRootItem()
+            root.removeChild(target_item)
+            
+            # 3. Update State
+            self.is_data_dirty = True
+            self.update_save_export_button_state()
+            
+            if self.ui.center_panel.video_layout.count() > 0:
+                 if self.ui.left_panel.action_tree.topLevelItemCount() == 0:
+                     self.ui.center_panel.show_single_view(None)
+                     self.ui.right_panel.manual_group_box.setEnabled(False)
 
     def _setup_shortcuts(self):
         self.undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self)
@@ -678,21 +728,11 @@ class ActionClassifierApp(QMainWindow):
         counter = max_counter + 1
         added_count = 0
         for fpath in files:
-            action_name = f"{self.SINGLE_VIDEO_PREFIX}{counter:03d}"
-            if copy_mode:
-                virtual_action_path = os.path.join(self.current_working_directory, action_name)
-                try:
-                    os.makedirs(virtual_action_path, exist_ok=True)
-                    shutil.copy2(fpath, os.path.join(virtual_action_path, os.path.basename(fpath)))
-                    self.action_item_data.append({'name': action_name, 'path': virtual_action_path})
-                    self.action_path_to_name[virtual_action_path] = action_name
-                    added_count += 1
-                except Exception as e: print(f"Copy failed: {e}")
-            else:
-                virtual_key = f"VIRTUAL_ID::{action_name}"
-                self.action_item_data.append({'name': action_name, 'path': virtual_key, 'source_files': [fpath]})
-                self.action_path_to_name[virtual_key] = action_name
-                added_count += 1
+            action_id = f"{self.SINGLE_VIDEO_PREFIX}{counter:03d}"
+            virtual_key = action_id 
+            self.action_item_data.append({'name': action_id, 'path': virtual_key, 'source_files': [fpath]})
+            self.action_path_to_name[virtual_key] = action_id
+            added_count += 1
             counter += 1
         if added_count > 0:
             self._populate_action_tree()
@@ -730,21 +770,59 @@ class ActionClassifierApp(QMainWindow):
     def _process_multi_modal_directories(self, dir_paths):
         all_added_actions = []
         total_dirs = len(dir_paths)
+        
+        # [MODIFIED] Ensure CWD exists to calculate relative paths
+        if not self.current_working_directory and dir_paths:
+             self.current_working_directory = os.path.dirname(dir_paths[0])
+
         progress = QProgressDialog(f"Processing {total_dirs} directories...", "Cancel", 0, total_dirs, self)
         progress.setWindowTitle("Importing")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setValue(0)
         progress.show()
+        
         for i, dir_path in enumerate(dir_paths):
             if progress.wasCanceled(): break
             progress.setLabelText(f"Processing: {os.path.basename(dir_path)}...")
             QApplication.processEvents()
-            action_name = os.path.basename(dir_path)
-            self.action_item_data.append({'name': action_name, 'path': dir_path})
-            self.action_path_to_name[dir_path] = action_name
+            
+            # [MODIFIED] Scan for ALL supported file types (images, audio, video), not just video
+            source_files_abs = []
+            try:
+                for entry in os.scandir(dir_path):
+                    if entry.is_file() and entry.name.lower().endswith(SUPPORTED_EXTENSIONS):
+                        source_files_abs.append(entry.path)
+            except Exception as e:
+                print(f"Error scanning {dir_path}: {e}")
+                continue
+
+            if not source_files_abs:
+                # If empty, skip
+                continue 
+
+            source_files_abs.sort()
+
+            # [MODIFIED] Mandated Relative Path Calculation for ID
+            try:
+                rel_path = os.path.relpath(dir_path, self.current_working_directory)
+                rel_path = rel_path.replace(os.sep, '/')
+            except ValueError:
+                rel_path = os.path.basename(dir_path)
+
+            action_name = rel_path 
+            
+            self.action_item_data.append({
+                'name': action_name, 
+                'path': rel_path, 
+                'source_files': source_files_abs # [IMPORTANT] Pass absolute paths so CenterPanel can load them
+            })
+            self.action_path_to_name[rel_path] = action_name
+            
             all_added_actions.append(True)
             progress.setValue(i + 1)
+            
         progress.close()
+        
         if all_added_actions:
             self._populate_action_tree()
             self.is_data_dirty = True
@@ -851,55 +929,30 @@ class ActionClassifierApp(QMainWindow):
                     self.label_definitions[clean_head_key] = {'type': label_type, 'labels': labels}
         self._setup_dynamic_ui()
         
-        grouped_data = {}
         for item in data.get('data', []):
             action_id = item.get('id')
             if not action_id: continue
             inputs = item.get('inputs', [])
-            video_paths_for_item = []
-            parent_folder_name = None
-            abs_parent_path = None
-
+            source_files = []
             for inp in inputs:
                 path_str = inp.get('path', '')
                 if not os.path.isabs(path_str):
                      full_path = os.path.normpath(os.path.join(self.current_working_directory, path_str))
                 else:
                      full_path = path_str
-                video_paths_for_item.append(full_path)
-                if parent_folder_name is None:
-                    parent_dir = os.path.dirname(full_path)
-                    parent_folder_name = os.path.basename(parent_dir)
-                    abs_parent_path = parent_dir
+                source_files.append(full_path)
+                self.imported_input_metadata[(action_id, os.path.basename(full_path))] = inp.get('metadata', {})
 
-            if not parent_folder_name:
-                parent_folder_name = action_id
-                abs_parent_path = f"VIRTUAL_ID::{action_id}"
-
-            if parent_folder_name not in grouped_data:
-                grouped_data[parent_folder_name] = {
-                    'path': abs_parent_path, 'source_files': [], 'labels': {}, 'metadata': {}
-                }
-            for v_path in video_paths_for_item:
-                if v_path not in grouped_data[parent_folder_name]['source_files']:
-                    grouped_data[parent_folder_name]['source_files'].append(v_path)
+            action_key = action_id
+            self.action_item_data.append({
+                'name': action_id, 
+                'path': action_key, 
+                'source_files': source_files
+            })
+            self.action_path_to_name[action_key] = action_id
+            self.imported_action_metadata[action_key] = item.get('metadata', {})
 
             item_labels = item.get('labels', {})
-            if not grouped_data[parent_folder_name]['labels'] and item_labels:
-                grouped_data[parent_folder_name]['labels'] = item_labels
-                grouped_data[parent_folder_name]['metadata'] = item.get('metadata', {})
-
-        for group_name, group_info in grouped_data.items():
-            action_key = group_info['path']
-            self.action_item_data.append({
-                'name': group_name,
-                'path': action_key,
-                'source_files': sorted(group_info['source_files'])
-            })
-            self.action_path_to_name[action_key] = group_name
-            self.imported_action_metadata[action_key] = group_info['metadata']
-
-            item_labels = group_info['labels']
             manual_labels = {}
             has_label = False
             for head_name_json in item_labels:
@@ -908,16 +961,18 @@ class ActionClassifierApp(QMainWindow):
                     definition = self.label_definitions[clean_head_key]
                     label_content = item_labels[head_name_json]
                     if isinstance(label_content, dict):
-                        if definition['type'] == 'single_label' and 'label' in label_content:
-                            val = label_content['label']
+                        if definition['type'] == 'single_label':
+                            val = label_content.get('label')
                             if val in definition['labels']:
                                 manual_labels[clean_head_key] = val
                                 has_label = True
-                        elif definition['type'] == 'multi_label' and 'labels' in label_content:
-                             vals = [l for l in label_content['labels'] if l in definition['labels']]
-                             if vals:
-                                 manual_labels[clean_head_key] = vals
-                                 has_label = True
+                        elif definition['type'] == 'multi_label':
+                             vals = label_content.get('labels')
+                             if vals and isinstance(vals, list):
+                                 valid_vals = [l for l in vals if l in definition['labels']]
+                                 if valid_vals:
+                                     manual_labels[clean_head_key] = valid_vals
+                                     has_label = True
             if has_label:
                 self.manual_annotations[action_key] = manual_labels
                 imported_count += 1
@@ -929,7 +984,7 @@ class ActionClassifierApp(QMainWindow):
         self.ui.right_panel.manual_group_box.setEnabled(True)
         self.toggle_annotation_view() 
         self.update_save_export_button_state()
-        self._show_temp_message_box("Import Complete", f"Imported {imported_count} actions (grouped).", QMessageBox.Icon.Information, 2000)
+        self._show_temp_message_box("Import Complete", f"Imported {len(self.action_item_data)} items.", QMessageBox.Icon.Information, 2000)
 
     def create_new_project(self):
         if not self.check_and_close_current_project():
@@ -950,7 +1005,7 @@ class ActionClassifierApp(QMainWindow):
             self._setup_dynamic_ui()
             self.update_save_export_button_state()
             self.toggle_annotation_view()
-            self._show_temp_message_box("Project Created", f"Project '{self.current_task_name}' created.\nYou can now Add Data.", QMessageBox.Icon.Information, 2500)
+            self._show_temp_message_box("Project Created", f"Project '{self.current_task_name}' created.\nYou can now Add Data.", QMessageBox.Icon.Information, 3500)
 
     def clear_action_list(self, clear_working_dir=True, full_reset=False):
         self.ui.left_panel.action_tree.clear()
@@ -988,7 +1043,8 @@ class ActionClassifierApp(QMainWindow):
     def toggle_annotation_view(self):
         can_annotate = False 
         current_item = self.ui.left_panel.action_tree.currentItem()
-        if current_item and current_item.childCount() > 0 and self.json_loaded: can_annotate = True
+        if current_item and (current_item.childCount() > 0 or current_item.parent() is None) and self.json_loaded: 
+            can_annotate = True
         self.ui.right_panel.manual_group_box.setEnabled(bool(can_annotate))
 
     def on_item_selected(self, current_item, _):
@@ -1002,6 +1058,8 @@ class ActionClassifierApp(QMainWindow):
             first_media_path = None
             if current_item.childCount() > 0:
                 first_media_path = current_item.child(0).data(0, Qt.ItemDataRole.UserRole)
+            elif self.action_item_data:
+                pass
             self.ui.center_panel.show_single_view(first_media_path)
             self.ui.center_panel.multi_view_button.setEnabled(True) 
         else:
@@ -1114,7 +1172,7 @@ class ActionClassifierApp(QMainWindow):
 
     def _write_gac_json(self, file_path):
         output_data = {
-            "version": "1.0",
+            "version": "2.0",
             "date": datetime.datetime.now().isoformat().split('T')[0],
             "task": self.current_task_name, 
             "description": getattr(self, 'project_description', ""),
@@ -1135,31 +1193,41 @@ class ActionClassifierApp(QMainWindow):
             path_to_item_map[item.data(0, Qt.ItemDataRole.UserRole)] = item
         all_keys = set(self.action_path_to_name.keys())
         all_keys.update(self.manual_annotations.keys())
-        sorted_keys = sorted(list(all_keys), key=lambda p: self.action_path_to_name.get(p, ""))
+        
+        def natural_sort_key_str(s):
+            return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
+            
+        sorted_keys = sorted(list(all_keys), key=lambda k: natural_sort_key_str(self.action_path_to_name.get(k, "")))
+        
         json_dir = os.path.dirname(file_path)
 
         for action_key in sorted_keys:
             action_name = self.action_path_to_name.get(action_key)
             if not action_name: continue
+            
             manual_result = self.manual_annotations.get(action_key, {})
             stored_metadata = self.imported_action_metadata.get(action_key, {})
+            
             data_item = {
                 "id": action_name,
                 "inputs": [],
                 "labels": {},
                 "metadata": stored_metadata 
             }
+            
             for head_name, definition in self.label_definitions.items():
                 if definition['type'] == 'single_label':
                     final_label = None
                     if manual_result and manual_result.get(head_name) and isinstance(manual_result.get(head_name), str):
                         final_label = manual_result.get(head_name)
-                    if final_label: data_item["labels"][head_name] = {"label": final_label}
+                    if final_label: 
+                        data_item["labels"][head_name] = {"label": final_label}
                 elif definition['type'] == 'multi_label':
                     final_label_list = []
                     if manual_result and manual_result.get(head_name) and isinstance(manual_result.get(head_name), list):
                         final_label_list = manual_result[head_name]
-                    data_item["labels"][head_name] = {"labels": final_label_list}
+                    if final_label_list:
+                        data_item["labels"][head_name] = {"labels": final_label_list}
 
             action_item = path_to_item_map.get(action_key)
             if action_item:
@@ -1172,6 +1240,7 @@ class ActionClassifierApp(QMainWindow):
                     if file_ext in ('.mp4', '.avi', '.mov'): modality_type = "video"
                     elif file_ext in ('.jpg', '.jpeg', '.png'): modality_type = "image"
                     elif file_ext in ('.wav', '.mp3'): modality_type = "audio"
+                    
                     input_meta = self.imported_input_metadata.get((action_key, clip_name), {})
                     
                     try:
@@ -1180,13 +1249,16 @@ class ActionClassifierApp(QMainWindow):
                     except ValueError:
                         rel_path = abs_clip_path
                     
-                    data_item["inputs"].append({
+                    input_obj = {
                         "type": modality_type,
-                        "path": rel_path, 
-                        "metadata": input_meta 
-                    })
+                        "path": rel_path
+                    }
+                    if input_meta:
+                        input_obj["metadata"] = input_meta
+                    
+                    data_item["inputs"].append(input_obj)
 
-            if data_item["labels"] or data_item["inputs"]: output_data["data"].append(data_item)
+            output_data["data"].append(data_item)
 
         try:
             with open(file_path, 'w', encoding='utf-8') as f: json.dump(output_data, f, indent=2, ensure_ascii=False)
