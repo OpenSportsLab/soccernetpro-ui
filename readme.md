@@ -1,6 +1,6 @@
 ## 🧭 How to Use **SoccerNetProAnalyzer**
 
-### 🔹 Installation
+### 🔹 Installation 
 1. **Download** the latest release of `SoccerNetProAnalyzer` as a `.zip` file from this repository.  
 2. **Unzip** the downloaded file.  
 3. **Drag** the extracted `.app` file into your **Applications** folder on macOS.  
