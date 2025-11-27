@@ -513,7 +513,7 @@ class ActionClassifierApp(QMainWindow):
             self._show_temp_message_box("Warning", "Category name cannot be empty.", QMessageBox.Icon.Warning, 1500)
             return
         if clean_name in self.label_definitions:
-            self._show_temp_message_box("Warning", f"Category '{head_name}' already exists (Case Insensitive).", QMessageBox.Icon.Warning, 1500)
+            self._show_temp_message_box("Warning", f"Category '{head_name}' already exists.", QMessageBox.Icon.Warning, 1500)
             return
 
         msg = QMessageBox(self)
@@ -607,10 +607,25 @@ class ActionClassifierApp(QMainWindow):
         if not group: return
         new_type = group.input_field.text().strip()
         if not new_type: return
-        type_set = set(self.label_definitions[head_name]['labels'])
-        if new_type in type_set: return
+        
+        # --- 修改开始: 不区分大小写的查重逻辑 ---
+        current_labels = self.label_definitions[head_name]['labels']
+        
+        # 检查是否存在同名标签 (不区分大小写)
+        # 使用 any() 函数遍历检查
+        if any(label.lower() == new_type.lower() for label in current_labels):
+            self._show_temp_message_box(
+                "Duplicate Label", 
+                f"Label '{new_type}' already exists in '{head_name}'.", 
+                QMessageBox.Icon.Warning, 
+                2000
+            )
+            return
+        # --- 修改结束 ---
         
         self._push_undo_command(CmdType.SCHEMA_ADD_LBL, head=head_name, label=new_type)
+        
+        
         
         self.label_definitions[head_name]['labels'].append(new_type)
         self.label_definitions[head_name]['labels'].sort()
@@ -843,12 +858,92 @@ class ActionClassifierApp(QMainWindow):
             self.update_action_item_status(path)
         self.apply_action_filter()
             
+    # [MODIFIED] Robust validation method
     def _validate_gac_json(self, data):
-        if 'modalities' not in data: return False, "Missing 'modalities' field."
-        if not isinstance(data['modalities'], list): return False, "'modalities' must be a list."
-        if 'labels' not in data: return False, "Missing 'labels' field."
-        if not isinstance(data['labels'], dict): return False, "'labels' must be a dictionary."
-        return True, None
+        """
+        Validates the structure and consistency of the imported JSON.
+        Returns: (is_valid, error_msg, warning_msg)
+        """
+        errors = []
+        warnings = []
+
+        # --- 1. JSON Structure & Modalities Check ---
+        if 'modalities' not in data:
+            errors.append("Critical: Missing 'modalities' key.")
+        elif not isinstance(data['modalities'], list):
+            errors.append("Critical: 'modalities' must be a list.")
+        # [MODIFIED] Empty modalities now promoted to Critical Error
+        elif len(data['modalities']) == 0:
+             errors.append("Critical: 'modalities' list is empty. You cannot proceed without defining data types (e.g., ['video']).")
+
+        # --- 2. Labels Definition Check ---
+        if 'labels' not in data:
+            errors.append("Critical: Missing 'labels' definition.")
+        elif not isinstance(data['labels'], dict):
+            errors.append("Critical: 'labels' must be a dictionary.")
+        
+        # [MODIFIED] Check for empty label lists inside category definitions
+        if isinstance(data.get('labels'), dict):
+            for head_name, definition in data['labels'].items():
+                if not isinstance(definition, dict):
+                    # Malformed definition, treat as error
+                    errors.append(f"Critical: Definition for category '{head_name}' is malformed.")
+                    continue
+                
+                # Check labels list existence and emptiness
+                lbl_list = definition.get('labels')
+                if not isinstance(lbl_list, list):
+                    errors.append(f"Critical: Category '{head_name}' missing 'labels' list.")
+                elif len(lbl_list) == 0:
+                    errors.append(f"Critical: Category '{head_name}' has an empty label list. Annotation cannot proceed.")
+
+        # If critical structure fails, return immediately
+        if errors:
+            return False, "\n".join(errors), None
+
+        # --- 3. Deep Consistency Check (Data Items) ---
+        items = data.get('data', [])
+        if not isinstance(items, list):
+             return False, "'data' field must be a list.", None
+
+        missing_labels_key = 0
+        empty_annotations = 0
+
+        for item in items:
+            # Check: Missing label in the 'label' key (Key missing entirely)
+            if 'labels' not in item:
+                missing_labels_key += 1
+                continue
+
+            lbls = item['labels']
+            
+            # Check: Label key without any annotations (Key exists but is empty dict/null)
+            if not lbls or not isinstance(lbls, dict):
+                empty_annotations += 1
+            else:
+                # Check for specific heads having empty values
+                # e.g., "Category": null or "Category": {"label": ""}
+                for head, val in lbls.items():
+                    is_empty_val = False
+                    if val is None:
+                        is_empty_val = True
+                    elif isinstance(val, dict):
+                        # Single label empty check
+                        if 'label' in val and not val['label']: is_empty_val = True
+                        # Multi label empty check
+                        if 'labels' in val and not val['labels']: is_empty_val = True
+                    
+                    if is_empty_val:
+                        empty_annotations += 1
+
+        if missing_labels_key > 0:
+            warnings.append(f"Label Inconsistency: Found {missing_labels_key} items missing the 'labels' key entirely.")
+        
+        if empty_annotations > 0:
+            warnings.append(f"Label Inconsistency: Found {empty_annotations} items with 'labels' keys that are empty or contain null values.")
+
+        warning_msg = "\n".join(warnings) if warnings else None
+        return True, None, warning_msg
 
     # --- [NEW] Handler for Clear List Button ---
     def on_clear_list_clicked(self):
@@ -901,15 +996,28 @@ class ActionClassifierApp(QMainWindow):
 
         file_path, _ = QFileDialog.getOpenFileName(self, "Select GAC JSON Annotation File", "", "JSON Files (*.json)")
         if not file_path: return
+        
+        # [MODIFIED] Stronger JSON Syntax Check
         try:
             with open(file_path, 'r', encoding='utf-8') as f: data = json.load(f)
+        except json.JSONDecodeError as e:
+            QMessageBox.critical(self, "Invalid JSON Format", 
+                                 f"The file is not a valid JSON.\nError: {e.msg}\nLine: {e.lineno}, Column: {e.colno}")
+            return
         except Exception as e:
-            QMessageBox.critical(self, "Import Error", f"Failed to parse JSON: {e}")
+            QMessageBox.critical(self, "Import Error", f"Unexpected error reading file: {e}")
             return
-        is_valid, error_msg = self._validate_gac_json(data)
+
+        # [MODIFIED] Use robust validation
+        is_valid, error_msg, warning_msg = self._validate_gac_json(data)
+        
         if not is_valid:
-            QMessageBox.critical(self, "JSON Format Error", error_msg)
+            QMessageBox.critical(self, "JSON Structure Error", error_msg)
             return
+        
+        if warning_msg:
+            # Show warnings but allow user to proceed
+            QMessageBox.warning(self, "Import Warnings", f"The file has inconsistencies:\n\n{warning_msg}\n\nThe import will proceed, but please check your data.")
         
         if not self.json_loaded:
              self.clear_action_list(clear_working_dir=False, full_reset=True)
