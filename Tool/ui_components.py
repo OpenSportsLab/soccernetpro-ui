@@ -192,10 +192,17 @@ class CreateProjectDialog(QDialog):
         txt = self.single_label_input.text().strip()
         if not txt: return
         
+        txt_lower = txt.lower() 
+        
         for i in range(self.current_labels_list.count()):
             item = self.current_labels_list.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == txt:
-                self.single_label_input.clear()
+            existing_text = item.data(Qt.ItemDataRole.UserRole)
+            
+            # Duplicated test
+            if existing_text and existing_text.lower() == txt_lower:
+                QMessageBox.warning(self, "Duplicate Label", f"The label '{txt}' already exists.")
+                self.single_label_input.selectAll() 
+                self.single_label_input.setFocus()
                 return
             
         item = QListWidgetItem(self.current_labels_list)
@@ -239,7 +246,7 @@ class CreateProjectDialog(QDialog):
         cat_key = raw_name.replace(" ", "_").lower()
             
         if cat_key in self.final_categories:
-            QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_key}' already exists (Case Insensitive).")
+            QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_key}' already exists.")
             self.cat_name_edit.selectAll()
             self.cat_name_edit.setFocus()
             return
