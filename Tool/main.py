@@ -131,7 +131,7 @@ class ActionClassifierApp(QMainWindow):
         self.current_style_mode = "Night"
         
         self.imported_action_metadata = {} 
-        self.imported_input_metadata = {}  
+        self.imported_input_metadata = {} 
         
         bright_blue = QColor("#00BFFF") 
         self.done_icon = self._create_checkmark_icon(bright_blue)
