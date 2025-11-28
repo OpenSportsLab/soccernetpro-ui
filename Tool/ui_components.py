@@ -11,7 +11,7 @@ from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QUrl, QTime, QSize, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QFont, QPen, QPixmap, QAction
-
+ 
 # Define all supported media extensions for file filtering
 SUPPORTED_EXTENSIONS = (
     '.mp4', '.avi', '.mov',  # Video
