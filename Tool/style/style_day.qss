@@ -1,0 +1,164 @@
+/* style_day.qss */
+
+/* 1. 全局和基础控件样式 */
+QWidget {
+    background-color: #E0E0E0; /* 浅灰色背景 */
+    color: #1E1E1E; /* 深色字体 */
+    font-family: Arial, sans-serif; 
+    font-size: 14px;
+}
+QLabel#titleLabel {
+    font-size: 18px; 
+    font-weight: bold; 
+    padding-bottom: 10px;
+    border-bottom: 2px solid #A0A0A0; /* 灰色分割线 */
+}
+QLabel#subtitleLabel {
+    font-size: 16px; 
+    font-weight: bold; 
+    color: #00AACC; /* 亮蓝色强调 */
+    padding-top: 10px;
+}
+QPushButton {
+    background-color: #F0F0F0;
+    border: 1px solid #CCCCCC;
+    color: #1E1E1E; /* 按钮文字为深色 */
+    padding: 8px; 
+    border-radius: 4px;
+}
+QPushButton:hover { background-color: #DCDCDC; }
+QPushButton:pressed { background-color: #C0C0C0; }
+QPushButton#startButton {
+    background-color: #0088CC; /* 蓝色强调 */
+    color: white; /* 启动按钮文字为白色 */
+    font-size: 16px; 
+    font-weight: bold;
+}
+QPushButton#startButton:hover { background-color: #0099DD; }
+QPushButton:disabled {
+    background-color: #B0B0B0;
+    color: #777777;
+}
+
+/* 2. 左侧列表样式 */
+QTreeWidget {
+    background-color: #FFFFFF; /* 白色背景 */
+    border: 1px solid #CCCCCC;
+    color: #1E1E1E;
+    alternate-background-color: #FAFAFA; /* 增加交替行颜色 */
+}
+QHeaderView::section {
+    background-color: #D0D0D0; 
+    padding: 4px;
+    border: 1px solid #CCCCCC; 
+    font-weight: bold;
+    color: #1E1E1E;
+}
+
+/* 3. 进度条样式 */
+QProgressBar {
+    border-radius: 5px; 
+    text-align: center; 
+    color: #1E1E1E; /* 深色文字 */
+    background-color: #F0F0F0; /* 进度条背景 */
+}
+QProgressBar::chunk {
+    background-color: #0088CC; 
+    border-radius: 5px;
+}
+
+/* 4. 分组框 (Manual/Auto Annotation) 修正 */
+QGroupBox {
+    font-size: 16px;
+    font-weight: bold;
+    color: #1E1E1E; /* 标题文字为深色 */
+    background-color: #FFFFFF; /* 组框内容区域背景为白色 */
+    border: 1px solid #A0A0A0;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+/* QGroupBox 的标题 (修正：需要使用亮色背景和深色文字) */
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 5px 25px;
+    background-color: #D0D0D0; /* 浅灰色背景 */
+    color: #1E1E1E; /* 标题文字为深色 */
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom: 1px solid #A0A0A0;
+}
+
+/* QGroupBox 的折叠指示器 (不需要修改 image，因为使用的是 Base64 编码的图标) */
+QGroupBox::indicator {
+    width: 18px;
+    height: 18px;
+    position: absolute;
+    left: 5px;
+    top: 5px;
+}
+QGroupBox::indicator:unchecked { 
+    /* "折叠" 状态 */
+    image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABvSURBVDhPzZAxCgAgDAQhR/f+V80hgkWsUBsLs3/cqiDgBYH4xBcBvjFpFiQbka0cDDc720BKKcmyLFMvSZIyIfO9Evf1k9Tf8zDVB80wzPM8WlW1lQJwni8AJZJk7QAVVTWtqhYAz/NJkiRbAWoOQMbDDB3iAAAAAElFTkSuQmCC); 
+}
+QGroupBox::indicator:checked { 
+    /* "展开" 状态 */
+    image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABqSURBVDhPzYxBCgAwCAOj+/+vbZCKIpA5NFAuTcsxZJk/YgkB8YkmAHzjeZ4lSZIsqyopZYrleZ7d+wP3rNcANE0biqL8m0EQFIVRWKu1xBABvO8/SlJERAQhBL/vH0EQEiL+N4FmBt0L2dOkAAAAAElFTkSuQmCC); 
+}
+
+/* 5. 折叠/展开功能 (不变) */
+QGroupBox::checkable:!checked > QWidget {
+    max-height: 0px;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+QGroupBox::checkable:checked > QWidget {
+    max-height: 9999px;
+    /* padding: 10px; */ 
+}
+
+/* 6. 单选按钮和复选框 (修正：文字颜色需要为深色) */
+QRadioButton {
+    padding: 4px;
+    color: #1E1E1E; /* 深色文字 */
+}
+QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+}
+QCheckBox {
+    padding: 4px;
+    color: #1E1E1E; /* 深色文字 */
+}
+
+/* 7. QSlider 样式 (修正：将夜间模式的颜色调亮) */
+QSlider::groove:horizontal {
+    /* 轨道（Groove）的样式 */
+    border: 1px solid #A0A0A0; /* 边框为灰色 */
+    height: 6px;
+    background: #CCCCCC; /* 轨道背景为浅灰色 */
+    margin: 2px 0;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    /* 节点（Handle）的样式 */
+    background: #FFFFFF; /* 节点为白色 */
+    border: 1px solid #0088CC; /* 边框为蓝色 */
+    width: 12px;
+    height: 12px;
+    margin: -4px 0;
+    border-radius: 6px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #00AACC; /* 悬停颜色 (不变) */
+}
+
+QSlider::sub-page:horizontal {
+    /* 已经走过的轨道部分 */
+    background: #0088CC; /* 蓝色强调 (不变) */
+    border-radius: 3px;
+}
