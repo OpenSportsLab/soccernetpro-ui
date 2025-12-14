@@ -2,12 +2,18 @@ import copy
 from enum import Enum, auto
 
 class CmdType(Enum):
+    # --- Classification Commands ---
     ANNOTATION_CONFIRM = auto()  # Confirming data to storage
     UI_CHANGE = auto()           # Fine-grained UI toggle (radio/checkbox)
     SCHEMA_ADD_CAT = auto()      # Add Category
     SCHEMA_DEL_CAT = auto()      # Delete Category
     SCHEMA_ADD_LBL = auto()      # Add Label option
     SCHEMA_DEL_LBL = auto()      # Delete Label option
+    
+    # --- [New] Localization Commands ---
+    LOC_EVENT_ADD = auto()       
+    LOC_EVENT_DEL = auto()
+    LOC_EVENT_MOD = auto()
 
 class AppStateModel:
     """
@@ -19,11 +25,18 @@ class AppStateModel:
     }
 
     def __init__(self):
-        # --- Core Data ---
+        # --- Core Data (Classification) ---
+        # Structure: {'action_id': {'head_name': 'label_value', ...}}
         self.manual_annotations = {}
+        
+        # --- [New] Core Data (Localization) ---
+        # Structure: {'file_path_or_id': [{'head': 'action', 'label': 'Pass', 'position_ms': 2100}, ...]}
+        self.localization_events = {} 
+        
+        # --- Common Data ---
         self.action_item_data = []      # List of dicts [{'name':.., 'path':.., 'source_files':..}]
         self.action_path_to_name = {}
-        self.action_item_map = {}       # Optional: Map IDs to UI items (if needed by controller)
+        self.action_item_map = {}       # Map IDs/Paths to UI items
         
         # --- Metadata ---
         self.imported_action_metadata = {}
@@ -48,6 +61,8 @@ class AppStateModel:
     def reset(self, full_reset=False):
         """Clears data for new project or list clear."""
         self.manual_annotations.clear()
+        self.localization_events.clear() # [New] Clear localization data
+        
         self.undo_stack.clear()
         self.redo_stack.clear()
         
@@ -70,7 +85,7 @@ class AppStateModel:
 
     def validate_gac_json(self, data):
         """
-        Validates JSON structure.
+        Validates Classification JSON structure.
         Returns: (is_valid, error_msg, warning_msg)
         """
         errors = []
@@ -82,7 +97,7 @@ class AppStateModel:
         elif not isinstance(data['modalities'], list):
             errors.append("Critical: 'modalities' must be a list.")
         elif len(data['modalities']) == 0:
-             errors.append("Critical: 'modalities' list is empty. You cannot proceed without defining data types.")
+             errors.append("Critical: 'modalities' list is empty.")
 
         # 2. Labels Check
         if 'labels' not in data:
