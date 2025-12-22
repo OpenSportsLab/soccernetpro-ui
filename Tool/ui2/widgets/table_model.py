@@ -4,8 +4,8 @@ class AnnotationTableModel(QAbstractTableModel):
     def __init__(self, annotations=None):
         super().__init__()
         self._data = annotations or []
-        # [修改] 移除了 "Clip" 列，只保留时间、Head、Label 和删除按钮列
-        self._headers = ["Time", "Head", "Label", "Del"]
+        # [修改] 移除了 "Del" 列，只保留数据列
+        self._headers = ["Time", "Head", "Label"]
 
     def rowCount(self, parent=None):
         return len(self._data)
@@ -25,11 +25,16 @@ class AnnotationTableModel(QAbstractTableModel):
             if col == 0:
                 return self._fmt_ms(item.get('position_ms', 0))
             elif col == 1:
-                return item.get('head', '')
+                # 显示时去下划线
+                return item.get('head', '').replace('_', ' ')
             elif col == 2:
-                return item.get('label', '')
-            # col 3 现在是删除按钮占位，不需要返回文本数据
+                # 显示时去下划线
+                return item.get('label', '').replace('_', ' ')
                 
+        # [新增] 存储原始数据 UserRole，方便逻辑处理
+        elif role == Qt.ItemDataRole.UserRole:
+            return self._data[index.row()]
+            
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -48,6 +53,7 @@ class AnnotationTableModel(QAbstractTableModel):
         return None
 
     def _fmt_ms(self, ms):
+        # 格式化时间为 mm:ss.mmm
         s = ms // 1000
         m = s // 60
         return f"{m:02}:{s%60:02}.{ms%1000:03}"
