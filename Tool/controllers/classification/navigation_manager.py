@@ -1,4 +1,5 @@
-from PyQt6.QtWidgets import QMessageBox
+import os
+from PyQt6.QtWidgets import QMessageBox, QFileDialog
 from PyQt6.QtCore import Qt
 from utils import SUPPORTED_EXTENSIONS
 
@@ -7,6 +8,59 @@ class NavigationManager:
         self.main = main_window
         self.model = main_window.model
         self.ui = main_window.ui
+
+    def add_items_via_dialog(self):
+        """
+        [新增] 允许用户在 Classification 模式下手动添加视频/图片数据。
+        """
+        if not self.model.json_loaded:
+            QMessageBox.warning(self.main, "Warning", "Please create or load a project first.")
+            return
+
+        # 1. 准备文件过滤器
+        filters = "Media Files (*.mp4 *.avi *.mov *.mkv *.jpg *.jpeg *.png *.bmp);;All Files (*)"
+        
+        # 2. 确定起始路径
+        start_dir = self.model.current_working_directory or ""
+        
+        # 3. 弹出选择框
+        files, _ = QFileDialog.getOpenFileNames(self.main, "Select Data to Add", start_dir, filters)
+        if not files: return
+        
+        # 如果是新建项目且还没有设置工作目录，以第一个文件的目录为准
+        if not self.model.current_working_directory:
+            self.model.current_working_directory = os.path.dirname(files[0])
+
+        added_count = 0
+        for file_path in files:
+            # 查重
+            if any(d['path'] == file_path for d in self.model.action_item_data):
+                continue
+            
+            name = os.path.basename(file_path)
+            
+            # 构建 Classification 需要的数据结构
+            new_item = {
+                'name': name,
+                'path': file_path,
+                'source_files': [file_path]
+            }
+            
+            self.model.action_item_data.append(new_item)
+            self.model.action_path_to_name[file_path] = name
+            
+            # 初始化元数据占位
+            if file_path not in self.model.imported_action_metadata:
+                self.model.imported_action_metadata[file_path] = {}
+            
+            added_count += 1
+        
+        # 4. 刷新界面
+        if added_count > 0:
+            self.model.is_data_dirty = True
+            self.main.populate_action_tree() 
+            self.main.update_save_export_button_state()
+            self.main.show_temp_msg("Added", f"Added {added_count} items.")
 
     def on_item_selected(self, current, _):
         if not current:
