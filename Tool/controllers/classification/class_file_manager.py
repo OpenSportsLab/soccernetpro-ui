@@ -21,7 +21,9 @@ class ClassFileManager:
             
         self._clear_workspace(full_reset=True)
         
+        # [关键] 设置当前工作目录为 JSON 文件所在的目录
         self.model.current_working_directory = os.path.dirname(file_path)
+        
         self.model.current_task_name = data.get('task', "N/A")
         self.model.modalities = data.get('modalities', [])
         
@@ -31,7 +33,7 @@ class ClassFileManager:
             for k, v in data['labels'].items():
                 clean_k = k.strip().replace(' ', '_').lower()
                 self.model.label_definitions[clean_k] = {'type': v['type'], 'labels': sorted(list(set(v.get('labels', []))))}
-        self.main.setup_dynamic_ui() # 这会刷新 Classification 的 UI
+        self.main.setup_dynamic_ui() 
         
         # Load Data
         for item in data.get('data', []):
@@ -41,15 +43,23 @@ class ClassFileManager:
             src_files = []
             for inp in item.get('inputs', []):
                 p = inp.get('path', '')
-                fp = p if os.path.isabs(p) else os.path.normpath(os.path.join(self.model.current_working_directory, p))
+                
+                # [关键] 路径恢复逻辑
+                if os.path.isabs(p):
+                    fp = p
+                else:
+                    fp = os.path.normpath(os.path.join(self.model.current_working_directory, p))
+                
                 src_files.append(fp)
                 self.model.imported_input_metadata[(aid, os.path.basename(fp))] = inp.get('metadata', {})
             
-            self.model.action_item_data.append({'name': aid, 'path': aid, 'source_files': src_files})
-            self.model.action_path_to_name[aid] = aid
-            self.model.imported_action_metadata[aid] = item.get('metadata', {})
+            path_key = src_files[0] if src_files else aid
             
-            # Load Manual Annotations (Classification Specific)
+            self.model.action_item_data.append({'name': aid, 'path': path_key, 'source_files': src_files})
+            self.model.action_path_to_name[path_key] = aid
+            self.model.imported_action_metadata[path_key] = item.get('metadata', {})
+            
+            # Load Manual Annotations
             lbls = item.get('labels', {})
             manual = {}
             has_l = False
@@ -64,16 +74,21 @@ class ClassFileManager:
                             vals = [x for x in content.get('labels', []) if x in defn['labels']]
                             if vals: manual[ck] = vals; has_l = True
             if has_l:
-                self.model.manual_annotations[aid] = manual
+                self.model.manual_annotations[path_key] = manual
 
         self.model.current_json_path = file_path
         self.model.json_loaded = True
-        self.main.populate_action_tree() # 刷新 Classification 左侧树
+        self.main.populate_action_tree()
         self.main.update_save_export_button_state()
-        self.main.show_temp_msg("Imported", f"Loaded {len(self.model.action_item_data)} items (Classification).")
+        
+        # [修改] 使用弹窗进行明显提示
+        QMessageBox.information(
+            self.main, 
+            "Mode Switched", 
+            f"Project loaded with {len(self.model.action_item_data)} items.\n\nCurrent Mode: CLASSIFICATION"
+        )
 
     def save_json(self):
-        # 专门保存 Classification
         if self.model.current_json_path: 
             return self._write_json(self.model.current_json_path)
         else: 
@@ -89,7 +104,7 @@ class ClassFileManager:
             return result
         return False
 
-    def _write_json(self, path):
+    def _write_json(self, save_path):
         out = {
             "version": "2.0",
             "date": datetime.datetime.now().isoformat().split('T')[0],
@@ -100,15 +115,60 @@ class ClassFileManager:
             "data": []
         }
         
-        # 遍历逻辑... (与原先完全一致，略去部分细节以节省篇幅，请复制原先的 _write_gac_json 内容)
-        # 关键是只遍历 self.model.manual_annotations
-        # ...
+        json_dir = os.path.dirname(os.path.abspath(save_path))
+        
+        sorted_items = sorted(self.model.action_item_data, key=lambda x: natural_sort_key(x.get('name', '')))
+        
+        for item in sorted_items:
+            path_key = item['path'] 
+            aid = item['name']
+            
+            inputs = []
+            for src_abs_path in item.get('source_files', []):
+                try:
+                    fpath = os.path.relpath(src_abs_path, json_dir)
+                    fpath = fpath.replace('\\', '/')
+                except ValueError:
+                    fpath = src_abs_path.replace('\\', '/')
+                
+                meta = self.model.imported_input_metadata.get((aid, os.path.basename(src_abs_path)), {})
+                
+                inputs.append({
+                    "type": "video", 
+                    "path": fpath,
+                    "metadata": meta
+                })
+            
+            data_entry = {
+                "id": aid,
+                "inputs": inputs,
+                "metadata": self.model.imported_action_metadata.get(path_key, {})
+            }
+            
+            if path_key in self.model.manual_annotations:
+                annots = self.model.manual_annotations[path_key]
+                entry_labels = {}
+                for head, val in annots.items():
+                    defn = self.model.label_definitions.get(head)
+                    if not defn: continue
+                    
+                    if defn['type'] == 'single_label':
+                        entry_labels[head] = {"label": val, "confidence": 1.0, "manual": True}
+                    elif defn['type'] == 'multi_label':
+                        entry_labels[head] = {"labels": val, "confidence": 1.0, "manual": True}
+                
+                if entry_labels:
+                    data_entry["labels"] = entry_labels
+            
+            out["data"].append(data_entry)
         
         try:
-            with open(path, 'w', encoding='utf-8') as f: json.dump(out, f, indent=2, ensure_ascii=False)
+            with open(save_path, 'w', encoding='utf-8') as f: 
+                json.dump(out, f, indent=2, ensure_ascii=False)
+            
             self.model.is_data_dirty = False
             self.main.update_save_export_button_state()
-            self.main.show_temp_msg("Saved", f"Saved to {os.path.basename(path)}")
+            self.main.show_temp_msg("Saved", f"Saved to {os.path.basename(save_path)}")
             return True
         except Exception as e:
             QMessageBox.critical(self.main, "Error", f"Save failed: {e}")
@@ -124,8 +184,13 @@ class ClassFileManager:
             self.model.modalities = data['modalities']
             self.model.label_definitions = data['labels']
             self.model.project_description = data['description']
+            
             self.model.json_loaded = True
             self.model.is_data_dirty = True
+            
+            self.model.current_json_path = None
+            self.model.current_working_directory = None 
+            
             self.main.setup_dynamic_ui()
             self.main.update_save_export_button_state()
             self.ui.show_classification_view()
