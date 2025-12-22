@@ -6,9 +6,9 @@ from PyQt6.QtGui import QKeySequence, QShortcut, QColor, QIcon
 from models import AppStateModel
 from ui.panels import MainWindowUI
 
-# [修正] 导入路径调整
+# 导入路径调整
 from controllers.router import AppRouter
-from controllers.history_manager import HistoryManager  # <--- 去掉了 .common
+from controllers.history_manager import HistoryManager
 from controllers.classification.annotation_manager import AnnotationManager
 from controllers.classification.navigation_manager import NavigationManager
 from controllers.localization.localization_manager import LocalizationManager
@@ -57,11 +57,16 @@ class ActionClassifierApp(QMainWindow):
     def connect_signals(self):
         # --- Welcome Screen ---
         self.ui.welcome_widget.import_btn.clicked.connect(self.router.import_annotations)
-        self.ui.welcome_widget.create_btn.clicked.connect(self.router.class_fm.create_new_project)
+        # Create 按钮连接到 Router 的统一分发流程
+        self.ui.welcome_widget.create_btn.clicked.connect(self.router.create_new_project_flow)
 
         # --- Left Panel (Classification File Ops) ---
         self.ui.left_panel.import_btn.clicked.connect(self.router.import_annotations)
-        self.ui.left_panel.create_btn.clicked.connect(self.router.class_fm.create_new_project)
+        self.ui.left_panel.create_btn.clicked.connect(self.router.create_new_project_flow)
+        
+        # 连接 Add Data 按钮
+        self.ui.left_panel.add_data_btn.clicked.connect(self.nav_manager.add_items_via_dialog)
+        
         self.ui.left_panel.clear_btn.clicked.connect(self._on_class_clear_clicked)
         
         # --- Left Panel (Classification Navigation) ---
@@ -69,9 +74,14 @@ class ActionClassifierApp(QMainWindow):
         self.ui.left_panel.action_tree.currentItemChanged.connect(self.nav_manager.on_item_selected)
         self.ui.left_panel.filter_combo.currentIndexChanged.connect(self.nav_manager.apply_action_filter)
         
-        # --- Left Panel (Undo/Redo) ---
+        # --- Undo/Redo Connections ---
+        # 1. Classification (Left Panel)
         self.ui.left_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
         self.ui.left_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
+        
+        # 2. Localization (Right Panel)
+        self.ui.localization_ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
+        self.ui.localization_ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
         
         # --- Center Panel (Classification Navigation) ---
         self.ui.center_panel.play_btn.clicked.connect(self.nav_manager.play_video)
@@ -138,39 +148,83 @@ class ActionClassifierApp(QMainWindow):
         return True
 
     def closeEvent(self, event):
-        can_export = self.model.json_loaded and bool(self.model.manual_annotations)
-        if not self.model.is_data_dirty or not can_export:
-            event.accept(); return
+        """
+        退出前的保存确认，同时支持 Classification 和 Localization。
+        """
+        # 1. 判断当前模式
+        is_loc_mode = (self.ui.stack_layout.currentWidget() == self.ui.localization_ui)
         
+        # 2. 判断是否有数据
+        if is_loc_mode:
+            has_data = bool(self.model.localization_events)
+        else:
+            has_data = bool(self.model.manual_annotations)
+            
+        can_export = self.model.json_loaded and has_data
+
+        # 3. 如果没有未保存的更改 或者 没有数据，直接关闭
+        if not self.model.is_data_dirty or not can_export:
+            event.accept()
+            return
+        
+        # 4. 弹出确认框
         msg = QMessageBox(self)
         msg.setWindowTitle("Unsaved Annotations")
         msg.setText("Do you want to save your annotations before quitting?")
         msg.setIcon(QMessageBox.Icon.Question)
+        
         save_btn = msg.addButton("Save & Exit", QMessageBox.ButtonRole.AcceptRole)
         discard_btn = msg.addButton("Discard & Exit", QMessageBox.ButtonRole.DestructiveRole)
         msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        
         msg.setDefaultButton(save_btn)
         msg.exec()
         
         if msg.clickedButton() == save_btn:
-            if self.ui.stack_layout.currentWidget() == self.ui.localization_ui:
-                if self.router.loc_fm.save_json(): event.accept()
-                else: event.ignore()
+            if is_loc_mode:
+                if self.router.loc_fm.overwrite_json(): 
+                    event.accept()
+                else: 
+                    event.ignore()
             else:
-                if self.router.class_fm.save_json(): event.accept()
-                else: event.ignore()
+                if self.router.class_fm.save_json(): 
+                    event.accept()
+                else: 
+                    event.ignore()
         elif msg.clickedButton() == discard_btn:
             event.accept()
         else:
             event.ignore()
 
     def update_save_export_button_state(self):
-        can_export = self.model.json_loaded and bool(self.model.manual_annotations)
+        """
+        更新按钮状态，同时支持 Classification 和 Localization 的数据检查。
+        """
+        is_loc_mode = (self.ui.stack_layout.currentWidget() == self.ui.localization_ui)
+        
+        if is_loc_mode:
+            has_data = bool(self.model.localization_events)
+        else:
+            has_data = bool(self.model.manual_annotations)
+            
+        can_export = self.model.json_loaded and has_data
         can_save = can_export and (self.model.current_json_path is not None) and self.model.is_data_dirty
+        
+        # 更新 Classification 界面右侧面板的按钮
         self.ui.right_panel.export_btn.setEnabled(can_export)
         self.ui.right_panel.save_btn.setEnabled(can_save)
-        self.ui.left_panel.undo_btn.setEnabled(len(self.model.undo_stack) > 0)
-        self.ui.left_panel.redo_btn.setEnabled(len(self.model.redo_stack) > 0)
+        
+        # Undo/Redo 状态
+        can_undo = len(self.model.undo_stack) > 0
+        can_redo = len(self.model.redo_stack) > 0
+        
+        # 1. 更新 Classification 按钮
+        self.ui.left_panel.undo_btn.setEnabled(can_undo)
+        self.ui.left_panel.redo_btn.setEnabled(can_redo)
+        
+        # 2. 更新 Localization 按钮
+        self.ui.localization_ui.right_panel.undo_btn.setEnabled(can_undo)
+        self.ui.localization_ui.right_panel.redo_btn.setEnabled(can_redo)
 
     def show_temp_msg(self, title, msg, duration=1500, icon=QMessageBox.Icon.Information):
         m = QMessageBox(self); m.setWindowTitle(title); m.setText(msg); m.setIcon(icon)
@@ -185,6 +239,9 @@ class ActionClassifierApp(QMainWindow):
         return curr.parent().data(0, Qt.ItemDataRole.UserRole)
 
     def populate_action_tree(self):
+        """
+        刷新 Classification 左侧树，并在完成后自动播放第一个视频。
+        """
         self.ui.left_panel.action_tree.clear()
         self.model.action_item_map.clear()
         
@@ -196,6 +253,15 @@ class ActionClassifierApp(QMainWindow):
         for path in self.model.action_item_map.keys():
             self.update_action_item_status(path)
         self.nav_manager.apply_action_filter()
+
+        # [新增/修复] 自动选中并播放第一个视频
+        if self.ui.left_panel.action_tree.topLevelItemCount() > 0:
+            first_item = self.ui.left_panel.action_tree.topLevelItem(0)
+            self.ui.left_panel.action_tree.setCurrentItem(first_item)
+            
+            # [修正] 使用 nav_manager.play_video 来避免属性错误
+            # 这会调用 CenterPanel 的 toggle_play_pause，安全且解耦
+            QTimer.singleShot(200, self.nav_manager.play_video)
 
     def update_action_item_status(self, action_path):
         item = self.model.action_item_map.get(action_path)
