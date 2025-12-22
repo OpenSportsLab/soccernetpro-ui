@@ -117,13 +117,8 @@ class AnnotationManager:
             
         self.model.push_undo(CmdType.SCHEMA_ADD_LBL, head=head, label=txt)
         labels.append(txt); labels.sort()
-        if isinstance(group, list): # Should handle wrapper
-             pass # Not implemented wrapper in this snippet but assumption is DynamicGroup widget handles it
-        # The update call is handled in HistoryManager or direct UI update if needed, but 
-        # HistoryManager handles the 'undo' logic. Here we just push command and update UI directly.
-        # But wait, HistoryManager ONLY does undo/redo. So we MUST update UI here for the forward action.
         
-        # We need to update UI here for the 'do' action
+        # Update UI directly
         from ui.widgets import DynamicSingleLabelGroup
         if isinstance(group, DynamicSingleLabelGroup): group.update_radios(labels)
         else: group.update_checkboxes(labels)
