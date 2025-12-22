@@ -1,10 +1,10 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QPushButton, QMessageBox,
-    QStyle, QStyleOptionSlider, QSizePolicy
+    QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QPushButton,
+    QStyle, QStyleOptionSlider, QSizePolicy, QScrollArea, QScrollBar
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import Qt, pyqtSignal, QUrl, QTime
+from PyQt6.QtCore import Qt, pyqtSignal, QUrl
 from PyQt6.QtGui import QPainter, QColor, QPen
 
 class MediaPreviewWidget(QWidget):
@@ -18,7 +18,6 @@ class MediaPreviewWidget(QWidget):
         layout.setContentsMargins(0,0,0,0)
         
         self.video_widget = QVideoWidget()
-        # Ensure black background to prevent white flash
         self.video_widget.setStyleSheet("background-color: black;")
         self.video_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
@@ -64,22 +63,123 @@ class TimelineWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
         
+        # 整体高度
+        self.setFixedHeight(60)
+        
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(2) 
+        main_layout.setContentsMargins(0, 5, 0, 5)
+        
+        # 1. Time Label
         self.time_label = QLabel("00:00.000 / 00:00.000")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.time_label.setStyleSheet("font-family: monospace; font-size: 14px; font-weight: bold;")
+        self.time_label.setStyleSheet("font-family: 'Courier New', monospace; font-size: 12px; font-weight: bold; color: #EEE;")
+        main_layout.addWidget(self.time_label)
         
+        # 2. Timeline Row
+        timeline_row = QHBoxLayout()
+        timeline_row.setSpacing(5)
+        timeline_row.setContentsMargins(5, 0, 5, 0)
+        timeline_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        # 按钮样式
+        btn_style = """
+            QPushButton { 
+                background-color: #444; color: white; border: 1px solid #555; 
+                border-radius: 4px; font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover { background-color: #555; }
+            QPushButton:pressed { background-color: #666; }
+        """
+
+        # Zoom Out Button (-)
+        self.btn_zoom_out = QPushButton("-")
+        self.btn_zoom_out.setFixedSize(24, 24)
+        self.btn_zoom_out.setStyleSheet(btn_style)
+        self.btn_zoom_out.clicked.connect(lambda: self._change_zoom(-1))
+        timeline_row.addWidget(self.btn_zoom_out)
+
+        # Scroll Area
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.scroll_area.setFixedHeight(30)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        # [修改] 增大滚动条高度，方便拖动
+        self.scroll_area.setStyleSheet("""
+            QScrollArea { background: transparent; }
+            QScrollBar:horizontal {
+                border: none;
+                background: #222;
+                height: 12px;  /* [修改] 从 4px 增加到 12px */
+                margin: 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #666;
+                min-width: 20px;
+                border-radius: 6px; /* [修改] 圆角调整 */
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+        """)
+
+        # 监听底部滚动条操作
+        self.scroll_bar = self.scroll_area.horizontalScrollBar()
+        self.scroll_bar.sliderPressed.connect(self._on_user_scroll_start)
+        self.scroll_bar.sliderReleased.connect(self._on_user_scroll_end)
+
         self.slider = AnnotationSlider(Qt.Orientation.Horizontal)
+        # 样式表：定义了红色把手的外观
+        self.slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #3A3A3A;
+                height: 6px;
+                background: #202020;
+                margin: 0px;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #FF3333;
+                border: 1px solid #FF3333;
+                width: 8px; 
+                height: 16px;
+                margin: -5px 0;
+                border-radius: 4px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #444;
+                border-radius: 3px;
+            }
+        """)
         self.slider.sliderPressed.connect(self._on_slider_pressed)
         self.slider.sliderMoved.connect(self._on_slider_moved)
         self.slider.sliderReleased.connect(self._on_slider_released)
         
-        layout.addWidget(self.time_label)
-        layout.addWidget(self.slider)
+        self.scroll_area.setWidget(self.slider)
+        timeline_row.addWidget(self.scroll_area)
         
+        # Zoom In Button (+)
+        self.btn_zoom_in = QPushButton("+")
+        self.btn_zoom_in.setFixedSize(24, 24)
+        self.btn_zoom_in.setStyleSheet(btn_style)
+        self.btn_zoom_in.clicked.connect(lambda: self._change_zoom(1))
+        timeline_row.addWidget(self.btn_zoom_in)
+        
+        main_layout.addLayout(timeline_row)
+        
+        # State
         self.duration = 0
-        self.is_dragging = False
+        self.is_dragging = False 
+        self.user_is_scrolling = False 
+        self.zoom_level = 1.0
+        self.auto_scroll_active = True # 控制自动跟随
+    
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_slider_width()
 
     def set_duration(self, ms):
         self.duration = ms
@@ -90,21 +190,106 @@ class TimelineWidget(QWidget):
         if not self.is_dragging:
             self.slider.setValue(ms)
             self._update_label(ms)
+            self._auto_scroll_to_playhead(ms)
 
     def set_markers(self, markers):
         self.slider.markers = markers
         self.slider.update()
+        
+    def _change_zoom(self, direction):
+        old_level = self.zoom_level
+        if direction > 0:
+            self.zoom_level = min(self.zoom_level * 1.5, 20.0) 
+        else:
+            self.zoom_level = max(self.zoom_level / 1.5, 1.0)
+            
+        if abs(self.zoom_level - 1.0) < 0.05:
+            self.zoom_level = 1.0
+            
+        if old_level != self.zoom_level:
+            center_ratio = self._get_current_center_ratio()
+            self._update_slider_width()
+            self._restore_center_ratio(center_ratio)
+
+    def _update_slider_width(self):
+        viewport_width = self.scroll_area.viewport().width()
+        
+        if self.zoom_level <= 1.0:
+            self.scroll_area.setWidgetResizable(True)
+            self.slider.setMinimumWidth(0)
+            self.slider.setMaximumWidth(16777215)
+        else:
+            self.scroll_area.setWidgetResizable(False)
+            new_width = int(viewport_width * self.zoom_level)
+            self.slider.setMinimumWidth(new_width)
+            self.slider.setMaximumWidth(new_width)
+
+    def _on_user_scroll_start(self):
+        self.user_is_scrolling = True
+        self.auto_scroll_active = False
+
+    def _on_user_scroll_end(self):
+        self.user_is_scrolling = False
+        self._check_and_restore_auto_follow()
+
+    def _check_and_restore_auto_follow(self):
+        current_ms = self.slider.value()
+        if self.duration <= 0 or self.slider.width() <= 0: return
+
+        ratio = current_ms / self.duration
+        target_x = int(ratio * self.slider.width())
+        
+        viewport_w = self.scroll_area.viewport().width()
+        current_scroll = self.scroll_area.horizontalScrollBar().value()
+        
+        if current_scroll <= target_x <= current_scroll + viewport_w:
+            self.auto_scroll_active = True
+
+    def _auto_scroll_to_playhead(self, current_ms):
+        if self.zoom_level <= 1.0 or self.duration <= 0:
+            return
+            
+        if self.user_is_scrolling or not self.auto_scroll_active:
+            return
+
+        ratio = current_ms / self.duration
+        slider_width = self.slider.width()
+        target_x = int(ratio * slider_width)
+        
+        viewport_w = self.scroll_area.viewport().width()
+        current_scroll = self.scroll_area.horizontalScrollBar().value()
+        
+        is_visible = (current_scroll <= target_x <= current_scroll + viewport_w)
+        
+        if not is_visible:
+            center_x = target_x - (viewport_w // 2)
+            self.scroll_area.horizontalScrollBar().setValue(center_x)
+
+    def _get_current_center_ratio(self):
+        if self.slider.width() <= 0: return 0.5
+        scroll = self.scroll_area.horizontalScrollBar().value()
+        viewport = self.scroll_area.viewport().width()
+        center_pixel = scroll + (viewport / 2)
+        return center_pixel / self.slider.width()
+
+    def _restore_center_ratio(self, ratio):
+        new_width = self.slider.width()
+        new_center_pixel = int(new_width * ratio)
+        viewport = self.scroll_area.viewport().width()
+        new_scroll = new_center_pixel - (viewport // 2)
+        self.scroll_area.horizontalScrollBar().setValue(new_scroll)
 
     def _update_label(self, current_ms):
         def fmt(ms):
             s = ms // 1000
             m = s // 60
-            # Format: MM:SS.mmm
             return f"{m:02}:{s%60:02}.{ms%1000:03}"
-        
         self.time_label.setText(f"{fmt(current_ms)} / {fmt(self.duration)}")
 
-    def _on_slider_pressed(self): self.is_dragging = True
+    def _on_slider_pressed(self): 
+        self.is_dragging = True
+        self.auto_scroll_active = True
+        
     def _on_slider_moved(self, val): self._update_label(val)
     def _on_slider_released(self):
         self.is_dragging = False
@@ -117,7 +302,9 @@ class AnnotationSlider(QSlider):
         self.markers = []
 
     def paintEvent(self, event):
+        # 1. 先调用系统绘制（画轨道和系统自带的 Handle）
         super().paintEvent(event)
+        
         if not self.markers or self.maximum() <= 0: return
         
         painter = QPainter(self)
@@ -125,18 +312,28 @@ class AnnotationSlider(QSlider):
         
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
+        
+        # 获取轨道和把手的几何区域
         groove = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
         
         available_width = groove.width()
         x_offset = groove.x()
         
+        # 2. 绘制事件标记 (覆盖在系统把手上)
         for m in self.markers:
             start_ms = m.get('start_ms', 0)
             ratio = start_ms / self.maximum()
             x = x_offset + int(available_width * ratio)
+            
             c = m.get('color', QColor('red'))
             painter.setPen(QPen(c, 2))
-            painter.drawLine(x, groove.top(), x, groove.bottom())
+            painter.drawLine(x, groove.top() - 2, x, groove.bottom() + 2)
+
+        # 3. 手动再绘制一次红色把手 (覆盖在标记上)
+        painter.setPen(QPen(QColor("#FF3333"), 1))
+        painter.setBrush(QColor("#FF3333"))
+        painter.drawRoundedRect(handle_rect, 4, 4)
 
 
 class PlaybackControlBar(QWidget):
@@ -144,14 +341,15 @@ class PlaybackControlBar(QWidget):
     stopRequested = pyqtSignal()
     playPauseRequested = pyqtSignal()
     nextPrevClipRequested = pyqtSignal(int)
-    nextPrevAnnotRequested = pyqtSignal(int) # [新增] -1 prev, 1 next
+    nextPrevAnnotRequested = pyqtSignal(int)
     playbackRateRequested = pyqtSignal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 5, 0, 5)
         
-        # Row 1: Navigation (Clip & Time)
+        # Row 1: Navigation
         r1 = QHBoxLayout()
         btns_r1 = [
             ("Prev Clip", lambda: self.nextPrevClipRequested.emit(-1)),
@@ -164,26 +362,25 @@ class PlaybackControlBar(QWidget):
         ]
         for txt, func in btns_r1:
             b = QPushButton(txt)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(func)
             r1.addWidget(b)
         layout.addLayout(r1)
         
-        # Row 2: Speed & Annotation Jump
+        # Row 2: Speed & Event Jump
         r2 = QHBoxLayout()
         
-        # [新增] Prev Annotation
         btn_prev_ann = QPushButton("Prev Event")
         btn_prev_ann.clicked.connect(lambda: self.nextPrevAnnotRequested.emit(-1))
         r2.addWidget(btn_prev_ann)
         
-        # Speed Buttons
-        speeds = [0.25, 0.5, 1.0, 2.0]
+        # [修改] 添加了 4.0 倍速
+        speeds = [0.25, 0.5, 1.0, 2.0, 4.0]
         for s in speeds:
             b = QPushButton(f"{s}x")
             b.clicked.connect(lambda _, rate=s: self.playbackRateRequested.emit(rate))
             r2.addWidget(b)
             
-        # [新增] Next Annotation
         btn_next_ann = QPushButton("Next Event")
         btn_next_ann.clicked.connect(lambda: self.nextPrevAnnotRequested.emit(1))
         r2.addWidget(btn_next_ann)
