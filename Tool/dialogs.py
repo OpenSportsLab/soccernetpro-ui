@@ -3,12 +3,346 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QRadioButton, QTreeView, QDialogButtonBox,
     QAbstractItemView, QGroupBox, QFormLayout, QLineEdit, QHBoxLayout,
     QCheckBox, QFrame, QListWidget, QComboBox, QPushButton, QLabel,
-    QMessageBox, QWidget, QListWidgetItem, QStyle
+    QMessageBox, QWidget, QListWidgetItem, QStyle, QButtonGroup, QScrollArea
 )
-from PyQt6.QtCore import QDir, Qt
-from PyQt6.QtGui import QFileSystemModel
+from PyQt6.QtCore import QDir, Qt, QSize
+from PyQt6.QtGui import QFileSystemModel, QIcon
 from utils import get_square_remove_btn_style
 
+class ProjectTypeDialog(QDialog):
+    """
+    项目类型选择对话框 (Classification vs Localization)
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Project Type")
+        self.resize(400, 250)
+        self.selected_mode = None
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        lbl = QLabel("Please select the type of project you want to create:")
+        lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ccc;")
+        layout.addWidget(lbl)
+        
+        # 按钮容器
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(20)
+        
+        # Classification 按钮
+        self.btn_cls = QPushButton("Classification")
+        self.btn_cls.setMinimumSize(QSize(0, 80))
+        self.btn_cls.setStyleSheet("""
+            QPushButton {
+                font-size: 16px; background-color: #2A2A2A; border: 2px solid #444; border-radius: 8px;
+            }
+            QPushButton:hover { background-color: #3A3A3A; border-color: #00BFFF; }
+        """)
+        self.btn_cls.clicked.connect(lambda: self._finish("classification"))
+        
+        # Localization 按钮
+        self.btn_loc = QPushButton("Localization\n(Action Spotting)")
+        self.btn_loc.setMinimumSize(QSize(0, 80))
+        self.btn_loc.setStyleSheet("""
+            QPushButton {
+                font-size: 16px; background-color: #2A2A2A; border: 2px solid #444; border-radius: 8px;
+            }
+            QPushButton:hover { background-color: #3A3A3A; border-color: #00BFFF; }
+        """)
+        self.btn_loc.clicked.connect(lambda: self._finish("localization"))
+        
+        btn_layout.addWidget(self.btn_cls)
+        btn_layout.addWidget(self.btn_loc)
+        
+        layout.addLayout(btn_layout)
+        layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+    def _finish(self, mode):
+        self.selected_mode = mode
+        self.accept()
+
+class CreateProjectDialog(QDialog):
+    """
+    Dialog for creating projects.
+    Layout: Top-Down flow.
+    1. Project Info
+    2. Head Definition (Name -> Labels) -> Add to List
+    3. Final List of Heads
+    """
+    def __init__(self, parent=None, project_type="classification"):
+        super().__init__(parent)
+        self.project_type = project_type
+        self.setWindowTitle(f"Create New {project_type.capitalize()} Project")
+        self.resize(600, 750)
+        
+        # Final result storage: { "HeadName": { "type": "...", "labels": [...] } }
+        self.final_categories = {} 
+        
+        # Temporary storage for the head currently being created
+        self.current_head_labels = [] 
+        
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(15)
+
+        # ==========================================
+        # 1. Project Info Section
+        # ==========================================
+        info_group = QGroupBox("1. Project Information")
+        form = QFormLayout(info_group)
+        self.task_name_edit = QLineEdit("My Task")
+        form.addRow("Task Name:", self.task_name_edit)
+        
+        self.desc_edit = QLineEdit()
+        form.addRow("Description:", self.desc_edit)
+        
+        # Modalities
+        mod_layout = QHBoxLayout()
+        self.mod_video = QCheckBox("Video"); self.mod_video.setChecked(True)
+        self.mod_image = QCheckBox("Image")
+        self.mod_audio = QCheckBox("Audio")
+        
+        mod_layout.addWidget(self.mod_video)
+        mod_layout.addWidget(self.mod_image)
+        mod_layout.addWidget(self.mod_audio)
+        
+        # Localization restriction: Only Video usually needed, hide others for simplicity
+        if self.project_type == "localization":
+            self.mod_image.setVisible(False)
+            self.mod_audio.setVisible(False)
+            self.mod_video.setEnabled(False) # Force check
+        
+        form.addRow("Modalities:", mod_layout)
+        main_layout.addWidget(info_group)
+
+        # ==========================================
+        # 2. Head Creator Section (Staging Area)
+        # ==========================================
+        creator_group = QGroupBox("2. Define a New Head (Category)")
+        creator_layout = QVBoxLayout(creator_group)
+        
+        # 2.1 Head Name
+        h_name_layout = QHBoxLayout()
+        h_name_layout.addWidget(QLabel("Head Name:"))
+        self.head_name_edit = QLineEdit()
+        self.head_name_edit.setPlaceholderText("e.g. Action, Team, Player...")
+        h_name_layout.addWidget(self.head_name_edit)
+        creator_layout.addLayout(h_name_layout)
+        
+        # 2.2 Label Type
+        type_layout = QHBoxLayout()
+        type_layout.addWidget(QLabel("Label Type:"))
+        self.type_group = QButtonGroup(self)
+        self.rb_single = QRadioButton("Single Label (Mutually Exclusive)")
+        self.rb_single.setChecked(True)
+        self.rb_multi = QRadioButton("Multi Label")
+        
+        type_layout.addWidget(self.rb_single)
+        type_layout.addWidget(self.rb_multi)
+        type_layout.addStretch()
+        self.type_group.addButton(self.rb_single)
+        self.type_group.addButton(self.rb_multi)
+        
+        # Localization restriction: Force Single Label
+        if self.project_type == "localization":
+            self.rb_multi.setVisible(False)
+            self.rb_single.setText("Single Label (Fixed for Action Spotting)")
+            self.rb_single.setEnabled(False)
+            
+        creator_layout.addLayout(type_layout)
+        
+        # 2.3 Labels Definition
+        lbl_def_group = QGroupBox("Labels for this Head")
+        lbl_def_group.setStyleSheet("QGroupBox { border: 1px solid #555; margin-top: 5px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }")
+        lbl_def_layout = QVBoxLayout(lbl_def_group)
+        
+        # Input row
+        inp_row = QHBoxLayout()
+        self.label_input = QLineEdit()
+        self.label_input.setPlaceholderText("Type label name and press Enter (e.g. Pass, Shot)")
+        self.label_input.returnPressed.connect(self.add_label_to_staging)
+        
+        btn_add_lbl = QPushButton("Add Label")
+        btn_add_lbl.clicked.connect(self.add_label_to_staging)
+        
+        inp_row.addWidget(self.label_input)
+        inp_row.addWidget(btn_add_lbl)
+        lbl_def_layout.addLayout(inp_row)
+        
+        # List of staged labels
+        self.staged_labels_list = QListWidget()
+        self.staged_labels_list.setFixedHeight(100) # Keep it compact
+        lbl_def_layout.addWidget(self.staged_labels_list)
+        
+        creator_layout.addWidget(lbl_def_group)
+        
+        # 2.4 Add Head Button
+        self.btn_add_head_to_project = QPushButton("Add Head Categories to Project ↓")
+        self.btn_add_head_to_project.setStyleSheet("font-weight: bold; padding: 8px; font-size: 14px;")
+        self.btn_add_head_to_project.clicked.connect(self.commit_head_to_project)
+        creator_layout.addWidget(self.btn_add_head_to_project)
+        
+        main_layout.addWidget(creator_group)
+
+        # ==========================================
+        # 3. Project Schema List (Result)
+        # ==========================================
+        result_group = QGroupBox("3. Project Structure (Heads)")
+        result_layout = QVBoxLayout(result_group)
+        
+        self.project_heads_list = QListWidget()
+        result_layout.addWidget(self.project_heads_list)
+        
+        main_layout.addWidget(result_group)
+
+        # ==========================================
+        # Bottom Buttons
+        # ==========================================
+        bbox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bbox.accepted.connect(self.validate_and_accept)
+        bbox.rejected.connect(self.reject)
+        main_layout.addWidget(bbox)
+
+    # --- Logic Methods ---
+
+    def add_label_to_staging(self):
+        """Adds a label to the temporary list for the head being created."""
+        txt = self.label_input.text().strip()
+        if not txt: return
+        
+        # [修改] 增加重复提示弹窗
+        # Case-insensitive check
+        if any(l.lower() == txt.lower() for l in self.current_head_labels):
+            QMessageBox.warning(self, "Duplicate Label", f"Label '{txt}' already exists (case-insensitive)!")
+            self.label_input.selectAll() # 全选文本方便用户修改
+            return 
+            
+        self.current_head_labels.append(txt)
+        
+        # Add to UI
+        item = QListWidgetItem(self.staged_labels_list)
+        widget = QWidget()
+        h = QHBoxLayout(widget)
+        h.setContentsMargins(5, 2, 5, 2)
+        h.addWidget(QLabel(txt))
+        h.addStretch()
+        
+        rem_btn = QPushButton("×")
+        rem_btn.setFixedSize(20, 20)
+        rem_btn.setStyleSheet(get_square_remove_btn_style())
+        rem_btn.clicked.connect(lambda: self.remove_label_from_staging(txt, item))
+        h.addWidget(rem_btn)
+        
+        item.setSizeHint(widget.sizeHint())
+        self.staged_labels_list.setItemWidget(item, widget)
+        
+        self.label_input.clear()
+        self.label_input.setFocus()
+
+    def remove_label_from_staging(self, txt, item):
+        if txt in self.current_head_labels:
+            self.current_head_labels.remove(txt)
+        row = self.staged_labels_list.row(item)
+        self.staged_labels_list.takeItem(row)
+
+    def commit_head_to_project(self):
+        """Moves the staged head definition into the final project structure."""
+        head_name = self.head_name_edit.text().strip()
+        if not head_name:
+            QMessageBox.warning(self, "Warning", "Head Name cannot be empty.")
+            return
+        
+        # Check if head already exists (Case-Insensitive)
+        if any(k.lower() == head_name.lower() for k in self.final_categories):
+            QMessageBox.warning(self, "Error", f"Head '{head_name}' already exists in project.")
+            return
+            
+        # Determine type
+        ltype = "single_label"
+        if self.project_type == "classification" and self.rb_multi.isChecked():
+            ltype = "multi_label"
+            
+        # Save to final dict
+        # Copy labels list to avoid reference issues
+        self.final_categories[head_name] = {
+            "type": ltype,
+            "labels": list(self.current_head_labels)
+        }
+        
+        # Update UI List
+        self.add_head_to_project_list_ui(head_name, ltype, self.current_head_labels)
+        
+        # Clear Staging Area
+        self.head_name_edit.clear()
+        self.label_input.clear()
+        self.staged_labels_list.clear()
+        self.current_head_labels = []
+        
+        # Reset Focus
+        self.head_name_edit.setFocus()
+
+    def add_head_to_project_list_ui(self, name, ltype, labels):
+        item = QListWidgetItem(self.project_heads_list)
+        widget = QWidget()
+        h = QHBoxLayout(widget)
+        h.setContentsMargins(5, 5, 5, 5)
+        
+        type_str = "[S]" if ltype == 'single_label' else "[M]"
+        label_summary = ", ".join(labels)
+        if len(label_summary) > 30: label_summary = label_summary[:30] + "..."
+        
+        info_label = QLabel(f"<b>{name}</b> {type_str} : {label_summary}")
+        h.addWidget(info_label)
+        h.addStretch()
+        
+        rem_btn = QPushButton("Remove")
+        rem_btn.setStyleSheet("""
+            QPushButton { background-color: #8B0000; color: white; border-radius: 4px; padding: 4px 8px; }
+            QPushButton:hover { background-color: #FF0000; }
+        """)
+        rem_btn.clicked.connect(lambda: self.remove_head_from_project(name, item))
+        h.addWidget(rem_btn)
+        
+        item.setSizeHint(widget.sizeHint())
+        self.project_heads_list.setItemWidget(item, widget)
+
+    def remove_head_from_project(self, name, item):
+        if name in self.final_categories:
+            del self.final_categories[name]
+        row = self.project_heads_list.row(item)
+        self.project_heads_list.takeItem(row)
+
+    def validate_and_accept(self):
+        if not self.task_name_edit.text().strip():
+            self.task_name_edit.setPlaceholderText("NAME REQUIRED!")
+            self.task_name_edit.setFocus()
+            return
+        
+        if not self.final_categories:
+            QMessageBox.warning(self, "Warning", "Please define at least one Head and add it to the project.")
+            return
+            
+        self.accept()
+
+    def get_data(self):
+        modalities = []
+        if self.mod_video.isChecked(): modalities.append("video")
+        if self.mod_image.isChecked(): modalities.append("image")
+        if self.mod_audio.isChecked(): modalities.append("audio")
+            
+        return {
+            "task": self.task_name_edit.text().strip(),
+            "description": self.desc_edit.text().strip(),
+            "modalities": modalities,
+            "labels": self.final_categories
+        }
+
+# --- FolderPickerDialog 保持不变 ---
 class FolderPickerDialog(QDialog):
     """Custom Folder Picker (Multi-Select without Ctrl)."""
     def __init__(self, initial_dir="", parent=None):
@@ -31,240 +365,16 @@ class FolderPickerDialog(QDialog):
         for i in range(1, 4):
             self.tree.hideColumn(i)
         
-        start_path = initial_dir if initial_dir and os.path.exists(initial_dir) else QDir.currentPath()
-        root_idx = self.model.index(start_path)
-        self.tree.scrollTo(root_idx)
-        self.tree.expand(root_idx)
+        start_path = initial_dir if initial_dir and os.path.exists(initial_dir) else QDir.rootPath()
+        self.tree.setRootIndex(self.model.index(start_path))
         
         self.layout.addWidget(self.tree)
         
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        self.layout.addWidget(self.button_box)
+        self.bbox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.bbox.accepted.connect(self.accept)
+        self.bbox.rejected.connect(self.reject)
+        self.layout.addWidget(self.bbox)
 
-    def get_selected_paths(self):
-        paths = []
+    def get_selected_folders(self):
         indexes = self.tree.selectionModel().selectedRows()
-        for idx in indexes:
-            file_path = self.model.filePath(idx)
-            if file_path:
-                paths.append(file_path)
-        return paths
-
-class CreateProjectDialog(QDialog):
-    """Dialog to initialize a new JSON project structure."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Create New Annotation Project")
-        self.resize(700, 600)
-        self.final_categories = {}
-        self._setup_ui()
-
-    def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        
-        # 1. Basic Info
-        form_group = QGroupBox("Project Metadata")
-        form_layout = QFormLayout(form_group)
-        self.task_name_edit = QLineEdit()
-        self.task_name_edit.setPlaceholderText("e.g., Soccer Foul Detection")
-        self.desc_edit = QLineEdit()
-        self.desc_edit.setPlaceholderText("Optional description...")
-        
-        form_layout.addRow("Task Name:", self.task_name_edit)
-        form_layout.addRow("Description:", self.desc_edit)
-        layout.addWidget(form_group)
-        
-        # 2. Modalities
-        mod_group = QGroupBox("Modalities")
-        mod_layout = QHBoxLayout(mod_group)
-        self.mod_video = QCheckBox("Video")
-        self.mod_video.setChecked(True)
-        self.mod_image = QCheckBox("Image")
-        self.mod_audio = QCheckBox("Audio")
-        
-        mod_layout.addWidget(self.mod_video)
-        mod_layout.addWidget(self.mod_image)
-        mod_layout.addWidget(self.mod_audio)
-        layout.addWidget(mod_group)
-        
-        # 3. Categories / Labels Definition
-        cat_group = QGroupBox("Create a Heads")
-        cat_layout = QVBoxLayout(cat_group)
-        
-        input_frame = QFrame()
-        input_frame.setFrameShape(QFrame.Shape.StyledPanel)
-        input_layout = QVBoxLayout(input_frame)
-        
-        # Row A: Name and Type
-        row_a = QHBoxLayout()
-        self.cat_name_edit = QLineEdit()
-        self.cat_name_edit.setPlaceholderText("Category Name")
-        
-        self.cat_type_combo = QComboBox()
-        self.cat_type_combo.addItems(["Single Label", "Multi Label"])
-        
-        row_a.addWidget(QLabel("Name:"))
-        row_a.addWidget(self.cat_name_edit, 2)
-        row_a.addWidget(QLabel("Type:"))
-        row_a.addWidget(self.cat_type_combo, 1)
-        input_layout.addLayout(row_a)
-        
-        # Row B: Label Adding
-        row_b = QHBoxLayout()
-        self.current_labels_list = QListWidget() 
-        self.current_labels_list.setMaximumHeight(120) 
-        self.current_labels_list.setAlternatingRowColors(True)
-        
-        label_input_layout = QVBoxLayout()
-        h_label_in = QHBoxLayout()
-        self.single_label_input = QLineEdit()
-        self.single_label_input.setPlaceholderText("Type a label")
-        self.single_label_input.returnPressed.connect(self.add_label_to_temp_list)
-        
-        self.add_label_btn = QPushButton("Add Label")
-        self.add_label_btn.clicked.connect(self.add_label_to_temp_list)
-        
-        h_label_in.addWidget(self.single_label_input)
-        h_label_in.addWidget(self.add_label_btn)
-        
-        label_input_layout.addLayout(h_label_in)
-        label_input_layout.addWidget(QLabel("Current Labels:"))
-        label_input_layout.addWidget(self.current_labels_list)
-        
-        input_layout.addLayout(label_input_layout)
-        
-        self.add_category_btn = QPushButton("Add Category to Project")
-        self.add_category_btn.setStyleSheet("font-weight: bold; padding: 5px;")
-        self.add_category_btn.clicked.connect(self.add_category_to_main_list)
-        input_layout.addWidget(self.add_category_btn)
-        
-        cat_layout.addWidget(input_frame)
-        cat_layout.addWidget(QLabel("Pre-defined Categories:"))
-        self.categories_list_widget = QListWidget() 
-        cat_layout.addWidget(self.categories_list_widget)
-        
-        layout.addWidget(cat_group)
-        
-        # 4. Dialog Buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        button_box.accepted.connect(self.validate_and_accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-
-    def add_label_to_temp_list(self):
-        txt = self.single_label_input.text().strip()
-        if not txt: return
-        txt_lower = txt.lower() 
-        for i in range(self.current_labels_list.count()):
-            item = self.current_labels_list.item(i)
-            existing_text = item.data(Qt.ItemDataRole.UserRole)
-            if existing_text and existing_text.lower() == txt_lower:
-                QMessageBox.warning(self, "Duplicate Label", f"The label '{txt}' already exists.")
-                return
-        
-        item = QListWidgetItem(self.current_labels_list)
-        item.setData(Qt.ItemDataRole.UserRole, txt)
-        
-        item_widget = QWidget()
-        h_layout = QHBoxLayout(item_widget)
-        h_layout.setContentsMargins(5, 2, 5, 2)
-        
-        lbl = QLabel(txt)
-        remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(20, 20)
-        remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        remove_btn.setStyleSheet(get_square_remove_btn_style())
-        remove_btn.clicked.connect(lambda _, it=item: self.remove_temp_label(it))
-        
-        h_layout.addWidget(lbl, 1)
-        h_layout.addWidget(remove_btn)
-        
-        item.setSizeHint(item_widget.sizeHint())
-        self.current_labels_list.setItemWidget(item, item_widget)
-        self.single_label_input.clear()
-        self.single_label_input.setFocus()
-
-    def remove_temp_label(self, item):
-        row = self.current_labels_list.row(item)
-        self.current_labels_list.takeItem(row)
-
-    def add_category_to_main_list(self):
-        raw_name = self.cat_name_edit.text().strip()
-        if not raw_name:
-            self.cat_name_edit.setPlaceholderText("NAME REQUIRED!")
-            return
-        cat_key = raw_name.replace(" ", "_").lower()
-        
-        if cat_key in self.final_categories:
-            QMessageBox.warning(self, "Duplicate Category", f"Category '{cat_key}' already exists.")
-            return
-
-        cat_type_disp = self.cat_type_combo.currentText()
-        cat_type_internal = "single_label" if "Single" in cat_type_disp else "multi_label"
-        
-        labels = []
-        for i in range(self.current_labels_list.count()):
-            item = self.current_labels_list.item(i)
-            label_text = item.data(Qt.ItemDataRole.UserRole)
-            if label_text: labels.append(label_text)
-        
-        self.final_categories[cat_key] = {"type": cat_type_internal, "labels": sorted(list(set(labels)))}
-        
-        item_widget = QWidget()
-        item_layout = QHBoxLayout(item_widget)
-        item_layout.setContentsMargins(5, 2, 5, 2)
-        
-        clean_title = cat_key.replace('_', ' ').title()
-        info_text = f"<b>{clean_title}</b> ({cat_type_disp}) - {len(labels)} labels"
-        label_info = QLabel(info_text)
-        
-        delete_btn = QPushButton()
-        delete_btn.setFixedSize(24, 24)
-        delete_btn.setFlat(True)
-        delete_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
-        delete_btn.clicked.connect(lambda _, n=cat_key: self.remove_category(n))
-        
-        item_layout.addWidget(label_info, 1)
-        item_layout.addWidget(delete_btn)
-        
-        list_item = QListWidgetItem(self.categories_list_widget)
-        list_item.setSizeHint(item_widget.sizeHint())
-        list_item.setData(Qt.ItemDataRole.UserRole, cat_key)
-        
-        self.categories_list_widget.addItem(list_item)
-        self.categories_list_widget.setItemWidget(list_item, item_widget)
-        
-        self.cat_name_edit.clear()
-        self.current_labels_list.clear()
-        self.single_label_input.clear()
-
-    def remove_category(self, cat_name):
-        if cat_name in self.final_categories:
-            del self.final_categories[cat_name]
-        for i in range(self.categories_list_widget.count()):
-            item = self.categories_list_widget.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == cat_name:
-                self.categories_list_widget.takeItem(i)
-                break
-
-    def validate_and_accept(self):
-        if not self.task_name_edit.text().strip():
-            self.task_name_edit.setPlaceholderText("NAME REQUIRED!")
-            self.task_name_edit.setFocus()
-            return
-        self.accept()
-
-    def get_data(self):
-        modalities = []
-        if self.mod_video.isChecked(): modalities.append("video")
-        if self.mod_image.isChecked(): modalities.append("image")
-        if self.mod_audio.isChecked(): modalities.append("audio")
-            
-        return {
-            "task": self.task_name_edit.text().strip(),
-            "description": self.desc_edit.text().strip(),
-            "modalities": modalities,
-            "labels": self.final_categories
-        }
+        return [self.model.filePath(idx) for idx in indexes]
