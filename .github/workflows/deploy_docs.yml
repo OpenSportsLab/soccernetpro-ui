@@ -1,12 +1,5 @@
 name: Deploy MkDocs Documentation
 
-## 1) Add / update workflow: `.github/workflows/deploy_docs.yml`
-
-Copy-paste the following file exactly:
-
-```yml
-name: Deploy MkDocs Documentation
-
 on:
   push:
     branches:
