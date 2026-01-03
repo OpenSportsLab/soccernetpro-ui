@@ -1,0 +1,55 @@
+site_name: OSL Action Spotting Annotation Tool
+site_description: A GUI tool for annotating action spotting datasets in sports video (OpenSportsLab)
+site_author: OpenSportsLab
+repo_url: https://github.com/OpenSportsLab/DatasetAnnotationTool
+repo_name: OpenSportsLab/DatasetAnnotationTool
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+# Optional: logo and favicon if you have them
+# logo: assets/logo.png
+# favicon: assets/favicon.ico
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Getting Started: getting_started.md
+  - User Guide:
+      - Overview: gui_overview.md
+      - Annotating:
+          - Annotating Actions: annotating.md
+          - Editing Annotations: editing.md
+          - Saving & Loading: saving_loading.md
+          - Keyboard Shortcuts: shortcuts.md
+      - Batch Tools: batch_tools.md
+  - Troubleshooting: troubleshooting.md
+  - FAQ: faq.md
+  - About: about.md
+  - Contributing: contributing.md  # (add this file if you want contributions)
+  - Changelog: changelog.md        # (add this file if you want to track changes)
+
+# Optional: Add Markdown extensions
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - footnotes
+  - tables
+
+# Optional: If you want to deploy on GitHub Pages
+plugins:
+  - search
+#  - git-revision-date
+#  - minify:
+#      minify_html: true
