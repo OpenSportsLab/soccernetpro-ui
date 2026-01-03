@@ -1,8 +1,8 @@
-site_name: OSL Action Spotting Annotation Tool
-site_description: A GUI tool for annotating action spotting datasets in sports video (OpenSportsLab)
+site_name: SoccerNetPro Analyzer
+site_description: A PyQt6 GUI tool for analyzing and annotating SoccerNetPro datasets (OpenSportsLab)
 site_author: OpenSportsLab
-repo_url: https://github.com/OpenSportsLab/DatasetAnnotationTool
-repo_name: OpenSportsLab/DatasetAnnotationTool
+repo_url: https://github.com/OpenSportsLab/soccernetpro-ui
+repo_name: OpenSportsLab/soccernetpro-ui
 
 theme:
   name: material
@@ -26,8 +26,11 @@ nav:
   - Getting Started: getting_started.md
   - User Guide:
       - Overview: gui_overview.md
-      - Annotating:
-          - Annotating Actions: annotating.md
+      - Using the Tool:
+          - Interface Tour: gui_overview.md
+          - Creating a Project: creating_project.md
+          - Import & Export: import_export.md
+          - Labels & Categories: labels_categories.md
           - Editing Annotations: editing.md
           - Saving & Loading: saving_loading.md
           - Keyboard Shortcuts: shortcuts.md
@@ -35,10 +38,9 @@ nav:
   - Troubleshooting: troubleshooting.md
   - FAQ: faq.md
   - About: about.md
-  - Contributing: contributing.md  # (add this file if you want contributions)
-  - Changelog: changelog.md        # (add this file if you want to track changes)
+  - Contributing: contributing.md
+  - Changelog: changelog.md
 
-# Optional: Add Markdown extensions
 markdown_extensions:
   - admonition
   - codehilite
@@ -47,9 +49,5 @@ markdown_extensions:
   - footnotes
   - tables
 
-# Optional: If you want to deploy on GitHub Pages
 plugins:
   - search
-#  - git-revision-date
-#  - minify:
-#      minify_html: true
