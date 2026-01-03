@@ -36,4 +36,4 @@ This tool helps you annotate action spotting datasets in sports video. Use the n
 ## License
 
 This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
-See [GitHub repository](https://github.com/OpenSportsLab/DatasetAnnotationTool) for details.
+See [GitHub repository](https://github.com/OpenSportsLab/soccernetpro-ui) for details.
