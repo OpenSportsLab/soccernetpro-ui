@@ -4,7 +4,7 @@ Welcome to the Soccernet Pro Annotation Tool documentation!
 
 This tool helps you annotate action spotting datasets in sports video. Use the navigation to find installation instructions, user guides, and more.
 
-![Main GUI Screenshot](assets/localization-GUI.png)
+![Main GUI Screenshot](assets/localization-UI.png)
 
 **Features:**
 - Intuitive graphical interface for annotating actions in sports videos
