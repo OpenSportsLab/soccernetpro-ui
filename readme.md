@@ -55,7 +55,7 @@ python Tool/tools/download_osl_hf.py \
 
 python Tool/main.py --data_file ./Test\ Data/HistWC-finals.json
 ```
-Adjust ```bash--data_file``` to match the CLI argument name used by your Tool/main.py (e.g., --osl_file if that is what your entry point expects).
+Adjust ```bash--data_file``` to match the CLI argument name used by your ```Tool/main.py``` (e.g., ```--osl_file``` if that is what your entry point expects).
 
 ---
 
@@ -88,7 +88,7 @@ pyinstaller --noconfirm --clean --windowed --onefile \
   main.py
 ```
 
-In GitHub Actions, the Windows ```bash--add-data``` separator is ; instead of :.
+In GitHub Actions, the Windows ```bash--add-data``` separator is ```;``` instead of ```:```.
 
 ---
 
