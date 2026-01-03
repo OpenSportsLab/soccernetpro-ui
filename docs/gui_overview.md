@@ -42,7 +42,7 @@ Designed for assigning global labels (Single or Multi-label) to video clips.
 
 Designed for marking specific timestamps (spotting) with event labels.
 
-![Localization Interface](assets/localization-ui.png)
+![Localization Interface](assets/localization-UI.png)
 *(Ensure you have a screenshot named `localization_ui.png` in your assets folder)*
 
 ### Left Panel: Sequence Management
