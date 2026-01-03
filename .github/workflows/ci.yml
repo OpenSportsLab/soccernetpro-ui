@@ -1,0 +1,114 @@
+name: Build Standalone GUI (CI)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Tool
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Windows exe (onefile)
+        run: |
+          pyinstaller --noconfirm --clean --windowed --onefile `
+            --name "SoccerNetProAnalyzer" `
+            --add-data "style;style" `
+            --add-data "ui;ui" `
+            --add-data "ui2;ui2" `
+            "main.py"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoccerNetProAnalyzer-Windows
+          path: Tool/dist/SoccerNetProAnalyzer.exe
+
+
+  build-macos:
+    name: Build on macOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: Tool
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build macOS .app
+        run: |
+          pyinstaller --noconfirm --clean --windowed \
+            --name "SoccerNetProAnalyzer" \
+            --add-data "style:style" \
+            --add-data "ui:ui" \
+            --add-data "ui2:ui2" \
+            "main.py"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoccerNetProAnalyzer-macOS
+          path: Tool/dist/SoccerNetProAnalyzer.app
+
+
+  build-linux:
+    name: Build on Linux
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Tool
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install system deps (Qt/OpenCV runtime)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglib2.0-0
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Linux binary (onefile)
+        run: |
+          pyinstaller --noconfirm --clean --windowed --onefile \
+            --name "SoccerNetProAnalyzer" \
+            --add-data "style:style" \
+            --add-data "ui:ui" \
+            --add-data "ui2:ui2" \
+            "main.py"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoccerNetProAnalyzer-Linux
+          path: Tool/dist/SoccerNetProAnalyzer
