@@ -1,4 +1,4 @@
-# Contributing to OSL Action Spotting Annotation Tool
+# Contributing to Soccernet Pro Tool
 
 Thank you for considering contributing to this project!
 
