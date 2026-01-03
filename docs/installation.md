@@ -2,31 +2,33 @@
 
 **Quick option:**
 
-Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Releases page](https://github.com/OpenSportsLab/DatasetAnnotationTool/releases). Download the latest release for your platform and run the executable—no installation required.
+Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Releases page](https://github.com/OpenSportsLab/soccernetpro-ui/releases). Download the latest release for your platform and run the executable—no installation required.
 
 ---
 
 ## Requirements
 
-- Python 3.9 or later
+- Python **3.9** or later
 - PyQt6
-- Other dependencies (see `requirements.txt`)
+- Other dependencies (see `Tool/requirements.txt`)
 
-## Steps
+---
 
-1. **Clone the repository:**
-    ```bash
-    git clone https://github.com/OpenSportsLab/DatasetAnnotationTool.git
-    cd DatasetAnnotationTool
-    ```
+## Steps (from source)
 
-2. **(Recommended) Create a Conda environment:**
-    ```bash
-    conda create -n osl-visualizer python=3.9 -y
-    conda activate osl-visualizer
-    ```
+> **Note:** The PyQt GUI project lives in the `Tool/` subdirectory of this repository. All commands below assume you are running them from the repository root unless stated otherwise.
 
-3. **Install dependencies:**
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/OpenSportsLab/soccernetpro-ui.git
+   cd soccernetpro-ui
+
+2. **(Recommended) Create and activate a Conda environment**
+   ```bash
+conda create -n soccernetpro-ui python=3.9 -y
+conda activate soccernetpro-ui
+
+4. **Install dependencies:**
     The main dependencies are:
     - pyqt6
     - opencv-python (optional, for video rendering/computer vision)
@@ -38,12 +40,12 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
     # Optional, for video rendering/computer vision:
     pip install opencv-python
     # Or install all dependencies:
-    pip install -r requirements.txt
+    pip install -r Tool/requirements.txt
     ```
 
-4. **Run the tool:**
+6. **Run the tool:**
     ```bash
-    python osl_visualizer/main.py
+    python Tool/main.py
     ```
 
 ## Troubleshooting
