@@ -215,7 +215,6 @@ class CreateProjectDialog(QDialog):
         txt = self.label_input.text().strip()
         if not txt: return
         
-        # [修改] 增加重复提示弹窗
         # Case-insensitive check
         if any(l.lower() == txt.lower() for l in self.current_head_labels):
             QMessageBox.warning(self, "Duplicate Label", f"Label '{txt}' already exists (case-insensitive)!")
@@ -300,11 +299,14 @@ class CreateProjectDialog(QDialog):
         h.addWidget(info_label)
         h.addStretch()
         
-        rem_btn = QPushButton("Remove")
-        rem_btn.setStyleSheet("""
-            QPushButton { background-color: #8B0000; color: white; border-radius: 4px; padding: 4px 8px; }
-            QPushButton:hover { background-color: #FF0000; }
-        """)
+        # [修改] 使用垃圾桶图标样式，与主界面右侧栏保持一致
+        rem_btn = QPushButton()
+        rem_btn.setFixedSize(24, 24)
+        rem_btn.setFlat(True)
+        rem_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        rem_btn.setToolTip("Remove Head")
+        rem_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+        
         rem_btn.clicked.connect(lambda: self.remove_head_from_project(name, item))
         h.addWidget(rem_btn)
         
