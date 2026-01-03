@@ -3,6 +3,7 @@ import copy
 from PyQt6.QtWidgets import QMessageBox, QInputDialog, QTreeWidgetItem, QFileDialog, QMenu
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QColor
+from PyQt6.QtMultimedia import QMediaPlayer # [新增] 必须引入 QMediaPlayer
 from utils import natural_sort_key
 from models import CmdType 
 
@@ -107,7 +108,7 @@ class LocalizationManager:
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(head_name)
         self.main.show_temp_msg("Head Added", f"Created '{head_name}'")
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     def _on_head_renamed(self, old_name, new_name):
         if old_name == new_name: return
@@ -135,7 +136,7 @@ class LocalizationManager:
         self.right_panel.annot_mgmt.tabs.set_current_head(new_name)
         self._refresh_current_clip_events()
         self.main.show_temp_msg("Head Renamed", f"Updated {count} events.")
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     def _on_head_deleted(self, head_name):
         display_name = head_name.replace('_', ' ')
@@ -179,28 +180,73 @@ class LocalizationManager:
         self._refresh_schema_ui()
         self._refresh_current_clip_events()
         self.main.show_temp_msg("Head Deleted", f"Removed {removed_count} events.")
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     # --- Label Management ---
     def _on_label_add_req(self, head):
-        text, ok = QInputDialog.getText(self.main, "Add Label", f"Add new label to '{head}':")
-        if not ok or not text.strip(): return
+        """
+        [修改] 暂停视频 -> 获取时间 -> 输入标签 -> 添加Schema & 打点 -> 恢复播放
+        """
+        # 1. 获取播放器状态并暂停
+        player = self.center_panel.media_preview.player
+        was_playing = (player.playbackState() == QMediaPlayer.PlaybackState.PlayingState)
+        if was_playing:
+            player.pause()
+            
+        current_pos = player.position()
+        time_str = self._fmt_ms(current_pos)
+
+        # 2. 弹出对话框
+        text, ok = QInputDialog.getText(
+            self.main, 
+            "Add New Label & Spot", 
+            f"Add new label to '{head}' and spot at {time_str}?"
+        )
+        
+        if not ok or not text.strip():
+            # 取消则恢复播放
+            if was_playing: player.play()
+            return
+            
         label_name = text.strip()
         labels_list = self.model.label_definitions[head].get('labels', [])
         
         if any(l.lower() == label_name.lower() for l in labels_list):
-            self.main.show_temp_msg("Error", "Label exists!", icon=QMessageBox.Icon.Warning); return
+            self.main.show_temp_msg("Error", "Label exists!", icon=QMessageBox.Icon.Warning)
+            if was_playing: player.play()
+            return
             
-        # 1. Push Undo
+        # 3. 动作 1: 修改 Schema (添加标签)
         self.model.push_undo(CmdType.SCHEMA_ADD_LBL, head=head, label=label_name)
-            
-        # 2. Execute
         labels_list.append(label_name)
         self.model.label_definitions[head]['labels'] = labels_list
         self.model.is_data_dirty = True
+        
+        # 4. 动作 2: 修改 Data (打点)
+        if self.current_video_path:
+            new_event = {
+                "head": head,
+                "label": label_name,
+                "position_ms": current_pos
+            }
+            # 注意：Undo Stack 此时会有两个操作，按 Undo 两次才能完全撤销，符合直觉
+            self.model.push_undo(CmdType.LOC_EVENT_ADD, video_path=self.current_video_path, event=new_event)
+            
+            if self.current_video_path not in self.model.localization_events:
+                self.model.localization_events[self.current_video_path] = []
+            self.model.localization_events[self.current_video_path].append(new_event)
+        
+        # 5. 刷新 UI
         self._refresh_schema_ui()
-        self.right_panel.annot_mgmt.tabs.set_current_head(head)
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.right_panel.annot_mgmt.tabs.set_current_head(head) # 保持 Tab 选中
+        self._display_events_for_item(self.current_video_path)
+        self.populate_tree() 
+        self.main.show_temp_msg("Added & Spotted", f"{head}: {label_name} at {time_str}")
+        self.main.update_save_export_button_state()
+
+        # 6. 恢复播放
+        if was_playing:
+            player.play()
 
     def _on_label_rename_req(self, head, old_label):
         new_label, ok = QInputDialog.getText(self.main, "Rename Label", f"Rename '{old_label}' to:", text=old_label)
@@ -229,7 +275,7 @@ class LocalizationManager:
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(head)
         self._refresh_current_clip_events()
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     def _on_label_delete_req(self, head, label):
         res = QMessageBox.warning(
@@ -270,7 +316,7 @@ class LocalizationManager:
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(head)
         self._refresh_current_clip_events()
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     # --- Spotting (Data Creation) ---
     def _on_spotting_triggered(self, head, label):
@@ -296,7 +342,7 @@ class LocalizationManager:
         self._display_events_for_item(self.current_video_path)
         self.populate_tree() 
         self.main.show_temp_msg("Event Created", f"{head}: {label}")
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     # --- Table Modification (New Logic) ---
     def _on_annotation_modified(self, old_event, new_event):
@@ -340,7 +386,7 @@ class LocalizationManager:
         self._display_events_for_item(self.current_video_path)
         self.populate_tree()
         self.main.show_temp_msg("Event Updated", "Modified")
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     def _on_delete_single_annotation(self, item_data):
         events = self.model.localization_events.get(self.current_video_path, [])
@@ -360,7 +406,7 @@ class LocalizationManager:
         self.model.is_data_dirty = True
         self._display_events_for_item(self.current_video_path)
         self.populate_tree()
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     # --- Helper Refresh Methods ---
     def _refresh_schema_ui(self):
@@ -437,7 +483,7 @@ class LocalizationManager:
         self.right_panel.table.set_data([]) 
         
         self.main.show_temp_msg("Cleared", "Workspace reset.")
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     def _on_tree_context_menu(self, pos):
         item = self.left_panel.clip_tree.itemAt(pos)
@@ -475,7 +521,7 @@ class LocalizationManager:
         # 3. Refresh Tree
         self.populate_tree()
         self.main.show_temp_msg("Removed", "Video removed from list.")
-        self.main.update_save_export_button_state() # [Fix] Update Buttons
+        self.main.update_save_export_button_state() 
 
     # ----------------------------------------------
 
