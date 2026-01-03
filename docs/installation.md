@@ -25,8 +25,8 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
 
 2. **(Recommended) Create and activate a Conda environment**
    ```bash
-conda create -n soccernetpro-ui python=3.9 -y
-conda activate soccernetpro-ui
+   conda create -n soccernetpro-ui python=3.9 -y
+   conda activate soccernetpro-ui
 
 4. **Install dependencies:**
     The main dependencies are:
