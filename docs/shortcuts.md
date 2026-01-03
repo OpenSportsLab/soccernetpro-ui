@@ -3,8 +3,6 @@
 - **Ctrl+O**: Open/Load annotation file
 - **Ctrl+S**: Save annotation file
 - **Ctrl+Shift+S**: Save As
-- **Ctrl+E**: Open Settings
-- **Ctrl+D**: Open Dataset Downloader
 - **Space**: Play/Pause video
 - **Left Arrow**: Step backward by one frame
 - **Right Arrow**: Step forward by one frame
