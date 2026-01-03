@@ -179,11 +179,13 @@ class LocFileManager:
             if len(missing_files) > 5: msg += "\n..."
             QMessageBox.warning(self.main, "Load Warning", msg)
         else:
-            # [修改] 使用弹窗进行明显提示
-            QMessageBox.information(
-                self.main, 
+            # [修改] 使用 show_temp_msg 并设置 5000ms (5秒) 延迟
+            # 这个消息框会自动显示5秒，期间可以不点击，5秒后自动关闭并进入下一界面
+            self.main.show_temp_msg(
                 "Mode Switched", 
-                f"Successfully loaded {loaded_count} clips.\n\nCurrent Mode: LOCALIZATION"
+                f"Successfully loaded {loaded_count} clips.\n\nCurrent Mode: LOCALIZATION",
+                duration=5000,
+                icon=QMessageBox.Icon.Information
             )
             
         return True
