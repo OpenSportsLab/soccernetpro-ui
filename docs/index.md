@@ -1,10 +1,10 @@
-# OSL Action Spotting Annotation Tool
+# Soccernet Pro Tool
 
-Welcome to the OSL Action Spotting Annotation Tool documentation!
+Welcome to the Soccernet Pro Annotation Tool documentation!
 
 This tool helps you annotate action spotting datasets in sports video. Use the navigation to find installation instructions, user guides, and more.
 
-![Main GUI Screenshot](assets/screenshot_main.png)
+![Main GUI Screenshot](assets/localization-GUI.png)
 
 **Features:**
 - Intuitive graphical interface for annotating actions in sports videos
