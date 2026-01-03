@@ -21,6 +21,14 @@ We recommend using [Anaconda](https://www.anaconda.com/) or [Miniconda](https://
 
 > **Note:** The GUI project lives in the `Tool/` subdirectory of this repository, and dependencies are defined in `Tool/requirements.txt`.
 
+### Step 0 – Clone the repository
+
+```bash
+git clone https://github.com/OpenSportsLab/soccernetpro-ui.git
+cd soccernetpro-ui
+```
+
+
 ### Step 1 – Create a new Conda environment
 
 ```bash
