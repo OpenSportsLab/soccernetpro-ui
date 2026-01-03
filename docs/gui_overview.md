@@ -8,7 +8,7 @@ The OSL Annotation Tool supports two distinct annotation modes: **Classification
 
 Designed for assigning global labels (Single or Multi-label) to video clips.
 
-![Classification Interface](assets/classification_ui.png)
+![Classification Interface](assets/classification-UI.png)
 
 ### Left Panel: Clip Management
 - **Scene/Clip List:** Displays the list of imported video files.
