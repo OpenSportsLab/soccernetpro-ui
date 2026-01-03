@@ -81,11 +81,13 @@ class ClassFileManager:
         self.main.populate_action_tree()
         self.main.update_save_export_button_state()
         
-        # [修改] 使用弹窗进行明显提示
-        QMessageBox.information(
-            self.main, 
+        # [修改] 使用 show_temp_msg 并设置 5000ms (5秒) 延迟
+        # 这个方法会阻塞 5 秒，然后 router 会切换界面
+        self.main.show_temp_msg(
             "Mode Switched", 
-            f"Project loaded with {len(self.model.action_item_data)} items.\n\nCurrent Mode: CLASSIFICATION"
+            f"Project loaded with {len(self.model.action_item_data)} items.\n\nCurrent Mode: CLASSIFICATION",
+            duration=5000,
+            icon=QMessageBox.Icon.Information
         )
 
     def save_json(self):
