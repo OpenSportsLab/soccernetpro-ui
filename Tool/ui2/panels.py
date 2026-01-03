@@ -1,8 +1,15 @@
+import os
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QLabel, 
-    QComboBox, QPushButton
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem,
+    QLabel, QComboBox, QScrollArea, QGroupBox, QLineEdit, QMenu, QStyle, QGridLayout,
+    QFrame, QStackedLayout
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QUrl, QTime
+from PyQt6.QtGui import QAction, QColor, QPixmap
+from PyQt6.QtMultimedia import QMediaPlayer
+
+# 引入基础组件
+# 注意：请根据您的实际目录结构调整引用。如果 ui2 文件夹下有 widgets 文件夹：
 from .widgets.left_widgets import ProjectControlsWidget
 from .widgets.center_widgets import MediaPreviewWidget, TimelineWidget, PlaybackControlBar
 from .widgets.right_widgets import AnnotationManagementWidget, AnnotationTableWidget
@@ -27,22 +34,11 @@ class LocLeftPanel(QWidget):
         self.filter_combo = QComboBox()
         self.filter_combo.addItems(["Show All", "Show Labelled", "No Labelled"])
 
-        # Clear All 按钮
+        # Clear All 按钮 - [修改] 移除红色样式，使其与 Export JSON 保持一致
         self.btn_clear_all = QPushButton("Clear All")
         self.btn_clear_all.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_clear_all.setFixedWidth(70)
-        self.btn_clear_all.setStyleSheet("""
-            QPushButton {
-                background-color: #8B0000; 
-                color: white; 
-                border: 1px solid #A52A2A;
-                border-radius: 4px;
-                padding: 2px;
-                font-size: 11px;
-            }
-            QPushButton:hover { background-color: #FF0000; border-color: #FF4444; }
-            QPushButton:pressed { background-color: #8B0000; }
-        """)
+        self.btn_clear_all.setFixedWidth(80) 
+        # 这里不再设置特殊的 setStyleSheet，让它使用全局样式
 
         filter_row = QHBoxLayout()
         filter_row.addWidget(self.filter_label)
@@ -74,7 +70,7 @@ class LocRightPanel(QWidget):
         self.setFixedWidth(400)
         layout = QVBoxLayout(self)
         
-        # --- [新增] Undo/Redo 按钮区域 ---
+        # --- Undo/Redo 按钮区域 ---
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 5)
         
