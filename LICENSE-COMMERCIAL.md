@@ -1,5 +1,0 @@
-# Commercial License
-
-This repository is dual-licensed: GPL-3.0 or a commercial license.
-
-To obtain a commercial license, please contact the project maintainers.
