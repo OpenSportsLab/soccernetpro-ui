@@ -114,7 +114,7 @@ mkdocs gh-deploy --force
 This project is **dual-licensed**:
 
 - **GPL-3.0** (open-source): You may use, modify, and distribute this software under the terms of the **GNU General Public License v3.0**.  
-  See the `LICENSE` file for details.
+  See the `LICENSE.txt` file for details.
 
 - **Commercial license**: If you would like to use this software under different terms (e.g., for proprietary use), please contact the maintainers to obtain a commercial license.
 
