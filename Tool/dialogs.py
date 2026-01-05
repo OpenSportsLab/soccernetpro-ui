@@ -11,7 +11,7 @@ from utils import get_square_remove_btn_style
 
 class ProjectTypeDialog(QDialog):
     """
-    项目类型选择对话框 (Classification vs Localization)
+    Choose the event Type (Classification vs Localization)
     """
     def __init__(self, parent=None):
         super().__init__(parent)
