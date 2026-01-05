@@ -109,14 +109,12 @@ mkdocs gh-deploy --force
 ---
 
 
-## 📄 License
+## 📜 License
 
-This project is **dual-licensed**:
+This Soccernet Pro project offers two licensing options to suit different needs:
 
-- **GPL-3.0** (open-source): You may use, modify, and distribute this software under the terms of the **GNU General Public License v3.0**.  
-  See the `LICENSE.txt` file for details.
-
-- **Commercial license**: If you would like to use this software under different terms (e.g., for proprietary use), please contact the maintainers to obtain a commercial license.
+* **GPL-3.0 License**: This open-source license is ideal for students, researchers, and the community. It supports open collaboration and sharing. See the `LICENSE.txt` file for full details.
+* **Commercial License**: Designed for commercial use, this option allows you to integrate this software into proprietary products and services without the open-source obligations of GPL-3.0. If your use case involves commercial deployment, please contact the maintainers to obtain a commercial license.
 
 **Contact:** OpenSportsLab / project maintainers.
 
