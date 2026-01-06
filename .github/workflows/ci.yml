@@ -25,6 +25,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Cleanup before PyInstaller
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force build,dist -ErrorAction SilentlyContinue
+          Remove-Item -Force *.spec -ErrorAction SilentlyContinue
+          try { pip cache purge } catch { Write-Host "pip cache purge failed (ignored)" }
+
       - name: Build Windows exe (onefile)
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile `
@@ -39,6 +46,7 @@ jobs:
         with:
           name: SoccerNetProAnalyzer-Windows
           path: Tool/dist/SoccerNetProAnalyzer.exe
+          retention-days: 7
 
 
   build-macos:
@@ -59,6 +67,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Cleanup before PyInstaller
+        run: |
+          rm -rf build dist *.spec
+          pip cache purge || true
+
       - name: Build macOS .app
         run: |
           pyinstaller --noconfirm --clean --windowed \
@@ -73,6 +86,7 @@ jobs:
         with:
           name: SoccerNetProAnalyzer-macOS
           path: Tool/dist/SoccerNetProAnalyzer.app
+          retention-days: 7
 
 
   build-linux:
@@ -98,6 +112,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Cleanup before PyInstaller
+        run: |
+          rm -rf build dist *.spec
+          pip cache purge || true
+
       - name: Build Linux binary (onefile)
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile \
@@ -112,3 +131,4 @@ jobs:
         with:
           name: SoccerNetProAnalyzer-Linux
           path: Tool/dist/SoccerNetProAnalyzer
+          retention-days: 7
