@@ -1,0 +1,145 @@
+{
+    "version": "1.0",
+    "date": "2025-11-17",
+    "dataset_name": "Dynamic Action Classification Export",
+    "metadata": {
+        "created_by": "SoccerNet Pro Analysis Tool"
+    },
+    "task": "action_classification",
+    "modalities": [
+        "video",
+        "image"
+    ],
+    "labels": {
+        "foul_type": {
+            "type": "single_label",
+            "labels": [
+                "Challenge",
+                "Dive",
+                "Elbowing",
+                "High Leg",
+                "Holding",
+                "Pushing",
+                "Standing Tackling",
+                "Tackling"
+            ]
+        },
+        "severity": {
+            "type": "single_label",
+            "labels": [
+                "No Offence",
+                "Offence + No Card",
+                "Offence + Red Card",
+                "Offence + Yellow Card"
+            ]
+        },
+        "attributes": {
+            "type": "multi_label",
+            "labels": [
+                "CounterAttack",
+                "Dangerous Play",
+                "InBox",
+                "Intentional",
+                "Reckless",
+                "VAR Checked"
+            ]
+        },
+        "color": {
+            "type": "single_label",
+            "labels": [
+                "black",
+                "brown",
+                "yellow"
+            ]
+        }
+    },
+    "data": [
+        {
+            "id": "Annotation_015",
+            "metadata": {
+                "AnnotationSource": "None"
+            },
+            "inputs": [
+                {
+                    "type": "image",
+                    "path": "Dataset/Test/Annotation_015/1.png"
+                },
+                {
+                    "type": "video",
+                    "path": "Dataset/Test/Annotation_015/clip_0.mp4"
+                },
+                {
+                    "type": "video",
+                    "path": "Dataset/Test/Annotation_015/clip_1.mp4"
+                }
+            ],
+            "labels": {
+                "attributes": {
+                    "labels": []
+                }
+            }
+        },
+        {
+            "id": "Annotation_017",
+            "metadata": {
+                "AnnotationSource": "Manual"
+            },
+            "inputs": [
+                {
+                    "type": "image",
+                    "path": "Dataset/Test/Annotation_017/2.png"
+                },
+                {
+                    "type": "video",
+                    "path": "Dataset/Test/Annotation_017/clip_0.mp4"
+                },
+                {
+                    "type": "video",
+                    "path": "Dataset/Test/Annotation_017/clip_1.mp4"
+                }
+            ],
+            "labels": {
+                "foul_type": {
+                    "label": "Standing Tackling"
+                },
+                "severity": {
+                    "label": "Offence + No Card"
+                },
+                "attributes": {
+                    "labels": [
+                        "Dangerous Play",
+                        "InBox"
+                    ]
+                },
+                "color": {
+                    "label": "black"
+                }
+            }
+        },
+        {
+            "id": "Annotation_016",
+            "metadata": {
+                "AnnotationSource": "None"
+            },
+            "inputs": [
+                {
+                    "type": "image",
+                    "path": "Dataset/Test/Annotation_016/1.png"
+                },
+                {
+                    "type": "video",
+                    "path": "Dataset/Test/Annotation_016/clip_0.mp4"
+                },
+                {
+                    "type": "video",
+                    "path": "Dataset/Test/Annotation_016/clip_1.mp4"
+                }
+            ],
+            "labels": {
+                "attributes": {
+                    "labels": []
+                }
+            }
+        }
+    ]
+}
