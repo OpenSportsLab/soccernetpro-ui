@@ -4,10 +4,9 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
-  push:
     tags:
       - "*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,15 +23,14 @@ jobs:
         run: |
           set -e
           repo="${{ github.repository }}"
-          workflow_file="${{ github.workflow_ref }}"
-          # github.workflow_ref looks like: owner/repo/.github/workflows/<file>.yml@ref
-          wf_path=$(echo "$workflow_file" | sed -E 's#^[^/]+/[^/]+/##' | sed -E 's#@.*$##')
+          workflow_ref="${{ github.workflow_ref }}"
+          # workflow_ref looks like: owner/repo/.github/workflows/ci.yml@refs/heads/main
+          wf_path=$(echo "$workflow_ref" | sed -E 's#^[^/]+/[^/]+/##' | sed -E 's#@.*$##')
 
           echo "Repo: $repo"
           echo "Workflow path: $wf_path"
           echo "Keeping last 3 runs, deleting older ones..."
 
-          # List runs for this workflow file, newest first
           ids=$(gh run list --repo "$repo" --workflow "$wf_path" --limit 100 --json databaseId --jq '.[].databaseId')
 
           keep=3
@@ -90,7 +88,6 @@ jobs:
           path: Tool/dist/SoccerNetProAnalyzer.exe
           retention-days: 3
 
-
   build-macos:
     name: Build on macOS
     runs-on: macos-latest
@@ -131,7 +128,6 @@ jobs:
           name: SoccerNetProAnalyzer-macOS
           path: Tool/dist/SoccerNetProAnalyzer.app
           retention-days: 3
-
 
   build-linux:
     name: Build on Linux
