@@ -19,7 +19,6 @@ jobs:
         run: |
           echo "changelog=$(git log -20 --pretty=format:'* %s')" >> $GITHUB_OUTPUT
 
-
   build-windows:
     needs: generate-release-notes
     runs-on: windows-latest
@@ -38,7 +37,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build Windows exe (onefile)
+      - name: Cleanup before PyInstaller
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force build,dist -ErrorAction SilentlyContinue
+          Remove-Item -Force *.spec -ErrorAction SilentlyContinue
+          try { pip cache purge } catch { Write-Host "pip cache purge failed (ignored)" }
+
+      - name: Build exe
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile `
             --name "SoccerNetProAnalyzer" `
@@ -47,9 +53,15 @@ jobs:
             --add-data "ui2;ui2" `
             "main.py"
 
-      - name: Zip Windows binary
+      - name: Rename binary
+        shell: pwsh
         run: |
-          powershell Compress-Archive -Path dist\SoccerNetProAnalyzer.exe -DestinationPath dist\SoccerNetProAnalyzer-win.zip
+          Move-Item -Force dist\SoccerNetProAnalyzer.exe dist\SoccerNetProAnalyzer-win.exe
+
+      - name: Zip Windows binary
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\SoccerNetProAnalyzer-win.exe -DestinationPath dist\SoccerNetProAnalyzer-win.zip -Force
 
       - name: Upload Release Asset (Windows)
         uses: softprops/action-gh-release@v2
@@ -57,7 +69,6 @@ jobs:
           files: Tool/dist/SoccerNetProAnalyzer-win.zip
           tag_name: ${{ github.ref_name }}
           body: ${{ needs.generate-release-notes.outputs.changelog }}
-
 
   build-macos:
     needs: generate-release-notes
@@ -77,19 +88,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build macOS .app
+      - name: Cleanup before PyInstaller
         run: |
-          pyinstaller --noconfirm --clean --windowed \
+          rm -rf build dist *.spec
+          pip cache purge || true
+
+      - name: Build binary
+        run: |
+          pyinstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
             --add-data "style:style" \
             --add-data "ui:ui" \
             --add-data "ui2:ui2" \
             "main.py"
 
-      - name: Zip macOS .app
+      - name: Rename binary
+        run: |
+          mv -f dist/SoccerNetProAnalyzer dist/SoccerNetProAnalyzer-mac
+
+      - name: Zip macOS binary
         run: |
           cd dist
-          zip -r SoccerNetProAnalyzer-mac.zip SoccerNetProAnalyzer.app
+          zip -r SoccerNetProAnalyzer-mac.zip SoccerNetProAnalyzer-mac
           cd ..
 
       - name: Upload Release Asset (macOS)
@@ -98,7 +118,6 @@ jobs:
           files: Tool/dist/SoccerNetProAnalyzer-mac.zip
           tag_name: ${{ github.ref_name }}
           body: ${{ needs.generate-release-notes.outputs.changelog }}
-
 
   build-linux:
     needs: generate-release-notes
@@ -123,7 +142,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build Linux binary (onefile)
+      - name: Cleanup before PyInstaller
+        run: |
+          rm -rf build dist *.spec
+          pip cache purge || true
+
+      - name: Build binary
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
@@ -132,10 +156,14 @@ jobs:
             --add-data "ui2:ui2" \
             "main.py"
 
+      - name: Rename binary
+        run: |
+          mv -f dist/SoccerNetProAnalyzer dist/SoccerNetProAnalyzer-linux
+
       - name: Zip Linux binary
         run: |
           cd dist
-          zip SoccerNetProAnalyzer-linux.zip SoccerNetProAnalyzer
+          zip -r SoccerNetProAnalyzer-linux.zip SoccerNetProAnalyzer-linux
           cd ..
 
       - name: Upload Release Asset (Linux)
