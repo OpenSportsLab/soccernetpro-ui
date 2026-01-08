@@ -15,7 +15,7 @@ This tool helps you annotate action spotting datasets in sports video. Use the n
 - Keyboard shortcuts for power users
 
 
-
+---
 [Get started &rarr;](getting_started.md)
 
 ---
