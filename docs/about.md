@@ -5,6 +5,6 @@ The Soccernet Pro Tool is developed by OpenSportsLab to help researchers and pra
 - **Project Lead:** Silvio Giancola
 - **Front End Developer:** Jintao Ma
 - **GitHub:** [OpenSportsLab/soccernetpro-ui](https://github.com/OpenSportsLab/soccernetpro-ui)
-- **License:** GPV3
+- **License:** AGPL-3.0
 
 We welcome feedback and contributions!
