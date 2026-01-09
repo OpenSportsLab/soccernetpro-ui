@@ -22,11 +22,13 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
    ```bash
    git clone https://github.com/OpenSportsLab/soccernetpro-ui.git
    cd soccernetpro-ui
+   ```
 
 2. **(Recommended) Create and activate a Conda environment**
    ```bash
    conda create -n soccernetpro-ui python=3.9 -y
    conda activate soccernetpro-ui
+   ```
 
 4. **Install dependencies:**
     The main dependencies are:
@@ -37,16 +39,24 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
     Install with pip:
     ```bash
     pip install pyqt6
+    ```
+    ```bash
     # Optional, for video rendering/computer vision:
+    ```
     ```bash
     pip install opencv-python
+    ```
+    ```bash
     # Or install all dependencies:
+    ```
     ```bash
     pip install -r Tool/requirements.txt
+    ```
 
 6. **Run the tool:**
     ```bash
     python Tool/main.py
+    ```
 
 ## Troubleshooting
 
