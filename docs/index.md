@@ -36,5 +36,15 @@ This tool helps you annotate action spotting datasets in sports video. Use the n
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
-See [GitHub repository](https://github.com/OpenSportsLab/soccernetpro-ui) for details.
+This project offers two licensing options to suit different needs:
+
+- **GPL-3.0 License**:  
+  This open-source license is intended for students, researchers, and the community. It supports open collaboration and sharing under the terms of the GNU General Public License v3.0.  
+  See the [`LICENSE.txt`](https://github.com/OpenSportsLab/soccernetpro-ui/blob/main/LICENSE.txt) file for full details.
+
+- **Commercial License**:  
+  Designed for commercial use, this option allows integration of the software into proprietary products and services without the open-source obligations of GPL-3.0.  
+  For commercial deployment, please contact the project maintainers to obtain a commercial license.
+
+**Contact:** OpenSportsLab / project maintainers
+
