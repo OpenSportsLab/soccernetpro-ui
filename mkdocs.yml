@@ -41,19 +41,33 @@ nav:
   - Contributing: contributing.md
   - Changelog: changelog.md
 
-
 markdown_extensions:
   - admonition
   - toc:
       permalink: true
   - footnotes
   - tables
-  - pymdownx.superfences
-  - pymdownx.highlight
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
+
+  # Better layout control
+  - attr_list
+  - md_in_html
+
+  # Pymdown extensions (Material-recommended)
   - pymdownx.details
+  - pymdownx.snippets
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.extra
+
+  # Code highlighting (more robust with Material)
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
 
 
 plugins:
   - search
+
+
+
