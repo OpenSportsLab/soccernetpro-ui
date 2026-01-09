@@ -39,17 +39,11 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
     Install with pip:
     ```bash
     pip install pyqt6
-    ```
-    ```bash
+    
     # Optional, for video rendering/computer vision:
-    ```
-    ```bash
     pip install opencv-python
-    ```
-    ```bash
+    
     # Or install all dependencies:
-    ```
-    ```bash
     pip install -r Tool/requirements.txt
     ```
 
