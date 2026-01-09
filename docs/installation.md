@@ -37,6 +37,7 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
     - See `requirements.txt` for the full list
     
     Install with pip:
+   
     ```bash
     pip install pyqt6
     
