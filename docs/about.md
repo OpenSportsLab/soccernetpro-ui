@@ -1,10 +1,11 @@
 # About
 
-The Soccernet Pro Tool is developed by OpenSportsLab to help researchers and practitioners annotate sports video datasets efficiently.
+The Soccernet Pro Tool is developed by OpenSportsLab to help researchers and practitioners efficiently annotate sports video datasets.
 
-- **Project Lead:** Silvio Giancola
-- **Front End Developer:** Jintao Ma
-- **GitHub:** [OpenSportsLab/soccernetpro-ui](https://github.com/OpenSportsLab/soccernetpro-ui)
-- **License:** AGPL-3.0
+- **Project Lead:** Silvio Giancola  
+- **Front End Developer:** Jintao Ma  
+- **GitHub:** [OpenSportsLab/soccernetpro-ui](https://github.com/OpenSportsLab/soccernetpro-ui)  
+- **License:** Dual-licensed (GPL-3.0 / Commercial)
 
-We welcome feedback and contributions!
+We welcome feedback and contributions from the community.
+
