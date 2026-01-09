@@ -6,7 +6,7 @@ This tool helps you annotate action spotting datasets in sports video. Use the n
 
 ![Main GUI Screenshot](assets/localization-UI.png)
 
-**Features:**
+**Features**
 
 - Intuitive graphical interface for annotating actions in sports videos
 - Fast video navigation and frame-accurate annotation
@@ -14,7 +14,7 @@ This tool helps you annotate action spotting datasets in sports video. Use the n
 - Supports OSL JSON annotation format for seamless integration with [OSL-ActionSpotting](https://github.com/OpenSportsLab/OSL-ActionSpotting)
 - Save and load annotation files
 - Keyboard shortcuts for power users
-  
+
 [Get started &rarr;](getting_started.md)
 
 ---
