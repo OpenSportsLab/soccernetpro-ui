@@ -41,13 +41,19 @@ nav:
   - Contributing: contributing.md
   - Changelog: changelog.md
 
+
 markdown_extensions:
   - admonition
-  - codehilite
   - toc:
       permalink: true
   - footnotes
   - tables
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+
 
 plugins:
   - search
