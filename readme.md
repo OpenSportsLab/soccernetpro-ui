@@ -69,6 +69,7 @@ All test data are hosted directly in this GitHub repository and should be downlo
 
 **Data location (GitHub):**  
 [Classification Dataset](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/Test%20Data/Classification_test/classification)
+
 This folder contains multiple action-category subfolders (e.g. `action_0`, `action_1`, …).
 
 #### 📥 Download via command line
@@ -98,7 +99,7 @@ Test Data/Classification_test/
 **Data location (GitHub):**  
 [Localization Dataset](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/Test%20Data/Localization_test)
 
-Each folder (e.g. england efl/) contains video clips for localization testing.
+Each folder (e.g. `england efl/`) contains video clips for localization testing.
 
 #### 📥 Download via command line
 
