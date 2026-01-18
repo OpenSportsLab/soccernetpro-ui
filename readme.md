@@ -63,8 +63,6 @@ All test data are hosted directly in this GitHub repository and should be downlo
 > For both tasks, the corresponding **JSON annotation file must be placed in the same directory**
 > as the data folder (`classification/` or `england efl/`), otherwise the GUI will not load the data correctly.
 
----
-
 ### 🟦 Classification – Test Data
 
 **Data location (GitHub):**  
@@ -123,6 +121,7 @@ After downloading, place the corresponding localization JSON annotation file in 
 ```bash
 Test Data/Localization_test/
 ```
+---
 
 
 ## 🧰 Build a standalone app (PyInstaller)
