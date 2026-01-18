@@ -93,7 +93,7 @@ git sparse-checkout set "Test Data/Classification_test/classification"
 After downloading, place the corresponding classification JSON annotation file in:
 
 ```bash
-Test Data/Classification_test/classification/
+Test Data/Classification_test/
 ```
 ### 🟩 Localization – Test Data
 **Data location (GitHub):**  
@@ -121,7 +121,7 @@ git sparse-checkout set "Test Data/Localization_test"
 ```
 After downloading, place the corresponding localization JSON annotation file in the same directory as the data folder, for example:
 ```bash
-Test Data/Localization_test/england efl/
+Test Data/Localization_test/
 ```
 
 
