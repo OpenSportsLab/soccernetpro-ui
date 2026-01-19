@@ -97,7 +97,7 @@ Test Data/Classification_test/
 **Data location (GitHub):**  
 [Localization Dataset](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/Test%20Data/Localization_test)
 
-Each folder (e.g. `england efl/`) contains video clips for localization testing.
+Each folder (e.g., `england efl/`) contains video clips for localization testing.
 
 #### 📥 Download via command line
 
