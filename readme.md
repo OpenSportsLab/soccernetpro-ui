@@ -55,6 +55,7 @@ A window will open where you can load your data and start working.
 
 
 ## 📦 Download Test Datasets
+#Downloading from Hugging Face needs to be here
 
 This project provides **test datasets** for two tasks: **Classification** and **Localization**.  
 All test data are hosted directly in this GitHub repository and should be downloaded via command line.
