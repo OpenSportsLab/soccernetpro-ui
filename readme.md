@@ -172,9 +172,9 @@ The build logic in the CI pipeline mirrors the manual PyInstaller commands descr
 
 CI workflows overview:
 
-- ci.yml: Continuous integration (linting / checks)
-- release.yml: Multi-platform executable build and GitHub Release publishing
-- deploy_docs.yml: Documentation build and deployment (MkDocs)
+- `ci.yml`: Continuous integration (linting / checks)
+- `release.yml`: Multi-platform executable build and GitHub Release publishing
+- `deploy_docs.yml`: Documentation build and deployment (MkDocs)
 
 ---
 ## 📚 Build the docs
