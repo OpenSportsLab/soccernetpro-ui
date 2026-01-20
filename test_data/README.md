@@ -1,12 +1,12 @@
-## Tools Directory Usage
+## test_data Directory Usage
 
-The `tools` directory contains utility scripts to help you work with OSL (Open Sports Lab) datasets, particularly for downloading annotated datasets and associated videos from Hugging Face. Below you'll find an explanation and usage instructions.
+The `test_data` directory contains utility scripts to help you work with OSL (Open Sports Lab) datasets, particularly for downloading annotated datasets and associated videos from Hugging Face. Below you'll find an explanation and usage instructions.
 
 ---
 
 ### 1. Download OSL Dataset and Videos from Hugging Face
 
-**Script:** `tools/download_osl_hf.py`
+**Script:** `test_data/download_osl_hf.py`
 
 This script automates the download of an OSL-format JSON file (annotation file) and all referenced videos from a Hugging Face dataset repository.
 
@@ -55,7 +55,7 @@ If authentication is missing or access is not granted, the script will fail with
 **Basic Command:**
 
 ```bash
-python tools/download_osl_hf.py \
+python test_data/download_osl_hf.py \
   --url https://huggingface.co/datasets/<org>/<dataset>/blob/<revision>/<annotations.json> \
   --output-dir <output_directory>
 ```
@@ -74,7 +74,7 @@ python tools/download_osl_hf.py \
 Classification – svfouls
 
 ```bash
-python tools/download_osl_hf.py \
+python test_data/download_osl_hf.py \
   --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/svfouls/annotations_test.json \
   --output-dir Test_Data/Classification/svfouls
 ```
@@ -82,7 +82,7 @@ python tools/download_osl_hf.py \
 Classification – mvfouls
 
 ```bash
-python tools/download_osl_hf.py \
+python test_data/download_osl_hf.py \
   --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/mvfouls/annotations_test.json \
   --output-dir Test_Data/Classification/mvfouls
 ```
@@ -90,7 +90,7 @@ python tools/download_osl_hf.py \
 Localization – Action Spotting
 
 ```bash
-python tools/download_osl_hf.py \
+python test_data/download_osl_hf.py \
   --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-localization-snbas/blob/224p/annotations-test.json \
   --output-dir Test_Data/Localization
 ```
@@ -98,7 +98,7 @@ python tools/download_osl_hf.py \
 **Dry Run Example:**
 Before downloading large video files, run the script in dry-run mode
 ```bash
-python tools/download_osl_hf.py \
+python test_data/download_osl_hf.py \
   --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/svfouls/annotations_test.json \
   --dry-run
 ```
