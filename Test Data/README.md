@@ -31,6 +31,7 @@ Before running the script, authenticate once on your machine:
 ```bash
 huggingface-cli login
 ```
+<img width="1182" height="710" alt="b6a32f46-9962-49cc-9882-a5dba710d606" src="https://github.com/user-attachments/assets/d848f451-58f6-40c6-96e3-e65cde7b4dc1" />
 
 Follow the instructions to paste your Hugging Face access token.
 
