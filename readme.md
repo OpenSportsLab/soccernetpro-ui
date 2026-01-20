@@ -65,7 +65,7 @@ All test data are hosted directly in this GitHub repository and should be downlo
 
 ### 🟦 Classification – Test Data
 
-**Data location (GitHub):**  
+**Data location (HuggingFace):**  
 [Classification Dataset](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars)
 
 This folder contains multiple action-category subfolders (e.g. `action_0`, `action_1`, …).
@@ -89,7 +89,7 @@ python test_data/download_osl_hf.py \
 ```
 
 ### 🟩 Localization – Test Data
-**Data location (GitHub):**  
+**Data location (HuggingFace):**  
 [Localization Dataset](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-localization-snas)
 
 Each folder (e.g., `england efl/`) contains video clips for localization testing.
