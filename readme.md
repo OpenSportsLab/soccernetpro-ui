@@ -57,11 +57,24 @@ A window will open where you can load your data and start working.
 ## 📦 Download Test Datasets
 
 This project provides **test datasets** for two tasks: **Classification** and **Localization**.  
-All test data are hosted directly in this GitHub repository and should be downloaded via command line.
+More details are available at:[`/test_data`](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/test_data)
+ 
 
 > ⚠️ **Important**  
 > For both tasks, the corresponding **JSON annotation file must be placed in the same directory**
 > as the data folder (`classification/` or `england efl/`), otherwise the GUI will not load the data correctly.
+> Some Hugging Face datasets (including SoccerNetPro localization and classification datasets) are restricted / gated. So you must:
+
+1.Have access to the dataset on Hugging Face
+
+2.Be authenticated locally using your Hugging Face account
+
+
+### **Requirements**
+
+* Python 3.x
+* `huggingface_hub` Python package (install with `pip install huggingface_hub`)
+
 
 ### 🟦 Classification – Test Data
 
