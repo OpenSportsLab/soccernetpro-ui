@@ -154,8 +154,29 @@ pyinstaller --noconfirm --clean --windowed --onefile \
 
 In GitHub Actions, the Windows ```bash--add-data``` separator is ```;``` instead of ```:```.
 
----
 
+### 🤖 How executables are built (CI / GitHub Releases)
+
+In addition to manual PyInstaller builds, standalone executables are automatically built and published using GitHub Actions.
+
+When a version tag (v* or V* such as V1.0.7) is pushed to the repository, a release workflow is triggered (`.github/workflows/release.yml`).  
+This workflow:
+
+- Builds standalone GUI executables using PyInstaller
+- Targets Windows, macOS, and Linux separately
+- Bundles required UI assets (`ui/`, `ui2/`, `style/`) into the binary
+- Packages each platform binary into a ZIP archive
+- Uploads the artifacts to the corresponding GitHub Release
+
+The build logic in the CI pipeline mirrors the manual PyInstaller commands described above, ensuring consistency between local and automated builds.
+
+CI workflows overview:
+
+- ci.yml: Continuous integration (linting / checks)
+- release.yml: Multi-platform executable build and GitHub Release publishing
+- deploy_docs.yml: Documentation build and deployment (MkDocs)
+
+---
 ## 📚 Build the docs
 ```bash
 pip install mkdocs mkdocs-material mkdocstrings[python]
