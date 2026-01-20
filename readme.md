@@ -66,36 +66,31 @@ All test data are hosted directly in this GitHub repository and should be downlo
 ### 🟦 Classification – Test Data
 
 **Data location (GitHub):**  
-[Classification Dataset](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/Test%20Data/Classification_test/classification)
+[Classification Dataset](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars)
 
 This folder contains multiple action-category subfolders (e.g. `action_0`, `action_1`, …).
 
 #### 📥 Download via command line
 
-From the repository root:
+**Classification – svfouls**
 
 ```bash
-mkdir -p "Test Data/Classification_test"
-cd "Test Data/Classification_test"
-
-git clone \
-  https://github.com/OpenSportsLab/soccernetpro-ui.git \
-  --depth 1 \
-  --filter=blob:none \
-  --sparse
-
-cd soccernetpro-ui
-git sparse-checkout init --cone
-git sparse-checkout set "Test Data/Classification_test/classification"
+python test_data/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/svfouls/annotations_test.json \
+  --output-dir Test_Data/Classification/svfouls
 ```
-After downloading, place the corresponding classification JSON annotation file in:
+
+**Classification – mvfouls**
 
 ```bash
-Test Data/Classification_test/
+python test_data/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/mvfouls/annotations_test.json \
+  --output-dir Test_Data/Classification/mvfouls
 ```
+
 ### 🟩 Localization – Test Data
 **Data location (GitHub):**  
-[Localization Dataset](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/Test%20Data/Localization_test)
+[Localization Dataset](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-localization-snas)
 
 Each folder (e.g., `england efl/`) contains video clips for localization testing.
 
@@ -104,22 +99,9 @@ Each folder (e.g., `england efl/`) contains video clips for localization testing
 From the repository root:
 
 ```bash
-mkdir -p "Test Data/Localization_test"
-cd "Test Data/Localization_test"
-
-git clone \
-  https://github.com/OpenSportsLab/soccernetpro-ui.git \
-  --depth 1 \
-  --filter=blob:none \
-  --sparse
-
-cd soccernetpro-ui
-git sparse-checkout init --cone
-git sparse-checkout set "Test Data/Localization_test"
-```
-After downloading, place the corresponding localization JSON annotation file in the same directory as the data folder, for example:
-```bash
-Test Data/Localization_test/
+python test_data/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-localization-snbas/blob/224p/annotations-test.json \
+  --output-dir Test_Data/Localization
 ```
 ---
 
