@@ -44,7 +44,7 @@ class AppStateModel:
         # { "video_path": { "Head": "Label", "Head2": ["L1", "L2"] } }
         self.manual_annotations = {} 
         
-        # Classification Import Metadata (防止报错)
+        # Classification Import Metadata (防止报错) --- please, add comments in English only
         self.imported_input_metadata = {}   # Key: (action_id, filename)
         self.imported_action_metadata = {}  # Key: action_id
 
