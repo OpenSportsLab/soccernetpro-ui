@@ -16,6 +16,33 @@ This script automates the download of an OSL-format JSON file (annotation file) 
 * Parses the JSON to identify referenced video files and downloads them as well.
 * Can perform a “dry run” to show which files would be downloaded and their total size, without actually downloading.
 
+
+#### ⚠️ Authentication Required for Gated Datasets
+Some Hugging Face datasets (including SoccerNetPro localization and classification datasets) are restricted / gated.
+
+To download files from these datasets, you must:
+
+1.Have access to the dataset on Hugging Face
+
+2.Be authenticated locally using your Hugging Face account
+
+#### Login to Hugging Face (Required)
+Before running the script, authenticate once on your machine:
+```bash
+huggingface-cli login
+```
+
+Follow the instructions to paste your Hugging Face access token.
+
+You can verify that authentication is working with:
+
+```bash
+python -c "from huggingface_hub import HfApi; print(HfApi().whoami())"
+```
+
+If authentication is missing or access is not granted, the script will fail with a
+`GatedRepoError (401)`.
+
 #### **Requirements**
 
 * Python 3.x
@@ -27,17 +54,12 @@ This script automates the download of an OSL-format JSON file (annotation file) 
 
 ```bash
 python tools/download_osl_hf.py \
-  --url https://huggingface.co/datasets/<user>/<dataset>/blob/main/<file.json> \
+  --url https://huggingface.co/datasets/<org>/<dataset>/blob/<revision>/<annotations.json> \
   --output-dir <output_directory>
 ```
-
-**Example:**
-
-```bash
-python tools/download_osl_hf.py \
-  --url https://huggingface.co/datasets/OpenSportsLab/HistWC/blob/main/HistWC-finals.json \
-  --output-dir /Users/giancos/Documents/HistWC/
-```
+- The URL should be copied directly from the Hugging Face web interface
+(i.e. `blob/... URLs`).
+- The script automatically converts it to the correct `resolve/...` format internally.
 
 **Arguments:**
 
@@ -45,18 +67,68 @@ python tools/download_osl_hf.py \
 * `--output-dir`: (optional) Path to the directory where the dataset and videos should be downloaded. Defaults to `downloaded_data` if not specified.
 * `--dry-run`: (optional) If provided, lists all files that would be downloaded and total size, but does not actually download any files.
 
-**Dry Run Example:**
+
+**Example:**
+Classification – svfouls
 
 ```bash
 python tools/download_osl_hf.py \
-  --url https://huggingface.co/datasets/OpenSportsLab/HistWC/blob/main/HistWC-finals.json \
-  --output-dir /Users/giancos/Documents/HistWC/ \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/svfouls/annotations_test.json \
+  --output-dir Test_Data/Classification/svfouls
+```
+
+Classification – mvfouls
+
+```bash
+python tools/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/mvfouls/annotations_test.json \
+  --output-dir Test_Data/Classification/mvfouls
+```
+
+Localization – Action Spotting
+
+```bash
+python tools/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-localization-snbas/blob/224p/annotations-test.json \
+  --output-dir Test_Data/Localization
+```
+
+**Dry Run Example:**
+Before downloading large video files, run the script in dry-run mode
+```bash
+python tools/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-classification-vars/blob/svfouls/annotations_test.json \
   --dry-run
 ```
+Dry-run mode will:
+- List all video files that would be downloaded
+- Show the estimated total storage required
+- Report missing files (if any)
+- Download nothing
 
 ---
 
-### 2. Zip the folder
+**Output Structure:**
+Output Structure
+After downloading, the output directory will contain:
+- The annotation JSON file
+- All referenced video files
+- The original Hugging Face repository folder structure
+
+
+Example:
+
+```bash
+output_dir/
+├── annotations-test.json
+└── test/
+    └── action_0/
+        ├── clip_0.mp4
+        └── clip_1.mp4
+```
+
+
+### 2. Zip the folder(Optional)
 
 ```bash
 zip -r DatasetAnnotationTool.zip *
