@@ -1,0 +1,9 @@
+{
+  "version": "2.0",
+  "labels": {
+    "ball_action": { "type": "single_label", "labels": ["PASS"] }
+  },
+  "data": [
+    { "events": [] }
+  ]
+}

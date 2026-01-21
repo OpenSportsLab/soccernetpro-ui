@@ -1,0 +1,12 @@
+{
+  "version": "2.0",
+  "labels": {
+    "ball_action": { "type": "single_label", "labels": ["PASS"] }
+  },
+  "data": [
+    {
+      "inputs": [{ "type": "video", "path": "a.mp4", "fps": 25 }],
+      "events": {}
+    }
+  ]
+}
