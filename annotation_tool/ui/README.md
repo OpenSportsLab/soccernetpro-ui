@@ -31,15 +31,15 @@ Contains widgets that are standardized and used across multiple modes to ensure 
 Implements the interface for **Whole-Video Classification** (assigning global labels to an entire video clip).
 
 * **`panels.py`**: Defines the high-level layout:
-* **LeftPanel**: Navigation tree and Project Controls.
-* **CenterPanel**: Video player and basic navigation controls.
-* **RightPanel**: Dynamic form generation based on the project Schema.
+  * `LeftPanel`: Navigation tree and Project Controls.
+  * `CenterPanel`: Video player and basic navigation controls.
+  * `RightPanel`: Dynamic form generation based on the project Schema.
 
 
 * **`widgets.py`**: Contains specialized input widgets:
-* `DynamicSingleLabelGroup`: Generates Radio Buttons for single-choice categories.
-* `DynamicMultiLabelGroup`: Generates Checkboxes for multi-choice categories.
-* `VideoViewAndControl`: A wrapper for the video player and slider.
+  * `DynamicSingleLabelGroup`: Generates Radio Buttons for single-choice categories.
+  * `DynamicMultiLabelGroup`: Generates Checkboxes for multi-choice categories.
+  * `VideoViewAndControl`: A wrapper for the video player and slider.
 
 
 
@@ -49,19 +49,19 @@ Implements the interface for **Action Spotting** (identifying specific timestamp
 
 * **`panels.py`**: The layout container that assembles the following functional widgets.
 * **`clip_explorer.py`**:
-* Displays the list of video clips (Sequences).
-* Handles filtering (Done/Not Done) and navigation.
+  * Displays the list of video clips (Sequences).
+  * Handles filtering (Done/Not Done) and navigation.
 
 
 * **`media_player.py`**:
-* Contains the `MediaPreviewWidget`.
-* Features a custom, zoomable **Timeline** with visual event markers.
-* Includes frame-stepping and speed control playback tools.
+  * Contains the `MediaPreviewWidget`.
+  * Features a custom, zoomable **Timeline** with visual event markers.
+  * Includes frame-stepping and speed control playback tools.
 
 
 * **`event_editor.py`**:
-* **Spotting Tabs**: A multi-tab interface for defining different event categories (Heads).
-* **Annotation Table**: A spreadsheet-like view for editing event timestamps and labels.
+  * `Spotting Tabs`: A multi-tab interface for defining different event categories (Heads).
+  * `Annotation Table`: A spreadsheet-like view for editing event timestamps and labels.
 
 
 
