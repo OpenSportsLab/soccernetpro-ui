@@ -1,6 +1,3 @@
-Here is the `README.md` file specifically for the `ui/` directory. You can directly copy and paste this into `annotation_tool/ui/README.md`.
-
-```markdown
 # User Interface (UI) Module
 
 This directory contains the **View layer** of the application's MVC architecture. It is responsible solely for the graphical presentation and user interaction components.
