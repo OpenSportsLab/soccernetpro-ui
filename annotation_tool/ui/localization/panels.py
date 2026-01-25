@@ -8,8 +8,6 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QUrl, QTime
 from PyQt6.QtGui import QAction, QColor, QPixmap
 from PyQt6.QtMultimedia import QMediaPlayer
 
-# 引入基础组件
-# 注意：请根据您的实际目录结构调整引用。如果 ui2 文件夹下有 widgets 文件夹：
 from .widgets.clip_explorer import ProjectControlsWidget
 from .widgets.media_player import MediaPreviewWidget, TimelineWidget, PlaybackControlBar
 from .widgets.event_editor import AnnotationManagementWidget, AnnotationTableWidget
@@ -34,11 +32,10 @@ class LocLeftPanel(QWidget):
         self.filter_combo = QComboBox()
         self.filter_combo.addItems(["Show All", "Show Labelled", "No Labelled"])
 
-        # Clear All 按钮 - [修改] 移除红色样式，使其与 Export JSON 保持一致
+        # Clear All Button
         self.btn_clear_all = QPushButton("Clear All")
         self.btn_clear_all.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_clear_all.setFixedWidth(80) 
-        # 这里不再设置特殊的 setStyleSheet，让它使用全局样式
 
         filter_row = QHBoxLayout()
         filter_row.addWidget(self.filter_label)
@@ -70,7 +67,7 @@ class LocRightPanel(QWidget):
         self.setFixedWidth(400)
         layout = QVBoxLayout(self)
         
-        # --- Undo/Redo 按钮区域 ---
+        # --- Undo/Redo Button ---
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 5)
         
@@ -80,7 +77,7 @@ class LocRightPanel(QWidget):
         self.undo_btn = QPushButton("Undo")
         self.redo_btn = QPushButton("Redo")
         
-        # 按钮样式
+        # Button Format
         btn_style = """
             QPushButton {
                 background-color: #444; color: #DDD; 
@@ -95,7 +92,7 @@ class LocRightPanel(QWidget):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet(btn_style)
             btn.setFixedWidth(60)
-            btn.setEnabled(False) # 初始禁用
+            btn.setEnabled(False) 
             
         header_layout.addWidget(lbl)
         header_layout.addStretch()
@@ -105,10 +102,10 @@ class LocRightPanel(QWidget):
         layout.addLayout(header_layout)
         # -----------------------------------
         
-        # 1. 顶部：多 Head 管理 + 标签打点区域
+        # 1. Top：Multi Head Management
         self.annot_mgmt = AnnotationManagementWidget()
         
-        # 2. 底部：已标注事件列表
+        # 2. Bottom：Labelled Event List
         self.table = AnnotationTableWidget()
         
         layout.addWidget(self.annot_mgmt, 3) 
