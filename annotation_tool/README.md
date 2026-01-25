@@ -15,9 +15,8 @@ annotation_tool/
 ├── utils.py                    # Helper functions and constants
 ├── __init__.py                 # Package initialization
 │
-├── style/                      # Visual themes
-│   ├── style.qss               # Dark mode stylesheet
-│   └── style_day.qss           # Light mode stylesheet
+├── style/                      # Visual theme assets
+│   └── style.qss               # Dark mode stylesheet (default)
 │
 ├── controllers/                # [Logic Layer] Business logic
 │   ├── __init__.py
@@ -47,8 +46,7 @@ annotation_tool/
             ├── clip_explorer.py
             ├── media_player.py
             └── event_editor.py
-
-```
+````
 
 ---
 
@@ -68,8 +66,9 @@ These files form the backbone of the application infrastructure.
 
 Contains the visual definitions for the application.
 
-* **`style.qss`**: CSS-like definitions for the default **Night Mode** (Dark Theme).
-* **`style_day.qss`**: CSS-like definitions for the **Day Mode** (Light Theme).
+* **`style.qss`**: CSS-like definitions for the default **Dark Theme**.
+
+> Note: The Day/Light theme stylesheet has been removed. The application currently ships with a single (dark) theme.
 
 ### 3. Controllers (`/controllers`)
 
@@ -110,4 +109,3 @@ PyQt6 widgets and layout definitions. Contains no business logic.
 * **`widgets/clip_explorer.py`**: The left sidebar widget for managing the list of video clips.
 * **`widgets/media_player.py`**: The center widget containing the video player, custom zoomable timeline, and playback controls.
 * **`widgets/event_editor.py`**: The right sidebar widget containing the multi-tab spotting interface and the editable event table.
-
