@@ -2,7 +2,7 @@ import json
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from controllers.classification.class_file_manager import ClassFileManager
 from controllers.localization.loc_file_manager import LocFileManager
-from dialogs import ProjectTypeDialog
+from ui.common.dialogs import ProjectTypeDialog
 
 class AppRouter:
     """

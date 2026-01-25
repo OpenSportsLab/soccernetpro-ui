@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
-from dialogs import CreateProjectDialog
+from ui.common.dialogs import CreateProjectDialog
 from utils import natural_sort_key
 
 class ClassFileManager:

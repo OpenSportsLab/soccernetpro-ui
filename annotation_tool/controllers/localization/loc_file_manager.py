@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from PyQt6.QtCore import QUrl
 
 from utils import natural_sort_key
-from dialogs import CreateProjectDialog  # import
+from ui.common.dialogs import CreateProjectDialog  # import
 
 
 class LocFileManager:
