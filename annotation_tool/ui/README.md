@@ -72,7 +72,3 @@ Implements the interface for **Action Spotting** (identifying specific timestamp
 1. **Passive View**: These classes do not modify the `model` directly. They only display data provided by the controller and emit signals when the user acts.
 2. **Dynamic Generation**: The annotation forms (buttons/checkboxes) are not hardcoded; they are generated dynamically based on the loaded JSON schema.
 3. **Functional Naming**: Files are named after what they *do* (e.g., `media_player.py`), not where they are located (e.g., `center_widgets.py`), allowing for flexible layout changes in the future.
-
-```
-
-```
