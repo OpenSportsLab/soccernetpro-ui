@@ -2,7 +2,7 @@
 
 This directory contains the **View layer** of the application's MVC architecture. It is responsible solely for the graphical presentation and user interaction components.
 
-**Note:** No business logic or data manipulation should be performed here. All user interactions (clicks, edits) are emitted as Qt Signals to be handled by the `controllers` module.
+**Note:** No business logic or data manipulation was performed here. All user interactions (clicks, edits) are emitted as Qt Signals to be handled by the `controllers` module.
 
 ## 📂 Directory Structure
 
