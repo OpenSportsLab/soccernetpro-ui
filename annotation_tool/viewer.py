@@ -1,66 +1,71 @@
 import os
-from PyQt6.QtWidgets import QMainWindow, QMessageBox
-from PyQt6.QtCore import Qt, QDir, QTimer
-from PyQt6.QtGui import QKeySequence, QShortcut, QColor, QIcon
+
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut
 from PyQt6.QtMultimedia import QMediaPlayer
+from PyQt6.QtWidgets import QMainWindow, QMessageBox
 
-from models import AppStateModel
-from ui.classification.panels import MainWindowUI
-
-from controllers.router import AppRouter
-from controllers.history_manager import HistoryManager
 from controllers.classification.annotation_manager import AnnotationManager
 from controllers.classification.navigation_manager import NavigationManager
+from controllers.history_manager import HistoryManager
 from controllers.localization.localization_manager import LocalizationManager
+from controllers.router import AppRouter
+from models import AppStateModel
+from ui.classification.panels import MainWindowUI
+from utils import create_checkmark_icon, natural_sort_key, resource_path
 
-from utils import resource_path, create_checkmark_icon, natural_sort_key
 
 class ActionClassifierApp(QMainWindow):
-    
+    """Main application window for annotation + localization workflows."""
+
     FILTER_ALL = 0
     FILTER_DONE = 1
     FILTER_NOT_DONE = 2
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         super().__init__()
+
         self.setWindowTitle("SoccerNet Pro Analysis Tool")
         self.setGeometry(100, 100, 1400, 900)
-        
-        # 1. Init MVC
+
+        # --- MVC wiring ---
         self.ui = MainWindowUI()
         self.setCentralWidget(self.ui)
         self.model = AppStateModel()
-        
-        # 2. Init Controllers
+
+        # --- Controllers ---
         self.router = AppRouter(self)
-        
         self.history_manager = HistoryManager(self)
         self.annot_manager = AnnotationManager(self)
         self.nav_manager = NavigationManager(self)
         self.loc_manager = LocalizationManager(self)
-        
-        # 3. Local State
+
+        # --- Local UI state (icons, etc.) ---
         bright_blue = QColor("#00BFFF")
         self.done_icon = create_checkmark_icon(bright_blue)
         self.empty_icon = QIcon()
-        
-        # 4. Setup
+
+        # --- Setup ---
         self.connect_signals()
-        self.load_stylesheet() 
+        self.load_stylesheet()
         self.ui.right_panel.manual_box.setEnabled(False)
         self.setup_dynamic_ui()
-        
         self._setup_shortcuts()
-        
+
         # Start at welcome screen
         self.ui.show_welcome_view()
 
-    def connect_signals(self):
-        # --- Welcome Screen ---
+    # ---------------------------------------------------------------------
+    # Wiring
+    # ---------------------------------------------------------------------
+    def connect_signals(self) -> None:
+        """Connect UI signals to controller actions."""
+
+        # Welcome screen
         self.ui.welcome_widget.import_btn.clicked.connect(self.router.import_annotations)
         self.ui.welcome_widget.create_btn.clicked.connect(self.router.create_new_project_flow)
 
-        # --- Left Panel (Classification) ---
+        # Left panel (classification)
         cls_controls = self.ui.left_panel.project_controls
         cls_controls.createRequested.connect(self.router.create_new_project_flow)
         cls_controls.loadRequested.connect(self.router.import_annotations)
@@ -73,47 +78,51 @@ class ActionClassifierApp(QMainWindow):
         self.ui.left_panel.request_remove_item.connect(self.nav_manager.remove_single_action_item)
         self.ui.left_panel.action_tree.currentItemChanged.connect(self.nav_manager.on_item_selected)
         self.ui.left_panel.filter_combo.currentIndexChanged.connect(self.nav_manager.apply_action_filter)
-        
-        # --- Undo/Redo Connections ---
+
+        # Undo/redo (both panels share the same stacks)
         self.ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
         self.ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
-        
         self.ui.localization_ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
         self.ui.localization_ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
-        
-        # --- Center Panel (Classification) ---
+
+        # Center panel (classification)
         self.ui.center_panel.play_btn.clicked.connect(self.nav_manager.play_video)
         self.ui.center_panel.multi_view_btn.clicked.connect(self.nav_manager.show_all_views)
         self.ui.center_panel.prev_action.clicked.connect(self.nav_manager.nav_prev_action)
         self.ui.center_panel.prev_clip.clicked.connect(self.nav_manager.nav_prev_clip)
         self.ui.center_panel.next_clip.clicked.connect(self.nav_manager.nav_next_clip)
         self.ui.center_panel.next_action.clicked.connect(self.nav_manager.nav_next_action)
-        
-        # --- Right Panel (Classification) ---
+
+        # Right panel (classification)
         self.ui.right_panel.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation)
         self.ui.right_panel.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
         self.ui.right_panel.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
         self.ui.right_panel.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
-        
-        # [修正] 移除了 style_mode_changed 的连接
 
-        # --- Localization Connections ---
+        # Localization panel
         loc_controls = self.ui.localization_ui.left_panel.project_controls
         loc_controls.createRequested.connect(self.router.create_new_project_flow)
         loc_controls.closeRequested.connect(self.router.close_project)
-        
+
         self.loc_manager.setup_connections()
 
-    def _setup_shortcuts(self):
+    def _setup_shortcuts(self) -> None:
+        """Register common keyboard shortcuts."""
+
         QShortcut(QKeySequence("Ctrl+O"), self).activated.connect(self.router.import_annotations)
         QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._dispatch_save)
         QShortcut(QKeySequence("Ctrl+Shift+S"), self).activated.connect(self._dispatch_export)
-        QShortcut(QKeySequence("Ctrl+E"), self).activated.connect(lambda: self.show_temp_msg("Settings", "Settings dialog not implemented yet."))
-        QShortcut(QKeySequence("Ctrl+D"), self).activated.connect(lambda: self.show_temp_msg("Downloader", "Dataset Downloader not implemented yet."))
-        
+
+        QShortcut(QKeySequence("Ctrl+E"), self).activated.connect(
+            lambda: self.show_temp_msg("Settings", "Settings dialog not implemented yet.")
+        )
+        QShortcut(QKeySequence("Ctrl+D"), self).activated.connect(
+            lambda: self.show_temp_msg("Downloader", "Dataset downloader not implemented yet.")
+        )
+
         QShortcut(QKeySequence.StandardKey.Undo, self).activated.connect(self.history_manager.perform_undo)
         QShortcut(QKeySequence.StandardKey.Redo, self).activated.connect(self.history_manager.perform_redo)
-        
+
         QShortcut(QKeySequence(Qt.Key.Key_Space), self).activated.connect(self._dispatch_play_pause)
         QShortcut(QKeySequence(Qt.Key.Key_Left), self).activated.connect(lambda: self._dispatch_seek(-40))
         QShortcut(QKeySequence(Qt.Key.Key_Right), self).activated.connect(lambda: self._dispatch_seek(40))
@@ -121,26 +130,31 @@ class ActionClassifierApp(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Right"), self).activated.connect(lambda: self._dispatch_seek(1000))
         QShortcut(QKeySequence("Ctrl+Shift+Left"), self).activated.connect(lambda: self._dispatch_seek(-5000))
         QShortcut(QKeySequence("Ctrl+Shift+Right"), self).activated.connect(lambda: self._dispatch_seek(5000))
-        
-        QShortcut(QKeySequence("A"), self).activated.connect(self._dispatch_add_annotation)
-        QShortcut(QKeySequence("S"), self).activated.connect(lambda: self.show_temp_msg("Info", "Select an event and Edit Time via Right-click."))
 
-    def _is_loc_mode(self):
+        QShortcut(QKeySequence("A"), self).activated.connect(self._dispatch_add_annotation)
+        QShortcut(QKeySequence("S"), self).activated.connect(
+            lambda: self.show_temp_msg("Info", "Select an event and edit time via right-click.")
+        )
+
+    # ---------------------------------------------------------------------
+    # Mode-aware dispatchers
+    # ---------------------------------------------------------------------
+    def _is_loc_mode(self) -> bool:
         return self.ui.stack_layout.currentWidget() == self.ui.localization_ui
 
-    def _dispatch_save(self):
+    def _dispatch_save(self) -> None:
         if self._is_loc_mode():
             self.router.loc_fm.overwrite_json()
         else:
             self.router.class_fm.save_json()
 
-    def _dispatch_export(self):
+    def _dispatch_export(self) -> None:
         if self._is_loc_mode():
             self.router.loc_fm.export_json()
         else:
             self.router.class_fm.export_json()
 
-    def _dispatch_play_pause(self):
+    def _dispatch_play_pause(self) -> None:
         if self._is_loc_mode():
             player = self.loc_manager.center_panel.media_preview.player
             if player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -150,149 +164,170 @@ class ActionClassifierApp(QMainWindow):
         else:
             self.nav_manager.play_video()
 
-    def _dispatch_seek(self, delta_ms):
-        player = None
+    def _dispatch_seek(self, delta_ms: int) -> None:
+        """Seek the active player by delta_ms (milliseconds)."""
         if self._is_loc_mode():
             player = self.loc_manager.center_panel.media_preview.player
         else:
             player = self.ui.center_panel.single_view_widget.player
-            
-        if player:
-            new_pos = max(0, player.position() + delta_ms)
-            player.setPosition(new_pos)
 
-    def _dispatch_add_annotation(self):
+        if not player:
+            return
+
+        player.setPosition(max(0, player.position() + delta_ms))
+
+    def _dispatch_add_annotation(self) -> None:
+        """Add an annotation in the current mode."""
         if self._is_loc_mode():
             current_head = self.loc_manager.current_head
-            if current_head:
-                self.loc_manager._on_label_add_req(current_head)
-            else:
-                self.show_temp_msg("Warning", "No Head/Category selected.", icon=QMessageBox.Icon.Warning)
+            if not current_head:
+                self.show_temp_msg("Warning", "No head/category selected.", icon=QMessageBox.Icon.Warning)
+                return
+            self.loc_manager._on_label_add_req(current_head)
         else:
             self.annot_manager.save_manual_annotation()
 
-    def _on_class_clear_clicked(self):
-        if not self.model.json_loaded and not self.model.action_item_data: return
+    # ---------------------------------------------------------------------
+    # UI actions / helpers
+    # ---------------------------------------------------------------------
+    def _on_class_clear_clicked(self) -> None:
+        if not self.model.json_loaded and not self.model.action_item_data:
+            return
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Clear Workspace")
         msg.setText("Clear workspace? Unsaved changes will be lost.")
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+
         if msg.exec() == QMessageBox.StandardButton.Yes:
             self.router.class_fm._clear_workspace(full_reset=True)
 
-    def load_stylesheet(self):
-        """Loads the main dark theme stylesheet."""
+    def load_stylesheet(self) -> None:
+        """Load the main (dark) theme stylesheet."""
         style_path = resource_path(os.path.join("style", "style.qss"))
         try:
             with open(style_path, "r", encoding="utf-8") as f:
                 self.setStyleSheet(f.read())
-        except Exception as e:
-            print(f"Style error: {e}")
+        except Exception as exc:
+            print(f"Style error: {exc}")
 
-    def check_and_close_current_project(self):
-        if self.model.json_loaded:
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("Close Project")
-            msg_box.setText("Opening a new project or closing will clear the current workspace. Continue?")
-            msg_box.setIcon(QMessageBox.Icon.Warning)
-            if self.model.is_data_dirty:
-                msg_box.setInformativeText("You have unsaved changes in the current project.")
-            btn_yes = msg_box.addButton("Yes", QMessageBox.ButtonRole.AcceptRole)
-            btn_no = msg_box.addButton("No", QMessageBox.ButtonRole.RejectRole)
-            msg_box.setDefaultButton(btn_no)
-            msg_box.exec()
-            if msg_box.clickedButton() == btn_yes: return True
-            else: return False
-        return True
+    def check_and_close_current_project(self) -> bool:
+        """Ask for confirmation if a project is open, especially with unsaved changes."""
+        if not self.model.json_loaded:
+            return True
 
-    def closeEvent(self, event):
-        is_loc_mode = (self.ui.stack_layout.currentWidget() == self.ui.localization_ui)
-        if is_loc_mode:
-            has_data = bool(self.model.localization_events)
-        else:
-            has_data = bool(self.model.manual_annotations)
-            
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Close Project")
+        msg_box.setText("Opening a new project or closing will clear the current workspace. Continue?")
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+
+        if self.model.is_data_dirty:
+            msg_box.setInformativeText("You have unsaved changes in the current project.")
+
+        btn_yes = msg_box.addButton("Yes", QMessageBox.ButtonRole.AcceptRole)
+        btn_no = msg_box.addButton("No", QMessageBox.ButtonRole.RejectRole)
+        msg_box.setDefaultButton(btn_no)
+        msg_box.exec()
+
+        return msg_box.clickedButton() == btn_yes
+
+    def closeEvent(self, event) -> None:
+        """Prompt to save if there are unsaved changes worth exporting."""
+        is_loc_mode = self._is_loc_mode()
+        has_data = bool(self.model.localization_events) if is_loc_mode else bool(self.model.manual_annotations)
         can_export = self.model.json_loaded and has_data
 
         if not self.model.is_data_dirty or not can_export:
             event.accept()
             return
-        
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Unsaved Annotations")
         msg.setText("Do you want to save your annotations before quitting?")
         msg.setIcon(QMessageBox.Icon.Question)
-        
+
         save_btn = msg.addButton("Save & Exit", QMessageBox.ButtonRole.AcceptRole)
         discard_btn = msg.addButton("Discard & Exit", QMessageBox.ButtonRole.DestructiveRole)
         msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        
+
         msg.setDefaultButton(save_btn)
         msg.exec()
-        
+
         if msg.clickedButton() == save_btn:
-            if is_loc_mode:
-                if self.router.loc_fm.overwrite_json(): event.accept()
-                else: event.ignore()
-            else:
-                if self.router.class_fm.save_json(): event.accept()
-                else: event.ignore()
+            ok = self.router.loc_fm.overwrite_json() if is_loc_mode else self.router.class_fm.save_json()
+            event.accept() if ok else event.ignore()
         elif msg.clickedButton() == discard_btn:
             event.accept()
         else:
             event.ignore()
 
-    def update_save_export_button_state(self):
-        is_loc_mode = (self.ui.stack_layout.currentWidget() == self.ui.localization_ui)
-        
-        if is_loc_mode:
-            has_data = bool(self.model.localization_events)
-        else:
-            has_data = bool(self.model.manual_annotations)
-            
+    def update_save_export_button_state(self) -> None:
+        """Enable/disable save/export + undo/redo buttons based on current state."""
+        is_loc_mode = self._is_loc_mode()
+        has_data = bool(self.model.localization_events) if is_loc_mode else bool(self.model.manual_annotations)
+
         can_export = self.model.json_loaded and has_data
         can_save = can_export and (self.model.current_json_path is not None) and self.model.is_data_dirty
-        
-        # Unified Controls for both panels
+
+        # Unified controls (both panels)
         self.ui.left_panel.project_controls.btn_save.setEnabled(can_save)
         self.ui.left_panel.project_controls.btn_export.setEnabled(can_export)
         self.ui.localization_ui.left_panel.project_controls.btn_save.setEnabled(can_save)
         self.ui.localization_ui.left_panel.project_controls.btn_export.setEnabled(can_export)
-        
+
         can_undo = len(self.model.undo_stack) > 0
         can_redo = len(self.model.redo_stack) > 0
-        
-        # Classification Right Panel buttons
+
+        # Classification panel
         self.ui.right_panel.undo_btn.setEnabled(can_undo)
         self.ui.right_panel.redo_btn.setEnabled(can_redo)
-        
-        # Localization Undo/Redo
+
+        # Localization panel
         self.ui.localization_ui.right_panel.undo_btn.setEnabled(can_undo)
         self.ui.localization_ui.right_panel.redo_btn.setEnabled(can_redo)
 
-    def show_temp_msg(self, title, msg, duration=1500, icon=QMessageBox.Icon.Information):
-        m = QMessageBox(self); m.setWindowTitle(title); m.setText(msg); m.setIcon(icon)
-        m.setStandardButtons(QMessageBox.StandardButton.NoButton)
-        QTimer.singleShot(duration, m.accept)
-        m.exec()
+    def show_temp_msg(
+        self,
+        title: str,
+        msg: str,
+        duration: int = 1500,
+        icon: QMessageBox.Icon = QMessageBox.Icon.Information,
+    ) -> None:
+        """Show a short-lived message box (auto-closes)."""
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setText(msg)
+        box.setIcon(icon)
+        box.setStandardButtons(QMessageBox.StandardButton.NoButton)
+
+        QTimer.singleShot(duration, box.accept)
+        box.exec()
 
     def get_current_action_path(self):
+        """Return the selected action path from the tree (top-level item path)."""
         curr = self.ui.left_panel.action_tree.currentItem()
-        if not curr: return None
-        if curr.parent() is None: return curr.data(0, Qt.ItemDataRole.UserRole)
+        if not curr:
+            return None
+
+        if curr.parent() is None:
+            return curr.data(0, Qt.ItemDataRole.UserRole)
+
         return curr.parent().data(0, Qt.ItemDataRole.UserRole)
 
-    def populate_action_tree(self):
+    def populate_action_tree(self) -> None:
+        """Rebuild the action tree from model data and select the first item."""
         self.ui.left_panel.action_tree.clear()
         self.model.action_item_map.clear()
-        
-        sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get('name', '')))
+
+        sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", "")))
         for data in sorted_list:
-            item = self.ui.left_panel.add_action_item(data['name'], data['path'], data.get('source_files'))
-            self.model.action_item_map[data['path']] = item
-            
+            item = self.ui.left_panel.add_action_item(data["name"], data["path"], data.get("source_files"))
+            self.model.action_item_map[data["path"]] = item
+
+        # Update completion icons once items exist
         for path in self.model.action_item_map.keys():
             self.update_action_item_status(path)
+
         self.nav_manager.apply_action_filter()
 
         if self.ui.left_panel.action_tree.topLevelItemCount() > 0:
@@ -300,38 +335,58 @@ class ActionClassifierApp(QMainWindow):
             self.ui.left_panel.action_tree.setCurrentItem(first_item)
             QTimer.singleShot(200, self.nav_manager.play_video)
 
-    def update_action_item_status(self, action_path):
+    def update_action_item_status(self, action_path: str) -> None:
+        """Set the checkmark icon if an action has at least one manual annotation."""
         item = self.model.action_item_map.get(action_path)
-        if not item: return
-        is_done = (action_path in self.model.manual_annotations and bool(self.model.manual_annotations[action_path]))
+        if not item:
+            return
+
+        is_done = action_path in self.model.manual_annotations and bool(self.model.manual_annotations[action_path])
         item.setIcon(0, self.done_icon if is_done else self.empty_icon)
+
+        # Keep filter in sync as statuses change
         self.nav_manager.apply_action_filter()
 
-    def setup_dynamic_ui(self):
+    def setup_dynamic_ui(self) -> None:
+        """Build right-panel label groups from the current task definition."""
         self.ui.right_panel.setup_dynamic_labels(self.model.label_definitions)
         self.ui.right_panel.task_label.setText(f"Task: {self.model.current_task_name}")
         self._connect_dynamic_type_buttons()
 
-    def _connect_dynamic_type_buttons(self):
+    def _connect_dynamic_type_buttons(self) -> None:
+        """Bind dynamic label widgets to the annotation manager."""
         for head, group in self.ui.right_panel.label_groups.items():
-            try: group.add_btn.clicked.disconnect()
-            except: pass
-            try: group.remove_label_signal.disconnect()
-            except: pass
-            try: group.value_changed.disconnect()
-            except: pass
-            
+            # Avoid duplicate connections when rebuilding the UI
+            try:
+                group.add_btn.clicked.disconnect()
+            except Exception:
+                pass
+            try:
+                group.remove_label_signal.disconnect()
+            except Exception:
+                pass
+            try:
+                group.value_changed.disconnect()
+            except Exception:
+                pass
+
             group.add_btn.clicked.connect(lambda _, h=head: self.annot_manager.add_custom_type(h))
             group.remove_label_signal.connect(lambda lbl, h=head: self.annot_manager.remove_custom_type(h, lbl))
             group.value_changed.connect(lambda h, v: self.annot_manager.handle_ui_selection_change(h, v))
 
-    def refresh_ui_after_undo_redo(self, action_path):
-        if not action_path: return
+    def refresh_ui_after_undo_redo(self, action_path: str) -> None:
+        """Refresh tree selection, status icons, and right panel after undo/redo."""
+        if not action_path:
+            return
+
         self.update_action_item_status(action_path)
+
         item = self.model.action_item_map.get(action_path)
         if item and self.ui.left_panel.action_tree.currentItem() != item:
             self.ui.left_panel.action_tree.setCurrentItem(item)
-        
+
         current = self.get_current_action_path()
-        if current == action_path: self.annot_manager.display_manual_annotation(action_path)
+        if current == action_path:
+            self.annot_manager.display_manual_annotation(action_path)
+
         self.update_save_export_button_state()
