@@ -7,7 +7,6 @@ on:
       - dev-jintao
   workflow_dispatch:
 
-
 permissions:
   contents: read
   actions: write
@@ -18,7 +17,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: Tool
+        working-directory: annotation_tool
     steps:
       - uses: actions/checkout@v4
 
@@ -39,21 +38,21 @@ jobs:
           try { pip cache purge } catch { Write-Host "pip cache purge failed (ignored)" }
 
       - name: Build exe
+        # Note: We only add 'ui' because 'ui2' is now merged inside it.
+        # Ensure you have a 'style' folder containing your .qss files.
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile `
             --name "SoccerNetProAnalyzer" `
             --add-data "style;style" `
             --add-data "ui;ui" `
-            --add-data "ui2;ui2" `
             "main.py"
 
-      # 为了避免你再次 hit artifact quota：只在网页端手动 Run workflow 时上传
       - name: Upload artifact (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-Windows
-          path: Tool/dist/SoccerNetProAnalyzer.exe
+          path: annotation_tool/dist/SoccerNetProAnalyzer.exe
           retention-days: 3
 
   build-macos:
@@ -61,7 +60,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: Tool
+        working-directory: annotation_tool
     steps:
       - uses: actions/checkout@v4
 
@@ -80,12 +79,12 @@ jobs:
           pip cache purge || true
 
       - name: Build binary
+        # Separator is ':' for macOS
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
             --add-data "style:style" \
             --add-data "ui:ui" \
-            --add-data "ui2:ui2" \
             "main.py"
 
       - name: Upload artifact (manual runs only)
@@ -93,7 +92,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-macOS
-          path: Tool/dist/SoccerNetProAnalyzer
+          path: annotation_tool/dist/SoccerNetProAnalyzer
           retention-days: 3
 
   build-linux:
@@ -101,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: Tool
+        working-directory: annotation_tool
     steps:
       - uses: actions/checkout@v4
 
@@ -125,12 +124,12 @@ jobs:
           pip cache purge || true
 
       - name: Build binary
+        # Separator is ':' for Linux
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
             --add-data "style:style" \
             --add-data "ui:ui" \
-            --add-data "ui2:ui2" \
             "main.py"
 
       - name: Upload artifact (manual runs only)
@@ -138,5 +137,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-Linux
-          path: Tool/dist/SoccerNetProAnalyzer
+          path: annotation_tool/dist/SoccerNetProAnalyzer
           retention-days: 3
