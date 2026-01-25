@@ -38,13 +38,16 @@ jobs:
           try { pip cache purge } catch { Write-Host "pip cache purge failed (ignored)" }
 
       - name: Build exe
-        # Note: We only add 'ui' because 'ui2' is now merged inside it.
-        # Ensure you have a 'style' folder containing your .qss files.
+        # Explanation of --add-data:
+        # 1. "ui;ui": Copies the entire ui folder structure so imports work.
+        # 2. "style.qss;style": Copies style.qss from root to a folder named 'style' inside the app.
+        #    (This ensures utils.py finds it if it looks for os.path.join('style', 'style.qss'))
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile `
             --name "SoccerNetProAnalyzer" `
-            --add-data "style;style" `
             --add-data "ui;ui" `
+            --add-data "style.qss;style" `
+            --add-data "style_day.qss;style" `
             "main.py"
 
       - name: Upload artifact (manual runs only)
@@ -79,12 +82,13 @@ jobs:
           pip cache purge || true
 
       - name: Build binary
-        # Separator is ':' for macOS
+        # Separator for add-data is ':' on macOS/Linux
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
-            --add-data "style:style" \
             --add-data "ui:ui" \
+            --add-data "style.qss:style" \
+            --add-data "style_day.qss:style" \
             "main.py"
 
       - name: Upload artifact (manual runs only)
@@ -111,7 +115,7 @@ jobs:
       - name: Install system deps (Qt/OpenCV runtime)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libglib2.0-0
+          sudo apt-get install -y libgl1 libglib2.0-0 libxcb-cursor0
 
       - name: Install requirements
         run: |
@@ -124,12 +128,13 @@ jobs:
           pip cache purge || true
 
       - name: Build binary
-        # Separator is ':' for Linux
+        # Separator for add-data is ':' on Linux
         run: |
           pyinstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
-            --add-data "style:style" \
             --add-data "ui:ui" \
+            --add-data "style.qss:style" \
+            --add-data "style_day.qss:style" \
             "main.py"
 
       - name: Upload artifact (manual runs only)
