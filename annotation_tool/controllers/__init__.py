@@ -11,8 +11,8 @@ from PyQt6.QtCore import Qt, QTimer, QDir
 from PyQt6.QtGui import QKeySequence, QShortcut, QColor, QIcon
 
 from models import AppStateModel, CmdType
-from ui.panels import MainWindowUI
-from ui.widgets import DynamicSingleLabelGroup, DynamicMultiLabelGroup
+from ui.classification.panels import MainWindowUI
+from ui.classification.widgets import DynamicSingleLabelGroup, DynamicMultiLabelGroup
 from dialogs import FolderPickerDialog, CreateProjectDialog
 from utils import resource_path, create_checkmark_icon, SINGLE_VIDEO_PREFIX, SUPPORTED_EXTENSIONS, natural_sort_key
 

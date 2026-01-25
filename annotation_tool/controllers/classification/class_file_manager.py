@@ -12,7 +12,7 @@ class ClassFileManager:
         self.ui = main_window.ui
 
     def load_project(self, data, file_path):
-        """专门加载 Classification 项目"""
+        """Load Classification Project"""
         valid, err, warn = self.model.validate_gac_json(data)
         if not valid:
             QMessageBox.critical(self.main, "JSON Error", err); return
@@ -21,7 +21,6 @@ class ClassFileManager:
             
         self._clear_workspace(full_reset=True)
         
-        # [关键] 设置当前工作目录为 JSON 文件所在的目录
         self.model.current_working_directory = os.path.dirname(file_path)
         
         self.model.current_task_name = data.get('task', "N/A")
@@ -44,7 +43,6 @@ class ClassFileManager:
             for inp in item.get('inputs', []):
                 p = inp.get('path', '')
                 
-                # [关键] 路径恢复逻辑
                 if os.path.isabs(p):
                     fp = p
                 else:
@@ -81,12 +79,11 @@ class ClassFileManager:
         self.main.populate_action_tree()
         self.main.update_save_export_button_state()
         
-        # [修改] 使用 show_temp_msg 并设置 5000ms (5秒) 延迟
-        # 这个方法会阻塞 5 秒，然后 router 会切换界面
+        # 2s block
         self.main.show_temp_msg(
             "Mode Switched", 
             f"Project loaded with {len(self.model.action_item_data)} items.\n\nCurrent Mode: CLASSIFICATION",
-            duration=5000,
+            duration=1500,
             icon=QMessageBox.Icon.Information
         )
 

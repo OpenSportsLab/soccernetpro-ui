@@ -119,7 +119,7 @@ class AnnotationManager:
         labels.append(txt); labels.sort()
         
         # Update UI directly
-        from ui.widgets import DynamicSingleLabelGroup
+        from ui.classification.widgets import DynamicSingleLabelGroup
         if isinstance(group, DynamicSingleLabelGroup): group.update_radios(labels)
         else: group.update_checkboxes(labels)
         group.input_field.clear()
@@ -141,7 +141,7 @@ class AnnotationManager:
             if defn['type'] == 'single_label' and val.get(head) == lbl: val[head] = None
             elif defn['type'] == 'multi_label' and lbl in val.get(head, []): val[head].remove(lbl)
             
-        from ui.widgets import DynamicSingleLabelGroup
+        from ui.classification.widgets import DynamicSingleLabelGroup
         group = self.ui.right_panel.label_groups.get(head)
         if isinstance(group, DynamicSingleLabelGroup): group.update_radios(defn['labels'])
         else: group.update_checkboxes(defn['labels'])

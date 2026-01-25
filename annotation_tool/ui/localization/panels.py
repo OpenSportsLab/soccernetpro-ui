@@ -10,9 +10,9 @@ from PyQt6.QtMultimedia import QMediaPlayer
 
 # 引入基础组件
 # 注意：请根据您的实际目录结构调整引用。如果 ui2 文件夹下有 widgets 文件夹：
-from .widgets.left_widgets import ProjectControlsWidget
-from .widgets.center_widgets import MediaPreviewWidget, TimelineWidget, PlaybackControlBar
-from .widgets.right_widgets import AnnotationManagementWidget, AnnotationTableWidget
+from .widgets.clip_explorer import ProjectControlsWidget
+from .widgets.media_player import MediaPreviewWidget, TimelineWidget, PlaybackControlBar
+from .widgets.event_editor import AnnotationManagementWidget, AnnotationTableWidget
 
 class LocLeftPanel(QWidget):
     def __init__(self, parent=None):

@@ -6,12 +6,14 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QPoint, QTime, QAbstractTableModel
 
-# ==================== Table Model (嵌入以确保完整性) ====================
+# ==================== Table Model ====================
 class AnnotationTableModel(QAbstractTableModel):
+    # Signal emitted when a cell is edited: old_data, new_data
+    itemChanged = pyqtSignal(dict, dict)
+
     def __init__(self, annotations=None):
         super().__init__()
         self._data = annotations or []
-        # [修改] 移除了 "Del" 列，只保留数据列
         self._headers = ["Time", "Head", "Label"]
 
     def rowCount(self, parent=None):
@@ -20,6 +22,12 @@ class AnnotationTableModel(QAbstractTableModel):
     def columnCount(self, parent=None):
         return len(self._headers)
 
+    def flags(self, index):
+        if not index.isValid():
+            return Qt.ItemFlag.NoItemFlags
+        # Enable selection and editing
+        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEditable
+
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
@@ -27,22 +35,55 @@ class AnnotationTableModel(QAbstractTableModel):
         row = index.row()
         item = self._data[row]
 
-        if role == Qt.ItemDataRole.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             col = index.column()
             if col == 0:
                 return self._fmt_ms(item.get('position_ms', 0))
             elif col == 1:
-                # 显示时去下划线
                 return item.get('head', '').replace('_', ' ')
             elif col == 2:
-                # 显示时去下划线
                 return item.get('label', '').replace('_', ' ')
         
-        # [新增] 存储原始数据 UserRole，方便逻辑获取
         elif role == Qt.ItemDataRole.UserRole:
             return item
             
         return None
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        """
+        Handle user edits directly from the table cells.
+        """
+        if not index.isValid() or role != Qt.ItemDataRole.EditRole:
+            return False
+
+        row = index.row()
+        col = index.column()
+        
+        # Get the original object
+        old_item = self._data[row]
+        # Create a shallow copy to modify
+        new_item = old_item.copy()
+
+        text_val = str(value).strip()
+
+        if col == 0:  # Time Column
+            try:
+                ms = self._parse_time_str(text_val)
+                new_item['position_ms'] = ms
+            except ValueError:
+                # Invalid time format, reject the edit
+                return False
+        elif col == 1:  # Head Column
+            new_item['head'] = text_val
+        elif col == 2:  # Label Column
+            new_item['label'] = text_val
+
+        # If data changed, emit signal for the Manager to handle (Undo Stack)
+        if new_item != old_item:
+            self.itemChanged.emit(old_item, new_item)
+            return True
+            
+        return False
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
@@ -64,10 +105,32 @@ class AnnotationTableModel(QAbstractTableModel):
         m = s // 60
         return f"{m:02}:{s%60:02}.{ms%1000:03}"
 
+    def _parse_time_str(self, time_str):
+        """
+        Parses a string like "MM:SS.mmm" or "SS.mmm" into milliseconds.
+        """
+        if not time_str:
+            return 0
+            
+        parts = time_str.split(':')
+        total_seconds = 0.0
+        
+        if len(parts) == 3: # HH:MM:SS.mmm
+            total_seconds += float(parts[0]) * 3600
+            total_seconds += float(parts[1]) * 60
+            total_seconds += float(parts[2])
+        elif len(parts) == 2: # MM:SS.mmm
+            total_seconds += float(parts[0]) * 60
+            total_seconds += float(parts[1])
+        elif len(parts) == 1: # SS.mmm
+            total_seconds += float(parts[0])
+            
+        return int(total_seconds * 1000)
+
 # ==================== Widgets ====================
 
 class LabelButton(QPushButton):
-    """自定义标签按钮"""
+    """Custom Label Button"""
     rightClicked = pyqtSignal()
     doubleClicked = pyqtSignal()
 
@@ -308,89 +371,7 @@ class AnnotationManagementWidget(QWidget):
     def update_schema(self, label_definitions):
         self.tabs.update_schema(label_definitions)
 
-# ==================== [New] Edit Dialog & Table Widget ====================
-
-class EditEventDialog(QDialog):
-    """
-    通用编辑对话框：
-    - 支持下拉选择现有的 (Head/Label)
-    - 包含 <Create New> 选项，选择后显示输入框添加新值
-    """
-    def __init__(self, current_value, existing_options, item_type="Head", parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(f"Edit {item_type}")
-        self.resize(300, 150)
-        self.is_new = False
-        
-        layout = QVBoxLayout(self)
-        
-        # 1. ComboBox
-        layout.addWidget(QLabel(f"Select {item_type}:"))
-        self.combo = QComboBox()
-        
-        # 映射 Display (无下划线) -> Real Key (有下划线)
-        self.options_map = {} 
-        
-        sorted_options = sorted(existing_options)
-        current_display = current_value.replace('_', ' ')
-        
-        for key in sorted_options:
-            display = key.replace('_', ' ')
-            self.options_map[display] = key
-            self.combo.addItem(display)
-            
-        self.combo.addItem("-- Create New --")
-        
-        # 选中当前值
-        idx = self.combo.findText(current_display)
-        if idx >= 0:
-            self.combo.setCurrentIndex(idx)
-        else:
-            # 如果当前值不在列表中（比如是 "???" 占位符），不选中任何现有项，或者保持默认
-            pass
-            
-        layout.addWidget(self.combo)
-        
-        # 2. Input Field (默认隐藏)
-        self.new_input_container = QWidget()
-        h_layout = QHBoxLayout(self.new_input_container)
-        h_layout.setContentsMargins(0, 5, 0, 5)
-        h_layout.addWidget(QLabel(f"New {item_type}:"))
-        self.line_edit = QLineEdit()
-        self.line_edit.setPlaceholderText(f"Enter new {item_type} name")
-        h_layout.addWidget(self.line_edit)
-        
-        self.new_input_container.setVisible(False)
-        layout.addWidget(self.new_input_container)
-        
-        # 逻辑连接
-        self.combo.currentIndexChanged.connect(self._on_combo_change)
-        
-        # 按钮
-        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        btns.accepted.connect(self.accept)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
-        
-    def _on_combo_change(self):
-        txt = self.combo.currentText()
-        if txt == "-- Create New --":
-            self.new_input_container.setVisible(True)
-            self.line_edit.setFocus()
-            self.is_new = True
-        else:
-            self.new_input_container.setVisible(False)
-            self.is_new = False
-            
-    def get_value(self):
-        """返回 (value, is_created_new)"""
-        if self.is_new:
-            val = self.line_edit.text().strip()
-            return val
-        else:
-            display = self.combo.currentText()
-            return self.options_map.get(display, display)
-
+# ==================== Table Widget ====================
 
 class AnnotationTableWidget(QWidget):
     annotationSelected = pyqtSignal(int) 
@@ -421,6 +402,9 @@ class AnnotationTableWidget(QWidget):
         """)
         
         self.model = AnnotationTableModel()
+        # Connect the model's itemChanged signal to this widget's output signal
+        self.model.itemChanged.connect(self.annotationModified.emit)
+        
         self.table.setModel(self.model)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
@@ -428,7 +412,6 @@ class AnnotationTableWidget(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         
-        # [修改] 启用右键菜单
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
         
@@ -451,102 +434,21 @@ class AnnotationTableWidget(QWidget):
                 self.annotationSelected.emit(item.get('position_ms', 0))
 
     def _show_context_menu(self, pos):
-        # [核心修改] 根据点击的列展示不同的菜单
         index = self.table.indexAt(pos)
         if not index.isValid(): return
         
-        col = index.column() # 0:Time, 1:Head, 2:Label
         row = index.row()
         item = self.model.get_annotation_at(row)
         if not item: return
         
         menu = QMenu(self)
         
-        action_map = {}
+        # Redundant editing actions removed. 
+        # Editing is now done directly in the table cells.
         
-        if col == 0:
-            act = menu.addAction("Edit Time")
-            action_map[act] = "edit_time"
-        elif col == 1:
-            act = menu.addAction("Edit Head")
-            action_map[act] = "edit_head"
-        elif col == 2:
-            act = menu.addAction("Edit Label")
-            action_map[act] = "edit_label"
-            
-        menu.addSeparator()
         act_delete = menu.addAction("Delete Event")
-        action_map[act_delete] = "delete"
         
         selected_action = menu.exec(self.table.mapToGlobal(pos))
         
-        if selected_action:
-            mode = action_map.get(selected_action)
-            if mode == "delete":
-                self.annotationDeleted.emit(item)
-            elif mode == "edit_time":
-                self._edit_time(item)
-            elif mode == "edit_head":
-                self._edit_head(item)
-            elif mode == "edit_label":
-                self._edit_label(item)
-
-    def _edit_time(self, item):
-        ms = item.get('position_ms', 0)
-        total_seconds = ms // 1000
-        h = total_seconds // 3600
-        m = (total_seconds % 3600) // 60
-        s = total_seconds % 60
-        ms_part = ms % 1000
-        cur_time = QTime(h, m, s, ms_part)
-        
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Edit Time")
-        l = QVBoxLayout(dlg)
-        
-        te = QTimeEdit()
-        te.setDisplayFormat("HH:mm:ss.zzz")
-        te.setTime(cur_time)
-        l.addWidget(QLabel("New Time:"))
-        l.addWidget(te)
-        
-        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        bb.accepted.connect(dlg.accept)
-        bb.rejected.connect(dlg.reject)
-        l.addWidget(bb)
-        
-        if dlg.exec():
-            t = te.time()
-            new_ms = (t.hour()*3600 + t.minute()*60 + t.second())*1000 + t.msec()
-            
-            new_item = item.copy()
-            new_item['position_ms'] = new_ms
-            self.annotationModified.emit(item, new_item)
-
-    def _edit_head(self, item):
-        heads = list(self.current_schema.keys())
-        dlg = EditEventDialog(item.get('head', ''), heads, "Head", self)
-        
-        if dlg.exec():
-            new_head = dlg.get_value()
-            if not new_head: return
-            
-            new_item = item.copy()
-            new_item['head'] = new_head
-            # 这里不处理 Label 置空，交给 Manager 处理
-            self.annotationModified.emit(item, new_item)
-
-    def _edit_label(self, item):
-        head = item.get('head', '')
-        labels = []
-        if head in self.current_schema:
-            labels = self.current_schema[head].get('labels', [])
-            
-        dlg = EditEventDialog(item.get('label', ''), labels, "Label", self)
-        
-        if dlg.exec():
-            new_label = dlg.get_value()
-            # 允许输入空字符串，如果用户想置空
-            new_item = item.copy()
-            new_item['label'] = new_label
-            self.annotationModified.emit(item, new_item)
+        if selected_action == act_delete:
+            self.annotationDeleted.emit(item)

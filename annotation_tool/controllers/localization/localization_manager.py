@@ -3,7 +3,7 @@ import copy
 from PyQt6.QtWidgets import QMessageBox, QInputDialog, QTreeWidgetItem, QFileDialog, QMenu
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QColor
-from PyQt6.QtMultimedia import QMediaPlayer # [新增] 必须引入 QMediaPlayer
+from PyQt6.QtMultimedia import QMediaPlayer
 from utils import natural_sort_key
 from models import CmdType 
 
@@ -79,6 +79,7 @@ class LocalizationManager:
         # Table Logic
         table.annotationSelected.connect(lambda ms: media.set_position(ms))
         table.annotationDeleted.connect(self._on_delete_single_annotation)
+        # This signal is now triggered via direct cell edits in the table model
         table.annotationModified.connect(self._on_annotation_modified)
 
     # --- Media Sync ---
@@ -185,9 +186,9 @@ class LocalizationManager:
     # --- Label Management ---
     def _on_label_add_req(self, head):
         """
-        [修改] 暂停视频 -> 获取时间 -> 输入标签 -> 添加Schema & 打点 -> 恢复播放
+        Flow: Pause video -> Get current time -> Input label -> Add Schema & Spot -> Resume
         """
-        # 1. 获取播放器状态并暂停
+        # 1. Get player state and pause
         player = self.center_panel.media_preview.player
         was_playing = (player.playbackState() == QMediaPlayer.PlaybackState.PlayingState)
         if was_playing:
@@ -196,7 +197,7 @@ class LocalizationManager:
         current_pos = player.position()
         time_str = self._fmt_ms(current_pos)
 
-        # 2. 弹出对话框
+        # 2. Show dialog
         text, ok = QInputDialog.getText(
             self.main, 
             "Add New Label & Spot", 
@@ -204,7 +205,7 @@ class LocalizationManager:
         )
         
         if not ok or not text.strip():
-            # 取消则恢复播放
+            # Resume if cancelled
             if was_playing: player.play()
             return
             
@@ -216,35 +217,35 @@ class LocalizationManager:
             if was_playing: player.play()
             return
             
-        # 3. 动作 1: 修改 Schema (添加标签)
+        # 3. Action 1: Modify Schema (Add Label)
         self.model.push_undo(CmdType.SCHEMA_ADD_LBL, head=head, label=label_name)
         labels_list.append(label_name)
         self.model.label_definitions[head]['labels'] = labels_list
         self.model.is_data_dirty = True
         
-        # 4. 动作 2: 修改 Data (打点)
+        # 4. Action 2: Modify Data (Create Event)
         if self.current_video_path:
             new_event = {
                 "head": head,
                 "label": label_name,
                 "position_ms": current_pos
             }
-            # 注意：Undo Stack 此时会有两个操作，按 Undo 两次才能完全撤销，符合直觉
+            # Note: Undo Stack will have two operations.
             self.model.push_undo(CmdType.LOC_EVENT_ADD, video_path=self.current_video_path, event=new_event)
             
             if self.current_video_path not in self.model.localization_events:
                 self.model.localization_events[self.current_video_path] = []
             self.model.localization_events[self.current_video_path].append(new_event)
         
-        # 5. 刷新 UI
+        # 5. Refresh UI
         self._refresh_schema_ui()
-        self.right_panel.annot_mgmt.tabs.set_current_head(head) # 保持 Tab 选中
+        self.right_panel.annot_mgmt.tabs.set_current_head(head)
         self._display_events_for_item(self.current_video_path)
         self.populate_tree() 
         self.main.show_temp_msg("Added & Spotted", f"{head}: {label_name} at {time_str}")
         self.main.update_save_export_button_state()
 
-        # 6. 恢复播放
+        # 6. Resume
         if was_playing:
             player.play()
 
@@ -346,8 +347,13 @@ class LocalizationManager:
 
     # --- Table Modification (New Logic) ---
     def _on_annotation_modified(self, old_event, new_event):
+        """
+        Called when a cell in the table is edited directly.
+        """
         events = self.model.localization_events.get(self.current_video_path, [])
         try:
+            # We need to find the specific event object reference to replace or index
+            # Since old_event might be a copy from the model, we rely on value equality
             index = events.index(old_event)
         except ValueError:
             return 
@@ -460,7 +466,7 @@ class LocalizationManager:
         self.model.action_item_data = []
         self.model.action_path_to_name = {}
         self.model.localization_events = {}
-        self.model.label_definitions = {} # 清空 Schema
+        self.model.label_definitions = {} 
         self.model.is_data_dirty = False 
         self.current_video_path = None
         self.current_head = None 

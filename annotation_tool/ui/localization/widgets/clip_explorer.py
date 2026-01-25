@@ -5,73 +5,23 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 
-class ProjectControlsWidget(QWidget):
-    loadRequested = pyqtSignal()
-    addVideoRequested = pyqtSignal()
-    saveRequested = pyqtSignal()
-    exportRequested = pyqtSignal()
+# Import the unified widget
+from ui.common.project_controls import UnifiedProjectControls
 
+# We reuse the UnifiedProjectControls but keep the name ProjectControlsWidget 
+# to avoid breaking imports in ui2/panels.py, 
+# OR we simply subclass it to allow for specific extensions if needed later.
+class ProjectControlsWidget(UnifiedProjectControls):
+    """
+    Inherits from the standard UnifiedProjectControls.
+    This ensures Localization uses the exact same 3x2 grid as Classification.
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        # The signals (loadRequested, addVideoRequested, etc.) are inherited.
+        # The 3x2 Layout is inherited.
         
-        group = QGroupBox("Project Controls")
-        
-        # [修改] 优化 Grid 布局参数
-        grid_layout = QGridLayout(group)
-        
-        # 1. 增加按钮之间的间距 (水平和垂直)
-        grid_layout.setSpacing(10) 
-        
-        # 2. 增加 GroupBox 内部的边距 (左, 上, 右, 下)
-        grid_layout.setContentsMargins(10, 20, 10, 10)
-        
-        self.btn_load = QPushButton("Load JSON")
-        self.btn_add = QPushButton("Add Video")
-        self.btn_save = QPushButton("Save JSON")
-        self.btn_export = QPushButton("Export JSON")
-        
-        self.btn_save.setEnabled(False)
-        self.btn_export.setEnabled(False)
-        
-        # [修改] 设置按钮的最小高度和样式，使其不那么紧缩
-        btns = [self.btn_load, self.btn_add, self.btn_save, self.btn_export]
-        for btn in btns:
-            btn.setMinimumHeight(35) # 增加高度
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            # 可选：增加一点圆角让界面更柔和
-            btn.setStyleSheet("""
-                QPushButton {
-                    border-radius: 6px;
-                    padding: 5px;
-                    background-color: #444;
-                    color: #EEE;
-                    border: 1px solid #555;
-                }
-                QPushButton:hover { background-color: #555; border-color: #777; }
-                QPushButton:pressed { background-color: #0078D7; border-color: #0078D7; }
-                QPushButton:disabled { background-color: #333; color: #777; border-color: #333; }
-            """)
-        
-        # 添加到网格位置 (行, 列)
-        grid_layout.addWidget(self.btn_load, 0, 0)
-        grid_layout.addWidget(self.btn_add, 0, 1)
-        grid_layout.addWidget(self.btn_save, 1, 0)
-        grid_layout.addWidget(self.btn_export, 1, 1)
-        
-        layout.addWidget(group)
-        
-        # Connect signals
-        self.btn_load.clicked.connect(self.loadRequested.emit)
-        self.btn_add.clicked.connect(self.addVideoRequested.emit)
-        self.btn_save.clicked.connect(self.saveRequested.emit)
-        self.btn_export.clicked.connect(self.exportRequested.emit)
-
-    def set_project_loaded_state(self, loaded: bool):
-        self.btn_save.setEnabled(loaded)
-        self.btn_export.setEnabled(loaded)
-
-# --- 保留 ActionListWidget 定义以防引用报错 (虽然 UI 中已移除) ---
+# --- Legacy ActionListWidget (kept for file integrity, though mostly unused in UI2) ---
 class ActionListWidget(QWidget):
     labelSelected = pyqtSignal(str, str) 
     listCleared = pyqtSignal()

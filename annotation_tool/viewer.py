@@ -5,9 +5,8 @@ from PyQt6.QtGui import QKeySequence, QShortcut, QColor, QIcon
 from PyQt6.QtMultimedia import QMediaPlayer
 
 from models import AppStateModel
-from ui.panels import MainWindowUI
+from ui.classification.panels import MainWindowUI
 
-# 导入路径调整
 from controllers.router import AppRouter
 from controllers.history_manager import HistoryManager
 from controllers.classification.annotation_manager import AnnotationManager
@@ -51,7 +50,6 @@ class ActionClassifierApp(QMainWindow):
         self.ui.right_panel.manual_box.setEnabled(False)
         self.setup_dynamic_ui()
         
-        # Setup Shortcuts (Last step to ensure controllers are ready)
         self._setup_shortcuts()
         
         # Start at welcome screen
@@ -63,18 +61,22 @@ class ActionClassifierApp(QMainWindow):
         self.ui.welcome_widget.create_btn.clicked.connect(self.router.create_new_project_flow)
 
         # --- Left Panel (Classification) ---
-        self.ui.left_panel.import_btn.clicked.connect(self.router.import_annotations)
-        self.ui.left_panel.create_btn.clicked.connect(self.router.create_new_project_flow)
-        self.ui.left_panel.add_data_btn.clicked.connect(self.nav_manager.add_items_via_dialog)
+        cls_controls = self.ui.left_panel.project_controls
+        cls_controls.createRequested.connect(self.router.create_new_project_flow)
+        cls_controls.loadRequested.connect(self.router.import_annotations)
+        cls_controls.addVideoRequested.connect(self.nav_manager.add_items_via_dialog)
+        cls_controls.closeRequested.connect(self.router.close_project)
+        cls_controls.saveRequested.connect(self.router.class_fm.save_json)
+        cls_controls.exportRequested.connect(self.router.class_fm.export_json)
+
         self.ui.left_panel.clear_btn.clicked.connect(self._on_class_clear_clicked)
-        
         self.ui.left_panel.request_remove_item.connect(self.nav_manager.remove_single_action_item)
         self.ui.left_panel.action_tree.currentItemChanged.connect(self.nav_manager.on_item_selected)
         self.ui.left_panel.filter_combo.currentIndexChanged.connect(self.nav_manager.apply_action_filter)
         
-        # --- Undo/Redo Connections ---
-        self.ui.left_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
-        self.ui.left_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
+        # --- Undo/Redo Connections (Moved to Right Panel for Classification) ---
+        self.ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
+        self.ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
         
         self.ui.localization_ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
         self.ui.localization_ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
@@ -88,70 +90,41 @@ class ActionClassifierApp(QMainWindow):
         self.ui.center_panel.next_action.clicked.connect(self.nav_manager.nav_next_action)
         
         # --- Right Panel (Classification) ---
-        self.ui.right_panel.save_btn.clicked.connect(self.router.class_fm.save_json)
-        self.ui.right_panel.export_btn.clicked.connect(self.router.class_fm.export_json)
+        # [修改] 移除了 save_btn 和 export_btn 的信号连接
         
         self.ui.right_panel.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation)
         self.ui.right_panel.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
         self.ui.right_panel.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
         self.ui.right_panel.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
-        self.ui.right_panel.style_mode_changed.connect(self.apply_stylesheet)
 
         # --- Localization Connections ---
+        loc_controls = self.ui.localization_ui.left_panel.project_controls
+        loc_controls.createRequested.connect(self.router.create_new_project_flow)
+        loc_controls.closeRequested.connect(self.router.close_project)
+        
         self.loc_manager.setup_connections()
 
     def _setup_shortcuts(self):
-        """
-        Initialize all application-wide keyboard shortcuts.
-        """
-        # --- 1. File Operations ---
-        # Ctrl+O: Open
         QShortcut(QKeySequence("Ctrl+O"), self).activated.connect(self.router.import_annotations)
-        
-        # Ctrl+S: Save (Context Aware)
         QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._dispatch_save)
-        
-        # Ctrl+Shift+S: Save As / Export (Context Aware)
         QShortcut(QKeySequence("Ctrl+Shift+S"), self).activated.connect(self._dispatch_export)
-        
-        # Ctrl+E: Settings (Placeholder)
         QShortcut(QKeySequence("Ctrl+E"), self).activated.connect(lambda: self.show_temp_msg("Settings", "Settings dialog not implemented yet."))
-        
-        # Ctrl+D: Dataset Downloader (Placeholder)
         QShortcut(QKeySequence("Ctrl+D"), self).activated.connect(lambda: self.show_temp_msg("Downloader", "Dataset Downloader not implemented yet."))
-
-        # --- 2. Edit Operations ---
-        # Undo / Redo
+        
         QShortcut(QKeySequence.StandardKey.Undo, self).activated.connect(self.history_manager.perform_undo)
         QShortcut(QKeySequence.StandardKey.Redo, self).activated.connect(self.history_manager.perform_redo)
-
-        # --- 3. Playback Controls ---
-        # Space: Play/Pause
-        QShortcut(QKeySequence(Qt.Key.Key_Space), self).activated.connect(self._dispatch_play_pause)
         
-        # Arrow Keys (Frame Step: approx 40ms)
+        QShortcut(QKeySequence(Qt.Key.Key_Space), self).activated.connect(self._dispatch_play_pause)
         QShortcut(QKeySequence(Qt.Key.Key_Left), self).activated.connect(lambda: self._dispatch_seek(-40))
         QShortcut(QKeySequence(Qt.Key.Key_Right), self).activated.connect(lambda: self._dispatch_seek(40))
-        
-        # Ctrl + Arrows (1s Step)
         QShortcut(QKeySequence("Ctrl+Left"), self).activated.connect(lambda: self._dispatch_seek(-1000))
         QShortcut(QKeySequence("Ctrl+Right"), self).activated.connect(lambda: self._dispatch_seek(1000))
-        
-        # Ctrl + Shift + Arrows (5s Step)
         QShortcut(QKeySequence("Ctrl+Shift+Left"), self).activated.connect(lambda: self._dispatch_seek(-5000))
         QShortcut(QKeySequence("Ctrl+Shift+Right"), self).activated.connect(lambda: self._dispatch_seek(5000))
-
-        # --- 4. Annotation Actions ---
-        # A: Add Annotation (Context Aware)
-        QShortcut(QKeySequence("A"), self).activated.connect(self._dispatch_add_annotation)
         
-        # S: Set Time (Edit Context)
+        QShortcut(QKeySequence("A"), self).activated.connect(self._dispatch_add_annotation)
         QShortcut(QKeySequence("S"), self).activated.connect(lambda: self.show_temp_msg("Info", "Select an event and Edit Time via Right-click."))
 
-    # =========================================================
-    #  Context Dispatchers (Handle Logic based on Active Mode)
-    # =========================================================
-    
     def _is_loc_mode(self):
         return self.ui.stack_layout.currentWidget() == self.ui.localization_ui
 
@@ -168,25 +141,20 @@ class ActionClassifierApp(QMainWindow):
             self.router.class_fm.export_json()
 
     def _dispatch_play_pause(self):
-        # 获取当前应该控制的播放器
         if self._is_loc_mode():
-            # Localization Mode Player
             player = self.loc_manager.center_panel.media_preview.player
             if player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
                 player.pause()
             else:
                 player.play()
         else:
-            # Classification Mode Player (managed via NavigationManager for safety)
             self.nav_manager.play_video()
 
     def _dispatch_seek(self, delta_ms):
-        # 获取当前播放器
         player = None
         if self._is_loc_mode():
             player = self.loc_manager.center_panel.media_preview.player
         else:
-            # In Classification, center panel uses single_view_widget
             player = self.ui.center_panel.single_view_widget.player
             
         if player:
@@ -195,20 +163,13 @@ class ActionClassifierApp(QMainWindow):
 
     def _dispatch_add_annotation(self):
         if self._is_loc_mode():
-            # Localization: Trigger "Add New Label" on the currently selected tab
-            # 这对应于我们刚刚修改的逻辑：暂停 -> 弹窗添加 -> 恢复
             current_head = self.loc_manager.current_head
             if current_head:
                 self.loc_manager._on_label_add_req(current_head)
             else:
                 self.show_temp_msg("Warning", "No Head/Category selected.", icon=QMessageBox.Icon.Warning)
         else:
-            # Classification: Equivalent to clicking "Confirm"
             self.annot_manager.save_manual_annotation()
-
-    # =========================================================
-    #  Existing Methods (Unchanged)
-    # =========================================================
 
     def _on_class_clear_clicked(self):
         if not self.model.json_loaded and not self.model.action_item_data: return
@@ -230,8 +191,8 @@ class ActionClassifierApp(QMainWindow):
     def check_and_close_current_project(self):
         if self.model.json_loaded:
             msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("Open New Project")
-            msg_box.setText("Opening a new project will clear the current workspace. Continue?")
+            msg_box.setWindowTitle("Close Project")
+            msg_box.setText("Opening a new project or closing will clear the current workspace. Continue?")
             msg_box.setIcon(QMessageBox.Icon.Warning)
             if self.model.is_data_dirty:
                 msg_box.setInformativeText("You have unsaved changes in the current project.")
@@ -291,14 +252,24 @@ class ActionClassifierApp(QMainWindow):
         can_export = self.model.json_loaded and has_data
         can_save = can_export and (self.model.current_json_path is not None) and self.model.is_data_dirty
         
-        self.ui.right_panel.export_btn.setEnabled(can_export)
-        self.ui.right_panel.save_btn.setEnabled(can_save)
+        # Unified Controls for both panels
+        self.ui.left_panel.project_controls.btn_save.setEnabled(can_save)
+        self.ui.left_panel.project_controls.btn_export.setEnabled(can_export)
+        self.ui.localization_ui.left_panel.project_controls.btn_save.setEnabled(can_save)
+        self.ui.localization_ui.left_panel.project_controls.btn_export.setEnabled(can_export)
+        
+        # Classification Right Panel buttons
+        # self.ui.right_panel.export_btn.setEnabled(can_export)
+        # self.ui.right_panel.save_btn.setEnabled(can_save)
         
         can_undo = len(self.model.undo_stack) > 0
         can_redo = len(self.model.redo_stack) > 0
         
-        self.ui.left_panel.undo_btn.setEnabled(can_undo)
-        self.ui.left_panel.redo_btn.setEnabled(can_redo)
+        # Classification now uses Right Panel Undo/Redo
+        self.ui.right_panel.undo_btn.setEnabled(can_undo)
+        self.ui.right_panel.redo_btn.setEnabled(can_redo)
+        
+        # Localization Undo/Redo
         self.ui.localization_ui.right_panel.undo_btn.setEnabled(can_undo)
         self.ui.localization_ui.right_panel.redo_btn.setEnabled(can_redo)
 

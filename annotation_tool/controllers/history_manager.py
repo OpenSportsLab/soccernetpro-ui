@@ -1,11 +1,11 @@
 import copy
 from models import CmdType
-from ui.widgets import DynamicSingleLabelGroup, DynamicMultiLabelGroup
+from ui.classification.widgets import DynamicSingleLabelGroup, DynamicMultiLabelGroup
 
 class HistoryManager:
     """
-    通用历史管理器：负责处理 Undo/Redo 栈的操作。
-    支持 Classification 和 Localization 两种模式。
+    General History Manager: Responsible for handling operations on the Undo/Redo stack.
+    Supports both Classification and Localization modes.
     """
     def __init__(self, main_window):
         self.main = main_window

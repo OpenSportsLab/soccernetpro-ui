@@ -4,6 +4,10 @@ from PyQt6.QtCore import Qt
 from utils import SUPPORTED_EXTENSIONS
 
 class NavigationManager:
+    """
+    Handles file navigation (action tree), adding videos, and playback flow 
+    for the Classification mode.
+    """
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
@@ -11,124 +15,105 @@ class NavigationManager:
 
     def add_items_via_dialog(self):
         """
-        [新增] 允许用户在 Classification 模式下手动添加视频/图片数据。
+        Allows user to add video/image files to the project.
         """
         if not self.model.json_loaded:
             QMessageBox.warning(self.main, "Warning", "Please create or load a project first.")
             return
 
-        # 1. 准备文件过滤器
         filters = "Media Files (*.mp4 *.avi *.mov *.mkv *.jpg *.jpeg *.png *.bmp);;All Files (*)"
-        
-        # 2. 确定起始路径
         start_dir = self.model.current_working_directory or ""
         
-        # 3. 弹出选择框
         files, _ = QFileDialog.getOpenFileNames(self.main, "Select Data to Add", start_dir, filters)
         if not files: return
         
-        # 如果是新建项目且还没有设置工作目录，以第一个文件的目录为准
         if not self.model.current_working_directory:
             self.model.current_working_directory = os.path.dirname(files[0])
 
         added_count = 0
         for file_path in files:
-            # 查重
+            # Duplicate check
             if any(d['path'] == file_path for d in self.model.action_item_data):
                 continue
             
             name = os.path.basename(file_path)
-            
-            # 构建 Classification 需要的数据结构
-            new_item = {
-                'name': name,
-                'path': file_path,
-                'source_files': [file_path]
-            }
-            
-            self.model.action_item_data.append(new_item)
-            self.model.action_path_to_name[file_path] = name
-            
-            # 初始化元数据占位
-            if file_path not in self.model.imported_action_metadata:
-                self.model.imported_action_metadata[file_path] = {}
-            
+            self.model.action_item_data.append({'name': name, 'path': file_path, 'source_files': [file_path]})
+            # Create mapping for quick lookup
+            item = self.ui.left_panel.add_action_item(name, file_path, [file_path])
+            self.model.action_item_map[file_path] = item
             added_count += 1
-        
-        # 4. 刷新界面
+            
         if added_count > 0:
             self.model.is_data_dirty = True
-            self.main.populate_action_tree() 
-            self.main.update_save_export_button_state()
+            self.apply_action_filter()
             self.main.show_temp_msg("Added", f"Added {added_count} items.")
 
-    def on_item_selected(self, current, _):
-        if not current:
-            self.ui.right_panel.manual_box.setEnabled(False)
-            return
-        
-        is_action = (current.childCount() > 0 or current.parent() is None)
-        path = None
-        
-        if is_action:
-            path = current.data(0, Qt.ItemDataRole.UserRole)
-            media = None
-            if current.childCount() > 0:
-                media = current.child(0).data(0, Qt.ItemDataRole.UserRole)
-            self.ui.center_panel.show_single_view(media)
-            self.ui.center_panel.multi_view_btn.setEnabled(True)
-        else:
-            media = current.data(0, Qt.ItemDataRole.UserRole)
-            self.ui.center_panel.show_single_view(media)
-            if current.parent():
-                path = current.parent().data(0, Qt.ItemDataRole.UserRole)
-            self.ui.center_panel.multi_view_btn.setEnabled(False)
-            
-        can_annotate = (path is not None) and self.model.json_loaded
-        self.ui.right_panel.manual_box.setEnabled(can_annotate)
-        if path: 
-            self.main.annot_manager.display_manual_annotation(path)
-
     def remove_single_action_item(self, item):
-        if not item: return
-        target = item if item.parent() is None else item.parent()
-        path = target.data(0, Qt.ItemDataRole.UserRole)
-        name = target.text(0)
+        path = item.data(0, Qt.ItemDataRole.UserRole)
         
-        reply = QMessageBox.question(self.main, 'Remove Item', f"Remove '{name}'? Annotations will be discarded.", 
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            if path in self.model.manual_annotations: del self.model.manual_annotations[path]
-            if path in self.model.action_item_map: del self.model.action_item_map[path]
-            if path in self.model.action_path_to_name: del self.model.action_path_to_name[path]
-            if path in self.model.imported_action_metadata: del self.model.imported_action_metadata[path]
-            self.model.action_item_data = [d for d in self.model.action_item_data if d['path'] != path]
+        # 1. Remove from Data
+        self.model.action_item_data = [d for d in self.model.action_item_data if d['path'] != path]
+        
+        if path in self.model.action_item_map:
+            del self.model.action_item_map[path]
             
-            root = self.ui.left_panel.action_tree.invisibleRootItem()
-            root.removeChild(target)
-            self.model.is_data_dirty = True
-            self.main.update_save_export_button_state()
-            if self.ui.left_panel.action_tree.topLevelItemCount() == 0:
-                self.ui.center_panel.show_single_view(None)
-                self.ui.right_panel.manual_box.setEnabled(False)
+        # 2. Remove Annotation if exists
+        if path in self.model.manual_annotations:
+            del self.model.manual_annotations[path]
+            
+        # 3. Remove from UI
+        index = self.ui.left_panel.action_tree.indexOfTopLevelItem(item)
+        self.ui.left_panel.action_tree.takeTopLevelItem(index)
+        
+        self.model.is_data_dirty = True
+        self.main.show_temp_msg("Removed", "Item removed.")
+        self.main.update_save_export_button_state()
 
-    def apply_action_filter(self):
-        curr = self.ui.left_panel.filter_combo.currentIndex()
-        for path, item in self.model.action_item_map.items():
-            is_done = (path in self.model.manual_annotations and bool(self.model.manual_annotations[path]))
-            if curr == self.main.FILTER_ALL: item.setHidden(False)
-            elif curr == self.main.FILTER_DONE: item.setHidden(not is_done)
-            elif curr == self.main.FILTER_NOT_DONE: item.setHidden(is_done)
-
-    def play_video(self): 
+    def on_item_selected(self, current, previous):
+        """
+        Called when the user clicks a different item in the left tree.
+        Loads the video and forces playback.
+        """
+        if not current: return
+        
+        path = current.data(0, Qt.ItemDataRole.UserRole)
+        
+        # Update Right Panel (Annotations)
+        self.main.annot_manager.display_manual_annotation(path)
+        self.ui.right_panel.manual_box.setEnabled(True)
+        
+        
+        # Update Center Panel (Video)
+        self.ui.center_panel.show_single_view(path)
+        
+        # [Fix] Force play when switching clips
+        # Use QTimer with 0ms to ensure the event loop processes the load before playing
+        self.ui.center_panel.single_view_widget.player.play()
+        
+    def play_video(self):
+        """Toggle Play/Pause"""
         self.ui.center_panel.toggle_play_pause()
 
     def show_all_views(self):
         curr = self.ui.left_panel.action_tree.currentItem()
-        if not curr: return
-        if curr.parent(): curr = curr.parent()
+        if not curr or curr.childCount() == 0: return
         paths = [curr.child(i).data(0, Qt.ItemDataRole.UserRole) for i in range(curr.childCount())]
         self.ui.center_panel.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
+
+    def apply_action_filter(self):
+        """Filters the tree items based on Done/Not Done status."""
+        idx = self.ui.left_panel.filter_combo.currentIndex()
+        root = self.ui.left_panel.action_tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            item = root.child(i)
+            path = item.data(0, Qt.ItemDataRole.UserRole)
+            is_done = (path in self.model.manual_annotations and bool(self.model.manual_annotations[path]))
+            
+            should_hide = False
+            if idx == self.main.FILTER_DONE and not is_done: should_hide = True
+            elif idx == self.main.FILTER_NOT_DONE and is_done: should_hide = True
+            
+            item.setHidden(should_hide)
 
     def nav_prev_action(self): self._nav_tree(step=-1, level='top')
     def nav_next_action(self): self._nav_tree(step=1, level='top')
@@ -141,15 +126,23 @@ class NavigationManager:
         if not curr: return
         
         if level == 'top':
+            # Navigate Top Level Items
             item = curr if curr.parent() is None else curr.parent()
             idx = tree.indexOfTopLevelItem(item)
             new_idx = idx + step
-            if 0 <= new_idx < tree.topLevelItemCount():
+            
+            # Find next visible item (respecting filter)
+            while 0 <= new_idx < tree.topLevelItemCount():
                 nxt = tree.topLevelItem(new_idx)
-                tree.setCurrentItem(nxt); tree.scrollToItem(nxt)
+                if not nxt.isHidden():
+                    tree.setCurrentItem(nxt); tree.scrollToItem(nxt)
+                    break
+                new_idx += step
         else:
+            # Navigate Children (if applicable)
             parent = curr.parent()
             if not parent:
+                # If currently on top level, try to go to child
                 if step == 1 and curr.childCount() > 0:
                     nxt = curr.child(0)
                     tree.setCurrentItem(nxt); tree.scrollToItem(nxt)

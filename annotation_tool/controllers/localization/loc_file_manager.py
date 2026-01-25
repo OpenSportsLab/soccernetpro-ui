@@ -1,9 +1,12 @@
 import os
 import json
+
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from PyQt6.QtCore import QUrl
+
 from utils import natural_sort_key
-from dialogs import CreateProjectDialog  # [导入]
+from dialogs import CreateProjectDialog  # import
+
 
 class LocFileManager:
     def __init__(self, main_window):
@@ -13,89 +16,104 @@ class LocFileManager:
 
     def create_new_project(self):
         """
-        [新增] 创建新的 Localization 项目
+        Create a new Localization project.
         """
-        # 1. 检查当前项目是否需要保存
+        # 1) Check whether the current project needs to be saved/closed
         if not self.main.check_and_close_current_project():
             return
 
-        # 2. 弹出创建对话框，指定类型为 localization
+        # 2) Pop up the creation dialog, with project_type="localization"
         dlg = CreateProjectDialog(self.main, project_type="localization")
-        
+
         if dlg.exec():
-            # 3. 清空现有工作区
+            # 3) Clear the existing workspace
             self._clear_workspace(full_reset=True)
-            
-            # 4. 获取用户配置
+
+            # 4) Get user configuration from the dialog
             data = dlg.get_data()
-            
-            # 5. 初始化 Model
-            self.model.current_task_name = data['task']
-            self.model.project_description = data['description']
-            self.model.modalities = data['modalities']
-            self.model.label_definitions = data['labels']
-            
-            # 设置 Localization 模式下的状态
-            self.model.current_working_directory = None 
-            self.model.current_json_path = None         
-            self.model.json_loaded = True               
-            self.model.is_data_dirty = True             
-            
-            # 6. 刷新 Localization UI
-            # 更新右侧 Schema
+
+            # 5) Initialize model fields
+            self.model.current_task_name = data["task"]
+            self.model.project_description = data["description"]
+            self.model.modalities = data["modalities"]
+            self.model.label_definitions = data["labels"]
+
+            # Set Localization-mode states
+            self.model.current_working_directory = None
+            self.model.current_json_path = None
+            self.model.json_loaded = True
+            self.model.is_data_dirty = True
+
+            # 6) Refresh Localization UI
+            # Update the schema on the right panel
             self.main.loc_manager.right_panel.annot_mgmt.update_schema(self.model.label_definitions)
-            
-            # 自动选择第一个 Head
+
+            # Auto-select the first head (if any)
             if self.model.label_definitions:
                 first_head = list(self.model.label_definitions.keys())[0]
                 self.main.loc_manager.current_head = first_head
                 self.main.loc_manager.right_panel.annot_mgmt.tabs.set_current_head(first_head)
 
-            # 刷新左侧树 (空)
+            # Refresh the left tree (empty at creation time)
             self.main.loc_manager.populate_tree()
-            
-            # 7. 切换视图
+
+            # 7) Switch view
             self.main.ui.show_localization_view()
             self.main.update_save_export_button_state()
-            
+
             self.main.show_temp_msg("Project Created", f"Task: {self.model.current_task_name}")
 
     def load_project(self, data, file_path):
         """
-        加载 Localization 项目。
-        返回: Boolean (True 表示加载成功，False 表示失败或取消)
+        Load a Localization project.
+
+        Returns:
+            bool: True if loaded successfully; False if failed or canceled.
         """
-        if hasattr(self.model, 'validate_loc_json'):
+        # Validate JSON if the model provides a validator
+        if hasattr(self.model, "validate_loc_json"):
             is_valid, error_msg, warning_msg = self.model.validate_loc_json(data)
-            
+
             if not is_valid:
-                if len(error_msg) > 800: error_msg = error_msg[:800] + "\n... (truncated)"
-                QMessageBox.critical(self.main, "Validation Error", f"Critical errors found in JSON. Load aborted.\n\n{error_msg}")
+                if len(error_msg) > 800:
+                    error_msg = error_msg[:800] + "\n... (truncated)"
+                QMessageBox.critical(
+                    self.main,
+                    "Validation Error",
+                    "Critical errors found in JSON. Load aborted.\n\n" + error_msg,
+                )
                 return False
 
             if warning_msg:
-                if len(warning_msg) > 800: warning_msg = warning_msg[:800] + "\n... (truncated)"
+                if len(warning_msg) > 800:
+                    warning_msg = warning_msg[:800] + "\n... (truncated)"
                 res = QMessageBox.warning(
                     self.main,
                     "Validation Warnings",
-                    f"The file contains warnings:\n\n{warning_msg}\n\nDo you want to continue loading?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    "The file contains warnings:\n\n"
+                    + warning_msg
+                    + "\n\nDo you want to continue loading?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 )
                 if res != QMessageBox.StandardButton.Yes:
                     return False
 
+        # Clear workspace before loading
         self._clear_workspace(full_reset=True)
-        
+
         project_root = os.path.dirname(os.path.abspath(file_path))
         self.model.current_working_directory = project_root
-        
-        self.model.current_task_name = data.get('dataset_name', data.get('task', "Localization Task"))
-        self.model.modalities = data.get('modalities', ['video']) 
-        
-        if 'labels' in data:
-            self.model.label_definitions = data['labels']
+
+        # Basic metadata
+        self.model.current_task_name = data.get("dataset_name", data.get("task", "Localization Task"))
+        self.model.modalities = data.get("modalities", ["video"])
+
+        # Labels / schema
+        if "labels" in data:
+            self.model.label_definitions = data["labels"]
             self.main.loc_manager.right_panel.annot_mgmt.update_schema(self.model.label_definitions)
-            
+
+            # Choose a reasonable default head
             default_head = None
             if "ball_action" in self.model.label_definitions:
                 default_head = "ball_action"
@@ -103,108 +121,137 @@ class LocFileManager:
                 default_head = "action"
             elif list(self.model.label_definitions.keys()):
                 default_head = list(self.model.label_definitions.keys())[0]
-            
+
             if default_head:
                 self.main.loc_manager.current_head = default_head
                 self.main.loc_manager.right_panel.annot_mgmt.tabs.set_current_head(default_head)
-        
+
         missing_files = []
         loaded_count = 0
-        
-        for item in data.get('data', []):
-            inputs = item.get('inputs', [])
-            if not inputs or not isinstance(inputs, list): continue
-            
-            raw_path = inputs[0].get('path', '')
-            aid = item.get('id')
+
+        # Load items (clips) and events
+        for item in data.get("data", []):
+            inputs = item.get("inputs", [])
+            if not inputs or not isinstance(inputs, list):
+                continue
+
+            raw_path = inputs[0].get("path", "")
+            aid = item.get("id")
             if not aid:
                 aid = os.path.splitext(os.path.basename(raw_path))[0]
 
-            final_path = raw_path 
-            
+            final_path = raw_path
+
+            # Resolve path:
+            # 1) If it's an absolute existing path, use it directly
+            # 2) Otherwise try to resolve relative to the project root
+            # 3) If still not found, try "flattened" resolution (project_root + filename)
             if os.path.isabs(raw_path) and os.path.exists(raw_path):
                 final_path = raw_path
             else:
-                norm_raw = raw_path.replace('\\', '/')
+                norm_raw = raw_path.replace("\\", "/")
                 abs_path_strict = os.path.normpath(os.path.join(project_root, norm_raw))
-                
+
                 if os.path.exists(abs_path_strict):
                     final_path = abs_path_strict
                 else:
-                    filename = os.path.basename(norm_raw) 
+                    filename = os.path.basename(norm_raw)
                     abs_path_flat = os.path.join(project_root, filename)
-                    
+
                     if os.path.exists(abs_path_flat):
                         final_path = abs_path_flat
                     else:
+                        # Keep the best guess for display/reference, but record as missing
                         final_path = abs_path_strict
                         missing_files.append(f"{aid}: {filename}")
 
-            self.model.action_item_data.append({
-                'name': aid, 'path': final_path, 'source_files': [final_path]
-            })
+            # Register clip in the model
+            self.model.action_item_data.append(
+                {"name": aid, "path": final_path, "source_files": [final_path]}
+            )
             self.model.action_path_to_name[final_path] = aid
-            
-            raw_events = item.get('events', [])
+
+            # Process events
+            raw_events = item.get("events", [])
             processed_events = []
-            
+
             if isinstance(raw_events, list):
                 for evt in raw_events:
-                    if not isinstance(evt, dict): continue
+                    if not isinstance(evt, dict):
+                        continue
                     try:
-                        pos_ms = int(evt.get('position_ms', 0))
+                        pos_ms = int(evt.get("position_ms", 0))
                     except ValueError:
                         pos_ms = 0
-                    
-                    new_evt = {
-                        "head": evt.get('head', 'action'),
-                        "label": evt.get('label', '?'),
-                        "position_ms": pos_ms
-                    }
-                    processed_events.append(new_evt)
+
+                    processed_events.append(
+                        {
+                            "head": evt.get("head", "action"),
+                            "label": evt.get("label", "?"),
+                            "position_ms": pos_ms,
+                        }
+                    )
 
             if processed_events:
                 self.model.localization_events[final_path] = processed_events
-            
+
             loaded_count += 1
 
+        # Update model status after loading
         self.model.current_json_path = file_path
         self.model.json_loaded = True
-        
+
+        # Refresh UI tree
         self.main.loc_manager.populate_tree()
-        
+
+        # Report missing files (if any)
         if missing_files:
             shown_missing = missing_files[:5]
-            msg = f"Loaded {loaded_count} clips.\n\nWARNING: {len(missing_files)} videos not found locally:\n" + "\n".join(shown_missing)
-            if len(missing_files) > 5: msg += "\n..."
+            msg = (
+                f"Loaded {loaded_count} clips.\n\n"
+                f"WARNING: {len(missing_files)} videos not found locally:\n"
+                + "\n".join(shown_missing)
+            )
+            if len(missing_files) > 5:
+                msg += "\n..."
             QMessageBox.warning(self.main, "Load Warning", msg)
         else:
-            # [修改] 使用 show_temp_msg 并设置 5000ms (5秒) 延迟
-            # 这个消息框会自动显示5秒，期间可以不点击，5秒后自动关闭并进入下一界面
+            # Show a short info toast (1.5s)
             self.main.show_temp_msg(
-                "Mode Switched", 
+                "Mode Switched",
                 f"Successfully loaded {loaded_count} clips.\n\nCurrent Mode: LOCALIZATION",
-                duration=5000,
-                icon=QMessageBox.Icon.Information
+                duration=1500,
+                icon=QMessageBox.Icon.Information,
             )
-            
+
         return True
 
     def overwrite_json(self):
+        """
+        Overwrite the current JSON if a path exists; otherwise fall back to export.
+        """
         if self.model.current_json_path:
             return self._write_json(self.model.current_json_path)
         return self.export_json()
 
     def export_json(self):
-        path, _ = QFileDialog.getSaveFileName(self.main, "Export Localization JSON", "", "JSON (*.json)")
+        """
+        Export Localization JSON to a user-selected file path.
+        """
+        path, _ = QFileDialog.getSaveFileName(
+            self.main, "Export Localization JSON", "", "JSON (*.json)"
+        )
         if path:
             if self._write_json(path):
-                self.model.current_json_path = path 
+                self.model.current_json_path = path
                 self.model.is_data_dirty = False
                 return True
         return False
 
     def _write_json(self, path):
+        """
+        Write the current Localization project state into a JSON file.
+        """
         output = {
             "version": "2.0",
             "date": "2025-12-16",
@@ -212,46 +259,55 @@ class LocFileManager:
             "dataset_name": self.model.current_task_name,
             "metadata": {
                 "source": "Annotation Tool Export",
-                "created_by": "User"
+                "created_by": "User",
             },
             "labels": self.model.label_definitions,
-            "data": []
+            "data": [],
         }
-        
+
         base_dir = os.path.dirname(path)
-        sorted_items = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get('name', '')))
-        
+        sorted_items = sorted(
+            self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", ""))
+        )
+
         for data in sorted_items:
-            abs_path = data['path']
+            abs_path = data["path"]
             events = self.model.localization_events.get(abs_path, [])
-            
+
+            # Store path as relative if possible (portable exports)
             try:
-                rel_path = os.path.relpath(abs_path, base_dir).replace(os.sep, '/')
-            except:
+                rel_path = os.path.relpath(abs_path, base_dir).replace(os.sep, "/")
+            except Exception:
                 rel_path = abs_path
-                
+
+            # Convert events to export format
             export_events = []
             for e in events:
-                export_events.append({
-                    "head": e.get('head'),
-                    "label": e.get('label'),
-                    "position_ms": str(e.get('position_ms')) 
-                })
+                export_events.append(
+                    {
+                        "head": e.get("head"),
+                        "label": e.get("label"),
+                        # Keep as string to match your existing JSON format
+                        "position_ms": str(e.get("position_ms")),
+                    }
+                )
 
             entry = {
-                "inputs": [{
-                    "type": "video",
-                    "path": rel_path,
-                    "fps": 25.0 
-                }],
-                "events": export_events
+                "inputs": [
+                    {
+                        "type": "video",
+                        "path": rel_path,
+                        "fps": 25.0,
+                    }
+                ],
+                "events": export_events,
             }
             output["data"].append(entry)
-            
+
         try:
-            with open(path, 'w', encoding='utf-8') as f:
+            with open(path, "w", encoding="utf-8") as f:
                 json.dump(output, f, indent=4, ensure_ascii=False)
-            
+
             self.model.is_data_dirty = False
             self.main.show_temp_msg("Saved", f"Saved to {os.path.basename(path)}")
             return True
@@ -260,12 +316,26 @@ class LocFileManager:
             return False
 
     def _clear_workspace(self, full_reset=False):
-        if hasattr(self.main, 'loc_manager'):
+        """
+        Clear UI panels and reset the model state.
+
+        Args:
+            full_reset (bool): If True, also switch back to the welcome view.
+        """
+        if hasattr(self.main, "loc_manager"):
+            # Left panel: clear clip tree
             self.main.loc_manager.left_panel.clip_tree.clear()
+
+            # Center panel: stop media preview and clear source
             self.main.loc_manager.center_panel.media_preview.stop()
             self.main.loc_manager.center_panel.media_preview.player.setSource(QUrl())
+
+            # Right panel: clear table
             self.main.loc_manager.right_panel.table.set_data([])
-            
+
+        # Reset model data
         self.model.reset(full_reset)
+
+        # Optionally show welcome screen
         if full_reset:
             self.main.ui.show_welcome_view()

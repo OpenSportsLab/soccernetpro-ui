@@ -1,43 +1,43 @@
 import json
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
-# 导入两个专属的文件管理器
 from controllers.classification.class_file_manager import ClassFileManager
 from controllers.localization.loc_file_manager import LocFileManager
-from dialogs import ProjectTypeDialog  # [导入]
+from dialogs import ProjectTypeDialog
 
 class AppRouter:
     """
-    负责应用的入口路由：
-    1. 打开 JSON 文件 / 创建新项目
-    2. 判断是 Classification 还是 Localization
-    3. 将控制权移交给对应的专用管理器
+    Handles application entry points and routing:
+    1. Open JSON / Create New Project
+    2. Determine Mode (Classification vs Localization)
+    3. Delegate to specific Managers
+    4. Handle Project Closure
     """
     def __init__(self, main_window):
         self.main = main_window
-        # 初始化两个专用的文件管理器
         self.class_fm = ClassFileManager(main_window)
         self.loc_fm = LocFileManager(main_window)
 
     def create_new_project_flow(self):
         """
-        [新增] 创建新项目的统一入口流程
+        Unified entry point for creating a new project.
         """
-        # 1. 弹出类型选择框
+        # 1. Ask user for project type
         dlg = ProjectTypeDialog(self.main)
         if dlg.exec():
             mode = dlg.selected_mode
             
-            # 2. 根据选择分发到对应的 Manager
+            # 2. Delegate to specific manager logic
+            # Note: Managers should handle 'check_and_close_current_project' internally
             if mode == "classification":
-                # 调用 Classification 的创建流程 (它内部会处理 check_and_close)
                 self.class_fm.create_new_project()
                 
             elif mode == "localization":
-                # 调用 Localization 的创建流程
                 self.loc_fm.create_new_project()
 
     def import_annotations(self):
-        # 全局入口
+        """
+        Global entry point for loading a JSON file.
+        """
         if not self.main.check_and_close_current_project(): return
         
         file_path, _ = QFileDialog.getOpenFileName(self.main, "Select Project JSON", "", "JSON Files (*.json)")
@@ -56,27 +56,39 @@ class AppRouter:
             self.main.ui.show_classification_view()
             
         elif json_type == "localization":
-            # 检查返回值
             if self.loc_fm.load_project(data, file_path):
                 self.main.ui.show_localization_view()
             
         else:
             QMessageBox.critical(self.main, "Error", "Unknown JSON format.")
 
+    def close_project(self):
+        """
+        [New] Handles closing the current project and returning to the Welcome Screen.
+        """
+        # 1. Check for unsaved changes
+        if not self.main.check_and_close_current_project():
+            return
+
+        # 2. Clear workspaces (both just in case, or check current mode)
+        # Using full_reset=True ensures models are wiped
+        self.class_fm._clear_workspace(full_reset=True)
+        self.loc_fm._clear_workspace(full_reset=True)
+
+        # 3. Return to Welcome Screen
+        self.main.ui.show_welcome_view()
+        self.main.show_temp_msg("Project Closed", "Returned to Home Screen", duration=1000)
+
     def _detect_json_type(self, data):
         items = data.get("data", [])
         first = items[0] if items else {}
 
-        # 1) 先判定“样本级 labels” => classification
+        # 1) Classification check
         if isinstance(first, dict) and "labels" in first:
             return "classification"
 
-        # 2) 再判定“事件 events” => localization
+        # 2) Localization check
         if isinstance(first, dict) and "events" in first:
             return "localization"
             
-        # 3) 兜底：根据顶层 labels 结构判断（可选）
-        if "labels" in data:
-            pass
-
         return "unknown"

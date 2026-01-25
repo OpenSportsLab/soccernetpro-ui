@@ -11,7 +11,7 @@ from utils import get_square_remove_btn_style
 
 class ProjectTypeDialog(QDialog):
     """
-    Choose the event Type (Classification vs Localization)
+     (Classification vs Localization)
     """
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -218,7 +218,7 @@ class CreateProjectDialog(QDialog):
         # Case-insensitive check
         if any(l.lower() == txt.lower() for l in self.current_head_labels):
             QMessageBox.warning(self, "Duplicate Label", f"Label '{txt}' already exists (case-insensitive)!")
-            self.label_input.selectAll() # 全选文本方便用户修改
+            self.label_input.selectAll() 
             return 
             
         self.current_head_labels.append(txt)
@@ -299,7 +299,7 @@ class CreateProjectDialog(QDialog):
         h.addWidget(info_label)
         h.addStretch()
         
-        # [修改] 使用垃圾桶图标样式，与主界面右侧栏保持一致
+
         rem_btn = QPushButton()
         rem_btn.setFixedSize(24, 24)
         rem_btn.setFlat(True)
@@ -344,7 +344,7 @@ class CreateProjectDialog(QDialog):
             "labels": self.final_categories
         }
 
-# --- FolderPickerDialog 保持不变 ---
+# --- FolderPickerDialog  ---
 class FolderPickerDialog(QDialog):
     """Custom Folder Picker (Multi-Select without Ctrl)."""
     def __init__(self, initial_dir="", parent=None):
