@@ -64,7 +64,7 @@ class TimelineWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # 整体高度
+        # Overall height
         self.setFixedHeight(60)
         
         main_layout = QVBoxLayout(self)
@@ -83,7 +83,7 @@ class TimelineWidget(QWidget):
         timeline_row.setContentsMargins(5, 0, 5, 0)
         timeline_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        # 按钮样式
+        # Button Style
         btn_style = """
             QPushButton { 
                 background-color: #444; color: white; border: 1px solid #555; 
@@ -108,31 +108,31 @@ class TimelineWidget(QWidget):
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
-        # [修改] 增大滚动条高度，方便拖动
+        # Increase the scrollbar height for easier dragging.
         self.scroll_area.setStyleSheet("""
             QScrollArea { background: transparent; }
             QScrollBar:horizontal {
                 border: none;
                 background: #222;
-                height: 12px;  /* [修改] 从 4px 增加到 12px */
+                height: 12px;  /* from 4px to 12px */
                 margin: 0px;
                 border-radius: 6px;
             }
             QScrollBar::handle:horizontal {
                 background: #666;
                 min-width: 20px;
-                border-radius: 6px; /* [修改] 圆角调整 */
+                border-radius: 6px; /* Modify Rounded Corner Adjustment */
             }
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
         """)
 
-        # 监听底部滚动条操作
+        # Monitor bottom scrollbar operations
         self.scroll_bar = self.scroll_area.horizontalScrollBar()
         self.scroll_bar.sliderPressed.connect(self._on_user_scroll_start)
         self.scroll_bar.sliderReleased.connect(self._on_user_scroll_end)
 
         self.slider = AnnotationSlider(Qt.Orientation.Horizontal)
-        # 样式表：定义了红色把手的外观
+        # Style Sheet: Defines the appearance of the red handle
         self.slider.setStyleSheet("""
             QSlider::groove:horizontal {
                 border: 1px solid #3A3A3A;
@@ -175,7 +175,7 @@ class TimelineWidget(QWidget):
         self.is_dragging = False 
         self.user_is_scrolling = False 
         self.zoom_level = 1.0
-        self.auto_scroll_active = True # 控制自动跟随
+        self.auto_scroll_active = True # Control Auto-Follow
     
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -302,7 +302,7 @@ class AnnotationSlider(QSlider):
         self.markers = []
 
     def paintEvent(self, event):
-        # 1. 先调用系统绘制（画轨道和系统自带的 Handle）
+        # 1.  Call the system drawing function.
         super().paintEvent(event)
         
         if not self.markers or self.maximum() <= 0: return
@@ -313,14 +313,14 @@ class AnnotationSlider(QSlider):
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
         
-        # 获取轨道和把手的几何区域
+        # Obtain the geometric regions of the track and handle
         groove = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
         handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
         
         available_width = groove.width()
         x_offset = groove.x()
         
-        # 2. 绘制事件标记 (覆盖在系统把手上)
+        # 2. Draw event markers (overlaying system handles)
         for m in self.markers:
             start_ms = m.get('start_ms', 0)
             ratio = start_ms / self.maximum()
@@ -330,7 +330,7 @@ class AnnotationSlider(QSlider):
             painter.setPen(QPen(c, 2))
             painter.drawLine(x, groove.top() - 2, x, groove.bottom() + 2)
 
-        # 3. 手动再绘制一次红色把手 (覆盖在标记上)
+        # 3. Manually redraw the red handle (overlaying the mark)
         painter.setPen(QPen(QColor("#FF3333"), 1))
         painter.setBrush(QColor("#FF3333"))
         painter.drawRoundedRect(handle_rect, 4, 4)
@@ -374,7 +374,6 @@ class PlaybackControlBar(QWidget):
         btn_prev_ann.clicked.connect(lambda: self.nextPrevAnnotRequested.emit(-1))
         r2.addWidget(btn_prev_ann)
         
-        # [修改] 添加了 4.0 倍速
         speeds = [0.25, 0.5, 1.0, 2.0, 4.0]
         for s in speeds:
             b = QPushButton(f"{s}x")
