@@ -1,46 +1,77 @@
 QWidget {
-    background-color: #2E2E2E; color: #F0F0F0;
-    font-family: Arial, sans-serif; font-size: 14px;
+    background-color: #2E2E2E;
+    color: #F0F0F0;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
 }
+
 QLabel#titleLabel {
-    font-size: 18px; font-weight: bold; padding-bottom: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    padding-bottom: 10px;
     border-bottom: 2px solid #555;
 }
+
 QLabel#subtitleLabel {
-    font-size: 16px; font-weight: bold; color: #00AACC;
+    font-size: 16px;
+    font-weight: bold;
+    color: #00AACC;
     padding-top: 10px;
 }
+
 QPushButton {
     background-color: #555;
-border: 1px solid #666;
-    padding: 8px; border-radius: 4px;
+    border: 1px solid #666;
+    padding: 8px;
+    border-radius: 4px;
 }
-QPushButton:hover { background-color: #666; }
-QPushButton:pressed { background-color: #444;
+
+QPushButton:hover {
+    background-color: #666;
 }
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
 QPushButton#startButton {
-    background-color: #007ACC; font-size: 16px; font-weight: bold;
+    background-color: #007ACC;
+    font-size: 16px;
+    font-weight: bold;
 }
-QPushButton#startButton:hover { background-color: #008AE6;
+
+QPushButton#startButton:hover {
+    background-color: #008AE6;
 }
+
 QPushButton:disabled {
     background-color: #4A5864;
 }
+
 QTreeWidget {
-    background-color: #3C3C3C; border: 1px solid #555;
-}
-QHeaderView::section {
-    background-color: #555; padding: 4px;
-    border: 1px solid #666; font-weight: bold;
-}
-QProgressBar {
-    border-radius: 5px; text-align: center; color: white;
-}
-QProgressBar::chunk {
-    background-color: #007ACC; border-radius: 5px;
+    background-color: #3C3C3C;
+    border: 1px solid #555;
 }
 
-/* --- 新增的样式 --- */
+QHeaderView::section {
+    background-color: #555;
+    padding: 4px;
+    border: 1px solid #666;
+    font-weight: bold;
+}
+
+QProgressBar {
+    border-radius: 5px;
+    text-align: center;
+    color: white;
+}
+
+QProgressBar::chunk {
+    background-color: #007ACC;
+    border-radius: 5px;
+}
+
+/* --- Additional styles --- */
 
 QGroupBox {
     font-size: 16px;
@@ -49,36 +80,38 @@ QGroupBox {
     background-color: #3C3C3C;
     border: 1px solid #555;
     border-radius: 4px;
-    margin-top: 10px; /* 为标题留出空间 */
+    margin-top: 10px; /* Leave space for the title bar */
 }
 
-/* QGroupBox 的标题和复选框 */
+/* GroupBox title + checkable toggle */
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 5px 25px; /* 增加左边距以容纳指示器 */
+    padding: 5px 25px; /* Extra left padding to make room for the indicator */
     background-color: #4A4A4A;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
     border-bottom: 1px solid #555;
 }
 
-/* QGroupBox 的复选框指示器 (折叠/展开) */
+/* Checkable indicator (collapse/expand) */
 QGroupBox::indicator {
     width: 18px;
     height: 18px;
-    /* 放置在标题的左侧 */
+    /* Positioned on the left side of the title */
     position: absolute;
     left: 5px;
     top: 5px;
 }
-QGroupBox::indicator:unchecked { 
-    /* "折叠" 状态 (指向右侧) */
-    image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABvSURBVDhPzZAxCgAgDAQhR/f+V80hgkWsUBsLs3/cqiDgBYH4xBcBvjFpFiQbka0cDDc720BKKcmyLFMvSZIyIfO9Evf1k9Tf8zDVB80wzPM8WlW1lQJwni8AJZJk7QAVVTWtqhYAz/NJkiRbAWoOQMbDDB3iAAAAAElFTkSuQmCC); 
+
+QGroupBox::indicator:unchecked {
+    /* Collapsed state (arrow pointing right) */
+    image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABvSURBVDhPzZAxCgAgDAQhR/f+V80hgkWsUBsLs3/cqiDgBYH4xBcBvjFpFiQbka0cDDc720BKKcmyLFMvSZIyIfO9Evf1k9Tf8zDVB80wzPM8WlW1lQJwni8AJZJk7QAVVTWtqhYAz/NJkiRbAWoOQMbDDB3iAAAAAElFTkSuQmCC);
 }
-QGroupBox::indicator:checked { 
-    /* "展开" 状态 (指向下方) */
-    image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABqSURBVDhPzYxBCgAwCAOj+/+vbZCKIpA5NFAuTcsxZJk/YgkB8YkmAHzjeZ4lSZIsqyopZYrleZ7d+wP3rNcANE0biqL8m0EQFIVRWKu1xBABvO8/SlJERAQhBL/vH0EQEiL+N4FmBt0L2dOkAAAAAElFTkSuQmCC); 
+
+QGroupBox::indicator:checked {
+    /* Expanded state (arrow pointing down) */
+    image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABqSURBVDhPzYxBCgAwCAOj+/+vbZCKIpA5NFAuTcsxZJk/YgkB8YkmAHzjeZ4lSZIsqyopZYrleZ7d+wP3rNcANE0biqL8m0EQFIVRWKu1xBABvO8/SlJERAQhBL/vH0EQEiL+N4FmBt0L2dOkAAAAAElFTkSuQmCC);
 }
 
 QRadioButton {
@@ -91,61 +124,53 @@ QRadioButton::indicator {
     height: 16px;
 }
 
-/* --- 这部分是您缺失的关键功能 --- */
-
-/* * 当 QGroupBox 可勾选 且 未被选中 (折叠状态) 时
- * 选择其内部的内容容器 (QWidget) 
+/* --- Collapsible GroupBox behavior --- */
+/*
+ * When a QGroupBox is checkable and unchecked (collapsed),
+ * hide the internal content widget by forcing its max-height to 0
+ * and stripping spacing so it fully disappears.
  */
 QGroupBox::checkable:!checked > QWidget {
-    /* 将其最大高度设为0, 从而隐藏它 */
     max-height: 0px;
-
-    /* 同样移除边距、内边距和边框，使其完全消失 */
     margin: 0;
     padding: 0;
     border: none;
 }
 
-/* * 当 QGroupBox 可勾选 且 被选中 (展开状态) 时 
- * 恢复其内部内容容器 (QWidget)
+/*
+ * When a QGroupBox is checkable and checked (expanded),
+ * restore a sufficiently large max-height so content becomes visible.
  */
 QGroupBox::checkable:checked > QWidget {
-    /* 恢复其最大高度 (设一个足够大的值) */
     max-height: 9999px;
-    
-    /* (可选) 您可以在这里恢复展开时想要的内边距 */
-    /* padding: 10px; */ 
+    /* Optional: add padding for the expanded content area */
+    /* padding: 10px; */
 }
 
-
-
-/* --- QSlider 样式调整 --- */
+/* --- QSlider styling --- */
 
 QSlider::groove:horizontal {
-    /* 轨道（Groove）的样式 */
     border: 1px solid #555;
-    height: 6px; /* 轨道高度 (粗细) */
+    height: 6px; /* Track thickness */
     background: #444;
     margin: 2px 0;
     border-radius: 3px;
 }
 
 QSlider::handle:horizontal {
-    /* 节点（Handle）的样式 */
-    background: #f2f6f8ff; /* 节点颜色 */
+    background: #f2f6f8ff;
     border: 1px solid #005699;
-    width: 12px;  /* 节点宽度 (大小) */
-    height: 12px; /* 节点高度 (大小) */
-    margin: -4px 0; /* 垂直居中 */
-    border-radius: 6px; /* 使节点呈圆形 */
+    width: 12px;   /* Handle size */
+    height: 12px;  /* Handle size */
+    margin: -4px 0; /* Vertically center the handle */
+    border-radius: 6px; /* Circular handle */
 }
 
 QSlider::handle:horizontal:hover {
-    background: #00AACC; /* 悬停颜色 */
+    background: #00AACC;
 }
 
 QSlider::sub-page:horizontal {
-    /* 已经走过的轨道部分 */
-    background: #007ACC;
+    background: #007ACC; /* Filled portion */
     border-radius: 3px;
 }
