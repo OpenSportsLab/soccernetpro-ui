@@ -38,16 +38,15 @@ jobs:
           try { pip cache purge } catch { Write-Host "pip cache purge failed (ignored)" }
 
       - name: Build exe
-        # Explanation of --add-data:
-        # 1. "ui;ui": Copies the entire ui folder structure so imports work.
-        # 2. "style.qss;style": Copies style.qss from root to a folder named 'style' inside the app.
-        #    (This ensures utils.py finds it if it looks for os.path.join('style', 'style.qss'))
+        # Windows add-data separator is ';'
+        # We bundle the whole folders: style/, ui/, controllers/
+        shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --windowed --onefile `
+          python -m PyInstaller --noconfirm --clean --windowed --onefile `
             --name "SoccerNetProAnalyzer" `
+            --add-data "style;style" `
             --add-data "ui;ui" `
-            --add-data "style.qss;style" `
-            --add-data "style_day.qss;style" `
+            --add-data "controllers;controllers" `
             "main.py"
 
       - name: Upload artifact (manual runs only)
@@ -81,14 +80,14 @@ jobs:
           rm -rf build dist *.spec
           pip cache purge || true
 
-      - name: Build binary
-        # Separator for add-data is ':' on macOS/Linux
+      - name: Build app
+        # macOS add-data separator is ':'
         run: |
-          pyinstaller --noconfirm --clean --windowed --onefile \
+          python -m PyInstaller --noconfirm --clean --windowed \
             --name "SoccerNetProAnalyzer" \
+            --add-data "style:style" \
             --add-data "ui:ui" \
-            --add-data "style.qss:style" \
-            --add-data "style_day.qss:style" \
+            --add-data "controllers:controllers" \
             "main.py"
 
       - name: Upload artifact (manual runs only)
@@ -96,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-macOS
-          path: annotation_tool/dist/SoccerNetProAnalyzer
+          path: annotation_tool/dist/SoccerNetProAnalyzer.app
           retention-days: 3
 
   build-linux:
@@ -128,13 +127,13 @@ jobs:
           pip cache purge || true
 
       - name: Build binary
-        # Separator for add-data is ':' on Linux
+        # Linux add-data separator is ':'
         run: |
-          pyinstaller --noconfirm --clean --windowed --onefile \
+          python -m PyInstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
+            --add-data "style:style" \
             --add-data "ui:ui" \
-            --add-data "style.qss:style" \
-            --add-data "style_day.qss:style" \
+            --add-data "controllers:controllers" \
             "main.py"
 
       - name: Upload artifact (manual runs only)
