@@ -1,7 +1,9 @@
 # 📍 Localization UI Module
 
 This directory contains the user interface components specifically designed for the **Action Spotting (Localization)** task. In this mode, users identify specific timestamps (events) within a video timeline, rather than categorizing the whole video.
-![Uploading localization.png…]()
+
+<img width="2076" height="1094" alt="localization" src="https://github.com/user-attachments/assets/9220ed90-db63-410c-b277-422131a2a6bb" />
+
 
 ## 📂 Directory Structure
 
