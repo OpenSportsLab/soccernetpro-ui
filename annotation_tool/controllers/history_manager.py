@@ -39,24 +39,24 @@ class HistoryManager:
 
     def _refresh_active_view(self):
         """
-        智能刷新：根据当前是 Classification 还是 Localization 界面，调用对应的刷新逻辑。
+        Refresh: Depending on whether the current interface is Classification or Localization, invoke the corresponding refresh logic.
         """
         current_widget = self.main.ui.stack_layout.currentWidget()
         
         # 1. Localization Mode
         if current_widget == self.main.ui.localization_ui:
-            # 刷新 Schema (Tabs)
+            # Refresh Schema (Tabs)
             self.main.loc_manager._refresh_schema_ui()
-            # 刷新 Events (Table & Timeline)
+            # Refresh Events (Table & Timeline)
             self.main.loc_manager._refresh_current_clip_events()
-            # 刷新左侧树图标
+            # Refresh left side
             self.main.loc_manager.populate_tree()
             
         # 2. Classification Mode
         else:
-            # 重建右侧动态控件
+            # Rebuild the right-side dynamic control
             self.main.setup_dynamic_ui()
-            # 刷新左侧树和标注状态
+            # Refresh the left and annotation status
             self.main.refresh_ui_after_undo_redo(self.main.get_current_action_path())
 
     def _apply_state_change(self, cmd, is_undo):
