@@ -46,7 +46,7 @@ class ActionClassifierApp(QMainWindow):
         
         # 4. Setup
         self.connect_signals()
-        self.apply_stylesheet("Night")
+        self.load_stylesheet() 
         self.ui.right_panel.manual_box.setEnabled(False)
         self.setup_dynamic_ui()
         
@@ -74,7 +74,7 @@ class ActionClassifierApp(QMainWindow):
         self.ui.left_panel.action_tree.currentItemChanged.connect(self.nav_manager.on_item_selected)
         self.ui.left_panel.filter_combo.currentIndexChanged.connect(self.nav_manager.apply_action_filter)
         
-        # --- Undo/Redo Connections (Moved to Right Panel for Classification) ---
+        # --- Undo/Redo Connections ---
         self.ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
         self.ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
         
@@ -90,12 +90,12 @@ class ActionClassifierApp(QMainWindow):
         self.ui.center_panel.next_action.clicked.connect(self.nav_manager.nav_next_action)
         
         # --- Right Panel (Classification) ---
-        # [修改] 移除了 save_btn 和 export_btn 的信号连接
-        
         self.ui.right_panel.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation)
         self.ui.right_panel.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
         self.ui.right_panel.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
         self.ui.right_panel.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
+        
+        # [修正] 移除了 style_mode_changed 的连接
 
         # --- Localization Connections ---
         loc_controls = self.ui.localization_ui.left_panel.project_controls
@@ -180,10 +180,11 @@ class ActionClassifierApp(QMainWindow):
         if msg.exec() == QMessageBox.StandardButton.Yes:
             self.router.class_fm._clear_workspace(full_reset=True)
 
-    def apply_stylesheet(self, mode):
-        qss = "style.qss" if mode == "Night" else "style_day.qss"
+    def load_stylesheet(self):
+        """Loads the main dark theme stylesheet."""
+        style_path = resource_path(os.path.join("style", "style.qss"))
         try:
-            with open(resource_path(os.path.join("style", qss)), "r", encoding="utf-8") as f:
+            with open(style_path, "r", encoding="utf-8") as f:
                 self.setStyleSheet(f.read())
         except Exception as e:
             print(f"Style error: {e}")
@@ -258,14 +259,10 @@ class ActionClassifierApp(QMainWindow):
         self.ui.localization_ui.left_panel.project_controls.btn_save.setEnabled(can_save)
         self.ui.localization_ui.left_panel.project_controls.btn_export.setEnabled(can_export)
         
-        # Classification Right Panel buttons
-        # self.ui.right_panel.export_btn.setEnabled(can_export)
-        # self.ui.right_panel.save_btn.setEnabled(can_save)
-        
         can_undo = len(self.model.undo_stack) > 0
         can_redo = len(self.model.redo_stack) > 0
         
-        # Classification now uses Right Panel Undo/Redo
+        # Classification Right Panel buttons
         self.ui.right_panel.undo_btn.setEnabled(can_undo)
         self.ui.right_panel.redo_btn.setEnabled(can_redo)
         
