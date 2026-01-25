@@ -19,7 +19,7 @@ A **PyQt6-based GUI** for analyzing and annotating **SoccerNetPro / action spott
 
 We recommend using [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) for managing your Python environment.
 
-> **Note:** The GUI project lives in the `Tool/` subdirectory of this repository, and dependencies are defined in `Tool/requirements.txt`.
+> **Note:** The GUI project lives in the `annotation_tool/` subdirectory of this repository, and dependencies are defined in `annotation_tool/requirements.txt`.
 
 ### Step 0 – Clone the repository
 
@@ -39,14 +39,14 @@ conda activate soccernetpro-ui
 
 ### Step 2 – Install dependencies
 ```bash
-pip install -r Tool/requirements.txt
+pip install -r annotation_tool/requirements.txt
 ```
 ---
 
 ## 🚀 Run the GUI
 From the repository root, launch the app with:
 ```bash
-python Tool/main.py
+python annotation_tool/main.py
 ```
 A window will open where you can load your data and start working.
 
@@ -124,7 +124,7 @@ python test_data/download_osl_hf.py \
 
 From the repository root:
 ```bash
-cd Tool
+cd annotation_tool
 pyinstaller --noconfirm --clean --windowed \
   --name "SoccerNetProAnalyzer" \
   --add-data "style:style" \
