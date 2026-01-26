@@ -41,24 +41,24 @@ annotation_tool/
     │   └── welcome_widget.py   # Welcome screen
     │
     ├── classification/         # UI components for Classification
-    │   ├── media_player/       # [Package] Center Panel components
+    │   ├── media_player/       # [Widget] Center Panel components
     │   │   ├── preview.py      # Video player wrapper
     │   │   ├── controls.py     # Navigation toolbar
     │   │   └── __init__.py     # Exposes ClassificationMediaPlayer
     │   │
-    │   └── event_editor/       # [Package] Right Panel components
+    │   └── event_editor/       # [Widget] Right Panel components
     │       ├── dynamic_widgets.py # Schema-driven widgets (Radio/Check)
     │       ├── editor.py       # Layout container
     │       └── __init__.py     # Exposes ClassificationEventEditor
     │
     └── localization/           # UI components for Localization
-        ├── media_player/       # [Package] Center Panel components
+        ├── media_player/       # [Widget] Center Panel components
         │   ├── preview.py      # Video player wrapper
         │   ├── timeline.py     # Custom Zoomable Timeline
         │   ├── controls.py     # Playback control bar
         │   └── __init__.py     # Exposes LocCenterPanel
         │
-        └── event_editor/       # [Package] Right Panel components
+        └── event_editor/       # [Widget] Right Panel components
             ├── annotation_table.py  # Event list table
             ├── spotting_controls.py # Tabbed spotting interface
             └── __init__.py          # Exposes LocRightPanel
