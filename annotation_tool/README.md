@@ -11,7 +11,6 @@ annotation_tool/
 ├── main.py                     # Application entry point
 ├── viewer.py                   # Main Window controller (orchestrates UI & Logic)
 ├── models.py                   # Data models, application state, and JSON validation
-├── dialogs.py                  # Custom pop-up dialogs (Project creation, file picking)
 ├── utils.py                    # Helper functions and constants
 ├── __init__.py                 # Package initialization
 │
@@ -34,7 +33,8 @@ annotation_tool/
 │
 └── ui/                         # [View Layer] Interface definitions
     ├── common/                 # Shared widgets used by both modes
-    │   └── project_controls.py
+    │   ├── dialogs.py          # Custom pop-up dialogs (Project creation, file picking)
+    │   └── project_controls.py # Unified control buttons & clip explorer
     │
     ├── classification/         # UI specific to Classification task
     │   ├── panels.py
@@ -46,7 +46,8 @@ annotation_tool/
             ├── clip_explorer.py
             ├── media_player.py
             └── event_editor.py
-````
+
+```
 
 ---
 
@@ -59,7 +60,6 @@ These files form the backbone of the application infrastructure.
 * **`main.py`**: The bootstrap script. Initializes the `QApplication` and launches the main window.
 * **`viewer.py`**: Defines the `ActionClassifierApp` (Main Window). It acts as the primary bridge, initializing the UI layout and connecting UI signals to their respective Controllers.
 * **`models.py`**: The **Model**. Stores runtime data (`manual_annotations`, `localization_events`), defines the Undo/Redo stacks, and contains strict JSON schema validation logic.
-* **`dialogs.py`**: Contains modal dialogs such as the **Project Creation Wizard** and the custom **Folder Picker**.
 * **`utils.py`**: Utility functions for file handling, natural sorting, and icon generation.
 
 ### 2. Style (`/style`)
@@ -96,7 +96,8 @@ PyQt6 widgets and layout definitions. Contains no business logic.
 
 #### Common (`/ui/common`)
 
-* **`project_controls.py`**: A unified 3x2 control panel (Create, Load, Add, Close, Save, Export) shared by both modes to ensure consistent UX.
+* **`dialogs.py`**: Contains modal dialogs such as the **Project Creation Wizard** and the custom **Folder Picker**.
+* **`project_controls.py`**: Contains shared UI components including the unified 3x2 control panel (Create, Load, Add, Close, Save, Export) and the unified video clip explorer list.
 
 #### Classification (`/ui/classification`)
 
@@ -106,6 +107,6 @@ PyQt6 widgets and layout definitions. Contains no business logic.
 #### Localization (`/ui/localization`)
 
 * **`panels.py`**: Defines the layout containers for the localization interface.
-* **`widgets/clip_explorer.py`**: The left sidebar widget for managing the list of video clips.
+* **`widgets/clip_explorer.py`**: The left sidebar widget for managing the list of video clips (wraps common components).
 * **`widgets/media_player.py`**: The center widget containing the video player, custom zoomable timeline, and playback controls.
 * **`widgets/event_editor.py`**: The right sidebar widget containing the multi-tab spotting interface and the editable event table.
