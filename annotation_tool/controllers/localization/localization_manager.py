@@ -33,16 +33,16 @@ class LocalizationManager:
         pc.exportRequested.connect(self._on_export_clicked)
         
         # Tree Interactions
-        self.left_panel.clip_tree.currentItemChanged.connect(self.on_clip_selected)
+        self.left_panel.tree.currentItemChanged.connect(self.on_clip_selected)
         
         # Right Click Context Menu
-        self.left_panel.clip_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.left_panel.clip_tree.customContextMenuRequested.connect(self._on_tree_context_menu)
+        self.left_panel.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.left_panel.tree.customContextMenuRequested.connect(self._on_tree_context_menu)
         
         self.left_panel.filter_combo.currentIndexChanged.connect(self._apply_clip_filter)
         
         # Clear All Button
-        self.left_panel.btn_clear_all.clicked.connect(self._on_clear_all_clicked)
+        self.left_panel.clear_btn.clicked.connect(self._on_clear_all_clicked)
         
         # --- Center Panel ---
         media = self.center_panel.media_preview
@@ -482,7 +482,7 @@ class LocalizationManager:
         self.center_panel.timeline.set_markers([])
 
         # 3. Clear Tree
-        self.left_panel.clip_tree.clear()
+        self.left_panel.tree.clear()
         
         # 4. Clear Right Panel (Top & Bottom)
         self._refresh_schema_ui() 
@@ -492,16 +492,16 @@ class LocalizationManager:
         self.main.update_save_export_button_state() 
 
     def _on_tree_context_menu(self, pos):
-        item = self.left_panel.clip_tree.itemAt(pos)
+        item = self.left_panel.tree.itemAt(pos)
         if not item: return
 
         path = item.data(0, Qt.ItemDataRole.UserRole)
         name = item.text(0)
 
-        menu = QMenu(self.left_panel.clip_tree)
+        menu = QMenu(self.left_panel.tree)
         remove_action = menu.addAction(f"Remove '{name}'")
         
-        action = menu.exec(self.left_panel.clip_tree.mapToGlobal(pos))
+        action = menu.exec(self.left_panel.tree.mapToGlobal(pos))
         
         if action == remove_action:
             self._remove_single_video(path)
@@ -540,9 +540,9 @@ class LocalizationManager:
         previous_path = self.current_video_path
         
         # 1. Start blocking signals BEFORE clearing
-        self.left_panel.clip_tree.blockSignals(True) 
+        self.left_panel.tree.blockSignals(True) 
         
-        self.left_panel.clip_tree.clear()
+        self.left_panel.tree.clear()
         
         sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get('name', '')))
         item_to_restore = None
@@ -551,7 +551,7 @@ class LocalizationManager:
         for i, data in enumerate(sorted_list):
             name = data['name']
             path = data['path']
-            item = QTreeWidgetItem(self.left_panel.clip_tree, [name])
+            item = QTreeWidgetItem(self.left_panel.tree, [name])
             item.setData(0, Qt.ItemDataRole.UserRole, path)
             events = self.model.localization_events.get(path, [])
             item.setIcon(0, self.main.done_icon if events else self.main.empty_icon)
@@ -569,19 +569,19 @@ class LocalizationManager:
         
         # 2. Restore Selection Logic
         if item_to_restore:
-            self.left_panel.clip_tree.setCurrentItem(item_to_restore)
+            self.left_panel.tree.setCurrentItem(item_to_restore)
         elif previous_path is None and first_item:
-            self.left_panel.clip_tree.setCurrentItem(first_item)
+            self.left_panel.tree.setCurrentItem(first_item)
         
         # 3. Finally Unblock Signals
-        self.left_panel.clip_tree.blockSignals(False)
+        self.left_panel.tree.blockSignals(False)
 
         # 4. Handle the "New Load" case manually
         if not item_to_restore and previous_path is None and first_item:
              self.on_clip_selected(first_item, None)
 
     def _apply_clip_filter(self, index):
-        root = self.left_panel.clip_tree.invisibleRootItem()
+        root = self.left_panel.tree.invisibleRootItem()
         for i in range(root.childCount()):
             item = root.child(i)
             path = item.data(0, Qt.ItemDataRole.UserRole)
@@ -629,7 +629,7 @@ class LocalizationManager:
         self.main.router.loc_fm.export_json()
 
     def _navigate_clip(self, step):
-        tree = self.left_panel.clip_tree
+        tree = self.left_panel.tree
         curr = tree.currentItem()
         if not curr: return
         visible_items = []

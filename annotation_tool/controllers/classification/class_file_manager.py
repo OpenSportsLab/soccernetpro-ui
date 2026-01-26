@@ -195,10 +195,10 @@ class ClassFileManager:
             self.ui.show_classification_view()
 
     def _clear_workspace(self, full_reset=False):
-        self.ui.left_panel.action_tree.clear()
+        self.ui.classification_ui.left_panel.tree.clear()
         self.model.reset(full_reset)
         self.main.update_save_export_button_state()
-        self.ui.right_panel.manual_box.setEnabled(False)
-        self.ui.center_panel.show_single_view(None)
+        self.ui.classification_ui.right_panel.manual_box.setEnabled(False)
+        self.ui.classification_ui.center_panel.show_single_view(None)
         if full_reset: 
             self.main.setup_dynamic_ui()

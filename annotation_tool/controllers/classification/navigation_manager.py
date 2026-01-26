@@ -39,7 +39,7 @@ class NavigationManager:
             name = os.path.basename(file_path)
             self.model.action_item_data.append({'name': name, 'path': file_path, 'source_files': [file_path]})
             # Create mapping for quick lookup
-            item = self.ui.left_panel.add_action_item(name, file_path, [file_path])
+            item = self.ui.classification_ui.left_panel.add_tree_item(name, file_path, [file_path])
             self.model.action_item_map[file_path] = item
             added_count += 1
             
@@ -62,8 +62,8 @@ class NavigationManager:
             del self.model.manual_annotations[path]
             
         # 3. Remove from UI
-        index = self.ui.left_panel.action_tree.indexOfTopLevelItem(item)
-        self.ui.left_panel.action_tree.takeTopLevelItem(index)
+        index = self.ui.classification_ui.left_panel.tree.indexOfTopLevelItem(item)
+        self.ui.classification_ui.left_panel.tree.takeTopLevelItem(index)
         
         self.model.is_data_dirty = True
         self.main.show_temp_msg("Removed", "Item removed.")
@@ -80,30 +80,30 @@ class NavigationManager:
         
         # Update Right Panel (Annotations)
         self.main.annot_manager.display_manual_annotation(path)
-        self.ui.right_panel.manual_box.setEnabled(True)
+        self.ui.classification_ui.right_panel.manual_box.setEnabled(True)
         
         
         # Update Center Panel (Video)
-        self.ui.center_panel.show_single_view(path)
+        self.ui.classification_ui.center_panel.show_single_view(path)
         
         # [Fix] Force play when switching clips
         # Use QTimer with 0ms to ensure the event loop processes the load before playing
-        self.ui.center_panel.single_view_widget.player.play()
+        self.ui.classification_ui.center_panel.single_view_widget.player.play()
         
     def play_video(self):
         """Toggle Play/Pause"""
-        self.ui.center_panel.toggle_play_pause()
+        self.ui.classification_ui.center_panel.toggle_play_pause()
 
     def show_all_views(self):
-        curr = self.ui.left_panel.action_tree.currentItem()
+        curr = self.ui.classification_ui.left_panel.tree.currentItem()
         if not curr or curr.childCount() == 0: return
         paths = [curr.child(i).data(0, Qt.ItemDataRole.UserRole) for i in range(curr.childCount())]
-        self.ui.center_panel.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
+        self.ui.classification_ui.center_panel.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
 
     def apply_action_filter(self):
         """Filters the tree items based on Done/Not Done status."""
-        idx = self.ui.left_panel.filter_combo.currentIndex()
-        root = self.ui.left_panel.action_tree.invisibleRootItem()
+        idx = self.ui.classification_ui.left_panel.filter_combo.currentIndex()
+        root = self.ui.classification_ui.left_panel.tree.invisibleRootItem()
         for i in range(root.childCount()):
             item = root.child(i)
             path = item.data(0, Qt.ItemDataRole.UserRole)
@@ -121,7 +121,7 @@ class NavigationManager:
     def nav_next_clip(self): self._nav_tree(step=1, level='child')
     
     def _nav_tree(self, step, level):
-        tree = self.ui.left_panel.action_tree
+        tree = self.ui.classification_ui.left_panel.tree
         curr = tree.currentItem()
         if not curr: return
         

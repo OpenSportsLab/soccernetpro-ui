@@ -1,0 +1,4 @@
+from .editor import ClassificationEventEditor
+from .dynamic_widgets import DynamicSingleLabelGroup, DynamicMultiLabelGroup
+
+ClassRightPanel = ClassificationEventEditor

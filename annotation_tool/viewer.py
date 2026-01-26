@@ -11,7 +11,9 @@ from controllers.history_manager import HistoryManager
 from controllers.localization.localization_manager import LocalizationManager
 from controllers.router import AppRouter
 from models import AppStateModel
-from ui.classification.panels import MainWindowUI
+
+# [CHANGE] Import from the new common location
+from ui.common.main_window import MainWindowUI
 from utils import create_checkmark_icon, natural_sort_key, resource_path
 
 
@@ -48,7 +50,10 @@ class ActionClassifierApp(QMainWindow):
         # --- Setup ---
         self.connect_signals()
         self.load_stylesheet()
-        self.ui.right_panel.manual_box.setEnabled(False)
+        
+        # [CHANGE] Access classification UI via .classification_ui
+        self.ui.classification_ui.right_panel.manual_box.setEnabled(False)
+        
         self.setup_dynamic_ui()
         self._setup_shortcuts()
 
@@ -65,8 +70,10 @@ class ActionClassifierApp(QMainWindow):
         self.ui.welcome_widget.import_btn.clicked.connect(self.router.import_annotations)
         self.ui.welcome_widget.create_btn.clicked.connect(self.router.create_new_project_flow)
 
-        # Left panel (classification)
-        cls_controls = self.ui.left_panel.project_controls
+        # [CHANGE] Classification - Left panel
+        cls_left = self.ui.classification_ui.left_panel
+        cls_controls = cls_left.project_controls
+        
         cls_controls.createRequested.connect(self.router.create_new_project_flow)
         cls_controls.loadRequested.connect(self.router.import_annotations)
         cls_controls.addVideoRequested.connect(self.nav_manager.add_items_via_dialog)
@@ -74,30 +81,37 @@ class ActionClassifierApp(QMainWindow):
         cls_controls.saveRequested.connect(self.router.class_fm.save_json)
         cls_controls.exportRequested.connect(self.router.class_fm.export_json)
 
-        self.ui.left_panel.clear_btn.clicked.connect(self._on_class_clear_clicked)
-        self.ui.left_panel.request_remove_item.connect(self.nav_manager.remove_single_action_item)
-        self.ui.left_panel.action_tree.currentItemChanged.connect(self.nav_manager.on_item_selected)
-        self.ui.left_panel.filter_combo.currentIndexChanged.connect(self.nav_manager.apply_action_filter)
+        cls_left.clear_btn.clicked.connect(self._on_class_clear_clicked)
+        cls_left.request_remove_item.connect(self.nav_manager.remove_single_action_item)
+        
+        # [FIX] Changed 'action_tree' to 'tree' to match CommonProjectTreePanel
+        cls_left.tree.currentItemChanged.connect(self.nav_manager.on_item_selected)
+        cls_left.filter_combo.currentIndexChanged.connect(self.nav_manager.apply_action_filter)
+
+        # [CHANGE] Classification - Center panel
+        cls_center = self.ui.classification_ui.center_panel
+        cls_center.play_btn.clicked.connect(self.nav_manager.play_video)
+        cls_center.multi_view_btn.clicked.connect(self.nav_manager.show_all_views)
+        cls_center.prev_action.clicked.connect(self.nav_manager.nav_prev_action)
+        cls_center.prev_clip.clicked.connect(self.nav_manager.nav_prev_clip)
+        cls_center.next_clip.clicked.connect(self.nav_manager.nav_next_clip)
+        cls_center.next_action.clicked.connect(self.nav_manager.nav_next_action)
+
+        # [CHANGE] Classification - Right panel
+        cls_right = self.ui.classification_ui.right_panel
+        cls_right.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation)
+        cls_right.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
+        cls_right.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
+        cls_right.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
 
         # Undo/redo (both panels share the same stacks)
-        self.ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
-        self.ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
+        # [CHANGE] Use new paths for classification buttons
+        cls_right.undo_btn.clicked.connect(self.history_manager.perform_undo)
+        cls_right.redo_btn.clicked.connect(self.history_manager.perform_redo)
+        
+        # Localization Undo/Redo
         self.ui.localization_ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
         self.ui.localization_ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
-
-        # Center panel (classification)
-        self.ui.center_panel.play_btn.clicked.connect(self.nav_manager.play_video)
-        self.ui.center_panel.multi_view_btn.clicked.connect(self.nav_manager.show_all_views)
-        self.ui.center_panel.prev_action.clicked.connect(self.nav_manager.nav_prev_action)
-        self.ui.center_panel.prev_clip.clicked.connect(self.nav_manager.nav_prev_clip)
-        self.ui.center_panel.next_clip.clicked.connect(self.nav_manager.nav_next_clip)
-        self.ui.center_panel.next_action.clicked.connect(self.nav_manager.nav_next_action)
-
-        # Right panel (classification)
-        self.ui.right_panel.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation)
-        self.ui.right_panel.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
-        self.ui.right_panel.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
-        self.ui.right_panel.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
 
         # Localization panel
         loc_controls = self.ui.localization_ui.left_panel.project_controls
@@ -169,7 +183,8 @@ class ActionClassifierApp(QMainWindow):
         if self._is_loc_mode():
             player = self.loc_manager.center_panel.media_preview.player
         else:
-            player = self.ui.center_panel.single_view_widget.player
+            # [CHANGE] Use classification_ui path
+            player = self.ui.classification_ui.center_panel.single_view_widget.player
 
         if not player:
             return
@@ -269,20 +284,22 @@ class ActionClassifierApp(QMainWindow):
         can_export = self.model.json_loaded and has_data
         can_save = can_export and (self.model.current_json_path is not None) and self.model.is_data_dirty
 
-        # Unified controls (both panels)
-        self.ui.left_panel.project_controls.btn_save.setEnabled(can_save)
-        self.ui.left_panel.project_controls.btn_export.setEnabled(can_export)
+        # [CHANGE] Unified controls (Classification uses new path)
+        self.ui.classification_ui.left_panel.project_controls.btn_save.setEnabled(can_save)
+        self.ui.classification_ui.left_panel.project_controls.btn_export.setEnabled(can_export)
+        
+        # Localization uses existing path
         self.ui.localization_ui.left_panel.project_controls.btn_save.setEnabled(can_save)
         self.ui.localization_ui.left_panel.project_controls.btn_export.setEnabled(can_export)
 
         can_undo = len(self.model.undo_stack) > 0
         can_redo = len(self.model.redo_stack) > 0
 
-        # Classification panel
-        self.ui.right_panel.undo_btn.setEnabled(can_undo)
-        self.ui.right_panel.redo_btn.setEnabled(can_redo)
+        # [CHANGE] Classification panel buttons
+        self.ui.classification_ui.right_panel.undo_btn.setEnabled(can_undo)
+        self.ui.classification_ui.right_panel.redo_btn.setEnabled(can_redo)
 
-        # Localization panel
+        # Localization panel buttons
         self.ui.localization_ui.right_panel.undo_btn.setEnabled(can_undo)
         self.ui.localization_ui.right_panel.redo_btn.setEnabled(can_redo)
 
@@ -305,7 +322,8 @@ class ActionClassifierApp(QMainWindow):
 
     def get_current_action_path(self):
         """Return the selected action path from the tree (top-level item path)."""
-        curr = self.ui.left_panel.action_tree.currentItem()
+        # [CHANGE] Access tree via classification_ui
+        curr = self.ui.classification_ui.left_panel.tree.currentItem()
         if not curr:
             return None
 
@@ -314,14 +332,18 @@ class ActionClassifierApp(QMainWindow):
 
         return curr.parent().data(0, Qt.ItemDataRole.UserRole)
 
+    # [FIX] Renamed to populate_action_tree to match ClassFileManager calls
     def populate_action_tree(self) -> None:
         """Rebuild the action tree from model data and select the first item."""
-        self.ui.left_panel.action_tree.clear()
+        # [CHANGE] Access tree via classification_ui
+        tree = self.ui.classification_ui.left_panel.tree
+        tree.clear()
         self.model.action_item_map.clear()
 
         sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", "")))
         for data in sorted_list:
-            item = self.ui.left_panel.add_action_item(data["name"], data["path"], data.get("source_files"))
+            # [CHANGE] Use helper method from left panel
+            item = self.ui.classification_ui.left_panel.add_tree_item(data["name"], data["path"], data.get("source_files"))
             self.model.action_item_map[data["path"]] = item
 
         # Update completion icons once items exist
@@ -330,9 +352,9 @@ class ActionClassifierApp(QMainWindow):
 
         self.nav_manager.apply_action_filter()
 
-        if self.ui.left_panel.action_tree.topLevelItemCount() > 0:
-            first_item = self.ui.left_panel.action_tree.topLevelItem(0)
-            self.ui.left_panel.action_tree.setCurrentItem(first_item)
+        if tree.topLevelItemCount() > 0:
+            first_item = tree.topLevelItem(0)
+            tree.setCurrentItem(first_item)
             QTimer.singleShot(200, self.nav_manager.play_video)
 
     def update_action_item_status(self, action_path: str) -> None:
@@ -349,13 +371,16 @@ class ActionClassifierApp(QMainWindow):
 
     def setup_dynamic_ui(self) -> None:
         """Build right-panel label groups from the current task definition."""
-        self.ui.right_panel.setup_dynamic_labels(self.model.label_definitions)
-        self.ui.right_panel.task_label.setText(f"Task: {self.model.current_task_name}")
+        # [CHANGE] Access right panel via classification_ui
+        cls_right = self.ui.classification_ui.right_panel
+        cls_right.setup_dynamic_labels(self.model.label_definitions)
+        cls_right.task_label.setText(f"Task: {self.model.current_task_name}")
         self._connect_dynamic_type_buttons()
 
     def _connect_dynamic_type_buttons(self) -> None:
         """Bind dynamic label widgets to the annotation manager."""
-        for head, group in self.ui.right_panel.label_groups.items():
+        # [CHANGE] Access label_groups via classification_ui
+        for head, group in self.ui.classification_ui.right_panel.label_groups.items():
             # Avoid duplicate connections when rebuilding the UI
             try:
                 group.add_btn.clicked.disconnect()
@@ -381,9 +406,12 @@ class ActionClassifierApp(QMainWindow):
 
         self.update_action_item_status(action_path)
 
+        # [CHANGE] Access tree via classification_ui
+        tree = self.ui.classification_ui.left_panel.tree
         item = self.model.action_item_map.get(action_path)
-        if item and self.ui.left_panel.action_tree.currentItem() != item:
-            self.ui.left_panel.action_tree.setCurrentItem(item)
+        
+        if item and tree.currentItem() != item:
+            tree.setCurrentItem(item)
 
         current = self.get_current_action_path()
         if current == action_path:

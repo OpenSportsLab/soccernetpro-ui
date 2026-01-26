@@ -13,7 +13,7 @@ class AnnotationManager:
         path = self.main.get_current_action_path()
         if not path: return
         
-        raw = self.ui.right_panel.get_annotation()
+        raw = self.ui.classification_ui.right_panel.get_annotation()
         cleaned = {k: v for k, v in raw.items() if v}
         if not cleaned: cleaned = None
         
@@ -30,7 +30,7 @@ class AnnotationManager:
         self.main.update_action_item_status(path)
         self.main.update_save_export_button_state()
         
-        tree = self.ui.left_panel.action_tree
+        tree = self.ui.classification_ui.left_panel.tree
         curr = tree.currentItem()
         nxt = tree.itemBelow(curr)
         if nxt:
@@ -47,11 +47,11 @@ class AnnotationManager:
             self.main.update_action_item_status(path)
             self.main.update_save_export_button_state()
             self.main.show_temp_msg("Cleared", "Selection cleared.")
-        self.ui.right_panel.clear_selection()
+        self.ui.classification_ui.right_panel.clear_selection()
 
     def display_manual_annotation(self, path):
         data = self.model.manual_annotations.get(path, {})
-        self.ui.right_panel.set_annotation(data)
+        self.ui.classification_ui.right_panel.set_annotation(data)
 
     def handle_ui_selection_change(self, head, new_val):
         if self.main.history_manager._is_undoing_redoing: 
@@ -83,7 +83,7 @@ class AnnotationManager:
         defn = {"type": type_str, "labels": []}
         self.model.push_undo(CmdType.SCHEMA_ADD_CAT, head=clean, definition=defn)
         self.model.label_definitions[clean] = defn
-        self.ui.right_panel.new_head_edit.clear()
+        self.ui.classification_ui.right_panel.new_head_edit.clear()
         self.main.setup_dynamic_ui()
 
     def handle_remove_label_head(self, head):
@@ -106,7 +106,7 @@ class AnnotationManager:
         self.display_manual_annotation(self.main.get_current_action_path())
 
     def add_custom_type(self, head):
-        group = self.ui.right_panel.label_groups.get(head)
+        group = self.ui.classification_ui.right_panel.label_groups.get(head)
         txt = group.input_field.text().strip()
         if not txt: return
         
@@ -119,7 +119,7 @@ class AnnotationManager:
         labels.append(txt); labels.sort()
         
         # Update UI directly
-        from ui.classification.widgets import DynamicSingleLabelGroup
+        from ui.classification.event_editor import DynamicSingleLabelGroup
         if isinstance(group, DynamicSingleLabelGroup): group.update_radios(labels)
         else: group.update_checkboxes(labels)
         group.input_field.clear()
@@ -141,8 +141,8 @@ class AnnotationManager:
             if defn['type'] == 'single_label' and val.get(head) == lbl: val[head] = None
             elif defn['type'] == 'multi_label' and lbl in val.get(head, []): val[head].remove(lbl)
             
-        from ui.classification.widgets import DynamicSingleLabelGroup
-        group = self.ui.right_panel.label_groups.get(head)
+        from ui.classification.event_editor import DynamicSingleLabelGroup
+        group = self.ui.classification_ui.right_panel.label_groups.get(head)
         if isinstance(group, DynamicSingleLabelGroup): group.update_radios(defn['labels'])
         else: group.update_checkboxes(defn['labels'])
         self.display_manual_annotation(self.main.get_current_action_path())

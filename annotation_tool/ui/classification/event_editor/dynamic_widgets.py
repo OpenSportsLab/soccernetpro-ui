@@ -1,145 +1,19 @@
-import os
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QButtonGroup, 
-    QRadioButton, QCheckBox, QGroupBox, QLineEdit, QPushButton, QStyle,
-    QScrollArea, QStyleOptionSlider
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
+    QLineEdit, QButtonGroup, QRadioButton, QCheckBox
 )
-from PyQt6.QtMultimedia import QMediaPlayer
-from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import Qt, QUrl, QTime, pyqtSignal, QSize, QPoint
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import pyqtSignal, Qt
 from utils import get_square_remove_btn_style
-
-class ClickableSlider(QSlider):
-    """
-    A custom QSlider that jumps to the click position immediately.
-    Standard QSlider only moves by pageStep on click.
-    """
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        if event.button() == Qt.MouseButton.LeftButton:
-            val = self._pixel_pos_to_value(event.pos())
-            self.setValue(val)
-            # Emit sliderMoved so connected slots handle the seek
-            self.sliderMoved.emit(val)
-
-    def _pixel_pos_to_value(self, pos):
-        opt = QStyleOptionSlider()
-        self.initStyleOption(opt)
-        gr = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
-        sr = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
-
-        if self.orientation() == Qt.Orientation.Horizontal:
-            slider_length = sr.width()
-            slider_min = gr.x()
-            slider_max = gr.right() - slider_length + 1
-            pos_x = pos.x()
-        else:
-            slider_length = sr.height()
-            slider_min = gr.y()
-            slider_max = gr.bottom() - slider_length + 1
-            pos_x = pos.y()
-            
-        return QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), pos_x - slider_min,
-                                              slider_max - slider_min, opt.upsideDown)
-
-class VideoViewAndControl(QWidget):
-    """
-    Wraps a QVideoWidget and its controls (Slider/Label).
-    Used in Classification CenterPanel.
-    """
-    def __init__(self, clip_path, parent=None):
-        super().__init__(parent)
-        self.clip_path = clip_path
-        
-        # 1. Player Setup
-        self.player = QMediaPlayer()
-        self.player.setLoops(QMediaPlayer.Loops.Infinite) 
-        self.video_widget = QVideoWidget()
-        self.player.setVideoOutput(self.video_widget)
-        
-        # 2. Controls
-        # Use custom ClickableSlider instead of standard QSlider
-        self.slider = ClickableSlider(Qt.Orientation.Horizontal)
-        self.slider.setRange(0, 1000)
-        self.slider.setEnabled(False) # Disabled until media loads
-        self.slider.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        self.clip_name = os.path.basename(clip_path) if clip_path else "No Clip"
-        self.time_label = QLabel(f"00:00 / 00:00")
-        self.time_label.setFixedWidth(120)
-        self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.time_label.setStyleSheet("font-family: monospace; font-weight: bold;")
-        
-        # 3. Layout
-        self.v_layout = QVBoxLayout(self)
-        self.v_layout.setContentsMargins(0, 0, 0, 0)
-        self.v_layout.setSpacing(5)
-        
-        self.v_layout.addWidget(self.video_widget, 1) # Video takes expandable space
-        
-        # Control Row
-        h_controls = QHBoxLayout()
-        h_controls.setContentsMargins(5, 0, 5, 5)
-        h_controls.addWidget(self.slider)
-        h_controls.addWidget(self.time_label)
-        self.v_layout.addLayout(h_controls)
-
-        # 4. Connections
-        self.player.positionChanged.connect(self._on_position_changed)
-        self.player.durationChanged.connect(self._on_duration_changed)
-        
-        # Slider interactions
-        self.slider.sliderMoved.connect(self._on_slider_moved)
-        self.slider.sliderPressed.connect(self.player.pause) # Pause while dragging
-        self.slider.sliderReleased.connect(self.player.play) # Resume after dragging
-
-        self._duration_ms = 0
-
-    def _on_duration_changed(self, duration):
-        """Called when video loads or duration changes."""
-        self._duration_ms = duration
-        if duration > 0:
-            self.slider.setRange(0, duration)
-            self.slider.setEnabled(True)
-            self.slider.setValue(0)
-            self._update_time_label(0, duration)
-        else:
-            self.slider.setEnabled(False)
-
-    def _on_position_changed(self, position):
-        """Update slider position as video plays (if not dragging)."""
-        if not self.slider.isSliderDown():
-            self.slider.setValue(position)
-        self._update_time_label(position, self._duration_ms)
-
-    def _on_slider_moved(self, position):
-        """User dragged or clicked the slider."""
-        self.player.setPosition(position)
-        self._update_time_label(position, self._duration_ms)
-
-    def _update_time_label(self, current_ms, total_ms):
-        def fmt(ms):
-            s = (ms // 1000) % 60
-            m = (ms // 60000) % 60
-            return f"{m:02}:{s:02}"
-        self.time_label.setText(f"{fmt(current_ms)} / {fmt(total_ms)}")
-
-
-# =========================================================
-# Dynamic Schema Widgets
-# =========================================================
 
 class DynamicSingleLabelGroup(QWidget):
     value_changed = pyqtSignal(str, str) # head, selected_label
     remove_category_signal = pyqtSignal(str) # head
-    # [Fix] Signal must be defined at class level!
     remove_label_signal = pyqtSignal(str, str) # label, head
 
     def __init__(self, head_name, definition, parent=None):
         super().__init__(parent)
         self.head_name = head_name
-        self.definition = definition # {'type': 'single_label', 'labels': [...]}
+        self.definition = definition 
         
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 5, 0, 15)
@@ -182,16 +56,13 @@ class DynamicSingleLabelGroup(QWidget):
 
         # Initial Population
         self.update_radios(definition.get('labels', []))
-        
         self.radio_group.buttonClicked.connect(self._on_radio_clicked)
 
     def update_radios(self, labels):
-        # Clear existing
         for btn in self.radio_group.buttons():
             self.radio_group.removeButton(btn)
             btn.deleteLater()
             
-        # Clear layout items including delete buttons
         while self.radio_layout.count():
             item = self.radio_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
@@ -208,14 +79,11 @@ class DynamicSingleLabelGroup(QWidget):
             del_label_btn.setFixedSize(20, 20)
             del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             del_label_btn.setStyleSheet(get_square_remove_btn_style())
-            
-            # Use lambda to pass specific label text
             del_label_btn.clicked.connect(lambda _, l=lbl_text: self.remove_label_signal.emit(l, self.head_name))
             
             row_layout.addWidget(rb)
             row_layout.addStretch()
             row_layout.addWidget(del_label_btn)
-            
             self.radio_layout.addWidget(row_widget)
 
     def _on_radio_clicked(self, btn):
@@ -227,23 +95,20 @@ class DynamicSingleLabelGroup(QWidget):
 
     def set_checked_label(self, label_text):
         if not label_text:
-            # Deselect
             btn = self.radio_group.checkedButton()
             if btn: 
                 self.radio_group.setExclusive(False)
                 btn.setChecked(False)
                 self.radio_group.setExclusive(True)
             return
-
         for btn in self.radio_group.buttons():
             if btn.text() == label_text:
-                btn.setChecked(True)
-                break
+                btn.setChecked(True); break
 
 class DynamicMultiLabelGroup(QWidget):
     value_changed = pyqtSignal(str, list)
     remove_category_signal = pyqtSignal(str)
-    remove_label_signal = pyqtSignal(str, str) # label, head
+    remove_label_signal = pyqtSignal(str, str) 
 
     def __init__(self, head_name, definition, parent=None):
         super().__init__(parent)
@@ -284,7 +149,7 @@ class DynamicMultiLabelGroup(QWidget):
         input_layout.addWidget(self.add_btn)
         self.layout.addLayout(input_layout)
         
-        self.checkboxes = {} # text -> QCheckBox
+        self.checkboxes = {} 
         self.update_checkboxes(definition.get('labels', []))
 
     def update_checkboxes(self, new_types):

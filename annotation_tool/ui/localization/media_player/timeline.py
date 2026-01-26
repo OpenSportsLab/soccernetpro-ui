@@ -1,60 +1,47 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QPushButton,
-    QStyle, QStyleOptionSlider, QSizePolicy, QScrollArea, QScrollBar
+    QStyle, QStyleOptionSlider, QScrollArea, QScrollBar
 )
-from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import Qt, pyqtSignal, QUrl
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen
 
-class MediaPreviewWidget(QWidget):
-    positionChanged = pyqtSignal(int)
-    durationChanged = pyqtSignal(int)
-    stateChanged = pyqtSignal(object)
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0,0,0,0)
-        
-        self.video_widget = QVideoWidget()
-        self.video_widget.setStyleSheet("background-color: black;")
-        self.video_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        
-        self.player = QMediaPlayer()
-        self.audio = QAudioOutput()
-        self.player.setAudioOutput(self.audio)
-        self.player.setVideoOutput(self.video_widget)
-        
-        layout.addWidget(self.video_widget)
-        
-        self.player.positionChanged.connect(self.positionChanged.emit)
-        self.player.durationChanged.connect(self.durationChanged.emit)
-        self.player.playbackStateChanged.connect(self.stateChanged.emit)
-        self.player.errorOccurred.connect(self._on_error)
+class AnnotationSlider(QSlider):
+    def __init__(self, orientation, parent=None):
+        super().__init__(orientation, parent)
+        self.markers = []
 
-    def load_video(self, path):
-        self.player.setSource(QUrl.fromLocalFile(path))
-        self.player.pause()
-        self.player.setPosition(0)
-
-    def play(self): self.player.play()
-    def pause(self): self.player.pause()
-    def stop(self): self.player.stop()
+    def paintEvent(self, event):
+        # 1. Call system draw
+        super().paintEvent(event)
         
-    def toggle_play_pause(self):
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.pause()
-        else:
-            if self.player.position() >= self.player.duration() and self.player.duration() > 0:
-                self.player.setPosition(0)
-            self.player.play()
+        if not self.markers or self.maximum() <= 0: return
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        
+        groove = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
+        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
+        
+        available_width = groove.width()
+        x_offset = groove.x()
+        
+        # 2. Draw markers
+        for m in self.markers:
+            start_ms = m.get('start_ms', 0)
+            ratio = start_ms / self.maximum()
+            x = x_offset + int(available_width * ratio)
+            
+            c = m.get('color', QColor('red'))
+            painter.setPen(QPen(c, 2))
+            painter.drawLine(x, groove.top() - 2, x, groove.bottom() + 2)
 
-    def set_position(self, ms): self.player.setPosition(ms)
-    def set_playback_rate(self, rate): self.player.setPlaybackRate(rate)
-    
-    def _on_error(self):
-        print(f"Media Error: {self.player.errorString()}")
+        # 3. Redraw handle on top
+        painter.setPen(QPen(QColor("#FF3333"), 1))
+        painter.setBrush(QColor("#FF3333"))
+        painter.drawRoundedRect(handle_rect, 4, 4)
 
 
 class TimelineWidget(QWidget):
@@ -64,7 +51,6 @@ class TimelineWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Overall height
         self.setFixedHeight(60)
         
         main_layout = QVBoxLayout(self)
@@ -83,7 +69,6 @@ class TimelineWidget(QWidget):
         timeline_row.setContentsMargins(5, 0, 5, 0)
         timeline_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        # Button Style
         btn_style = """
             QPushButton { 
                 background-color: #444; color: white; border: 1px solid #555; 
@@ -93,7 +78,7 @@ class TimelineWidget(QWidget):
             QPushButton:pressed { background-color: #666; }
         """
 
-        # Zoom Out Button (-)
+        # Zoom Out
         self.btn_zoom_out = QPushButton("-")
         self.btn_zoom_out.setFixedSize(24, 24)
         self.btn_zoom_out.setStyleSheet(btn_style)
@@ -108,31 +93,28 @@ class TimelineWidget(QWidget):
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
-        # Increase the scrollbar height for easier dragging.
         self.scroll_area.setStyleSheet("""
             QScrollArea { background: transparent; }
             QScrollBar:horizontal {
                 border: none;
                 background: #222;
-                height: 12px;  /* from 4px to 12px */
+                height: 12px;
                 margin: 0px;
                 border-radius: 6px;
             }
             QScrollBar::handle:horizontal {
                 background: #666;
                 min-width: 20px;
-                border-radius: 6px; /* Modify Rounded Corner Adjustment */
+                border-radius: 6px;
             }
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
         """)
 
-        # Monitor bottom scrollbar operations
         self.scroll_bar = self.scroll_area.horizontalScrollBar()
         self.scroll_bar.sliderPressed.connect(self._on_user_scroll_start)
         self.scroll_bar.sliderReleased.connect(self._on_user_scroll_end)
 
         self.slider = AnnotationSlider(Qt.Orientation.Horizontal)
-        # Style Sheet: Defines the appearance of the red handle
         self.slider.setStyleSheet("""
             QSlider::groove:horizontal {
                 border: 1px solid #3A3A3A;
@@ -161,7 +143,7 @@ class TimelineWidget(QWidget):
         self.scroll_area.setWidget(self.slider)
         timeline_row.addWidget(self.scroll_area)
         
-        # Zoom In Button (+)
+        # Zoom In
         self.btn_zoom_in = QPushButton("+")
         self.btn_zoom_in.setFixedSize(24, 24)
         self.btn_zoom_in.setStyleSheet(btn_style)
@@ -175,7 +157,7 @@ class TimelineWidget(QWidget):
         self.is_dragging = False 
         self.user_is_scrolling = False 
         self.zoom_level = 1.0
-        self.auto_scroll_active = True # Control Auto-Follow
+        self.auto_scroll_active = True
     
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -213,7 +195,6 @@ class TimelineWidget(QWidget):
 
     def _update_slider_width(self):
         viewport_width = self.scroll_area.viewport().width()
-        
         if self.zoom_level <= 1.0:
             self.scroll_area.setWidgetResizable(True)
             self.slider.setMinimumWidth(0)
@@ -246,11 +227,8 @@ class TimelineWidget(QWidget):
             self.auto_scroll_active = True
 
     def _auto_scroll_to_playhead(self, current_ms):
-        if self.zoom_level <= 1.0 or self.duration <= 0:
-            return
-            
-        if self.user_is_scrolling or not self.auto_scroll_active:
-            return
+        if self.zoom_level <= 1.0 or self.duration <= 0: return
+        if self.user_is_scrolling or not self.auto_scroll_active: return
 
         ratio = current_ms / self.duration
         slider_width = self.slider.width()
@@ -294,94 +272,3 @@ class TimelineWidget(QWidget):
     def _on_slider_released(self):
         self.is_dragging = False
         self.seekRequested.emit(self.slider.value())
-
-
-class AnnotationSlider(QSlider):
-    def __init__(self, orientation, parent=None):
-        super().__init__(orientation, parent)
-        self.markers = []
-
-    def paintEvent(self, event):
-        # 1.  Call the system drawing function.
-        super().paintEvent(event)
-        
-        if not self.markers or self.maximum() <= 0: return
-        
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        opt = QStyleOptionSlider()
-        self.initStyleOption(opt)
-        
-        # Obtain the geometric regions of the track and handle
-        groove = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove, self)
-        handle_rect = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle, self)
-        
-        available_width = groove.width()
-        x_offset = groove.x()
-        
-        # 2. Draw event markers (overlaying system handles)
-        for m in self.markers:
-            start_ms = m.get('start_ms', 0)
-            ratio = start_ms / self.maximum()
-            x = x_offset + int(available_width * ratio)
-            
-            c = m.get('color', QColor('red'))
-            painter.setPen(QPen(c, 2))
-            painter.drawLine(x, groove.top() - 2, x, groove.bottom() + 2)
-
-        # 3. Manually redraw the red handle (overlaying the mark)
-        painter.setPen(QPen(QColor("#FF3333"), 1))
-        painter.setBrush(QColor("#FF3333"))
-        painter.drawRoundedRect(handle_rect, 4, 4)
-
-
-class PlaybackControlBar(QWidget):
-    seekRelativeRequested = pyqtSignal(int)
-    stopRequested = pyqtSignal()
-    playPauseRequested = pyqtSignal()
-    nextPrevClipRequested = pyqtSignal(int)
-    nextPrevAnnotRequested = pyqtSignal(int)
-    playbackRateRequested = pyqtSignal(float)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 5, 0, 5)
-        
-        # Row 1: Navigation
-        r1 = QHBoxLayout()
-        btns_r1 = [
-            ("Prev Clip", lambda: self.nextPrevClipRequested.emit(-1)),
-            ("<< 5s", lambda: self.seekRelativeRequested.emit(-5000)),
-            ("<< 1s", lambda: self.seekRelativeRequested.emit(-1000)),
-            ("Play/Pause", lambda: self.playPauseRequested.emit()),
-            ("1s >>", lambda: self.seekRelativeRequested.emit(1000)),
-            ("5s >>", lambda: self.seekRelativeRequested.emit(5000)),
-            ("Next Clip", lambda: self.nextPrevClipRequested.emit(1))
-        ]
-        for txt, func in btns_r1:
-            b = QPushButton(txt)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.clicked.connect(func)
-            r1.addWidget(b)
-        layout.addLayout(r1)
-        
-        # Row 2: Speed & Event Jump
-        r2 = QHBoxLayout()
-        
-        btn_prev_ann = QPushButton("Prev Event")
-        btn_prev_ann.clicked.connect(lambda: self.nextPrevAnnotRequested.emit(-1))
-        r2.addWidget(btn_prev_ann)
-        
-        speeds = [0.25, 0.5, 1.0, 2.0, 4.0]
-        for s in speeds:
-            b = QPushButton(f"{s}x")
-            b.clicked.connect(lambda _, rate=s: self.playbackRateRequested.emit(rate))
-            r2.addWidget(b)
-            
-        btn_next_ann = QPushButton("Next Event")
-        btn_next_ann.clicked.connect(lambda: self.nextPrevAnnotRequested.emit(1))
-        r2.addWidget(btn_next_ann)
-        
-        layout.addLayout(r2)

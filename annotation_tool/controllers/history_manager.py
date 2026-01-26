@@ -1,6 +1,6 @@
 import copy
 from models import CmdType
-from ui.classification.widgets import DynamicSingleLabelGroup, DynamicMultiLabelGroup
+from ui.classification.event_editor import DynamicSingleLabelGroup, DynamicMultiLabelGroup
 
 class HistoryManager:
     """
@@ -81,7 +81,8 @@ class HistoryManager:
                 if grp:
                     if isinstance(grp, DynamicSingleLabelGroup): grp.set_checked_label(val)
                     else: grp.set_checked_labels(val)
-        
+
+
         # =========================================================
         # 2. Localization Specific (Events)
         # =========================================================
