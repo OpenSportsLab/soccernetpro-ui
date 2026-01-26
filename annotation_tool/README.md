@@ -2,7 +2,7 @@
 
 This project is a professional video annotation desktop application built with **PyQt6**. It features a dual-mode architecture supporting both **Whole-Video Classification** and **Action Spotting (Localization)** tasks.
 
-The project follows a modular **MVC (Model-View-Controller)** design pattern to ensure separation of concerns between data handling, business logic, and user interface.
+The project follows a modular **MVC (Model-View-Controller)** design pattern to ensure separation of concerns between data handling, business logic, and user interface. Recent updates have unified the UI architecture using a composite design pattern.
 
 ## 📂 Project Structure Overview
 
@@ -32,20 +32,36 @@ annotation_tool/
 │       └── localization_manager.py
 │
 └── ui/                         # [View Layer] Interface definitions
-    ├── common/                 # Shared widgets used by both modes
-    │   ├── dialogs.py          # Custom pop-up dialogs (Project creation, file picking)
-    │   └── project_controls.py # Unified control buttons & clip explorer
+    ├── common/                 # Shared widgets & layouts
+    │   ├── main_window.py      # Main UI Assembler (Stacks Views)
+    │   ├── workspace.py        # Generic 3-Column Layout (UnifiedTaskPanel)
+    │   ├── clip_explorer.py    # Universal Left Sidebar (Tree & Filters)
+    │   ├── project_controls.py # Unified control buttons (Save, Export, etc.)
+    │   ├── dialogs.py          # Pop-up dialogs (Wizard, File Picker)
+    │   └── welcome_widget.py   # Welcome screen
     │
-    ├── classification/         # UI specific to Classification task
-    │   ├── panels.py
-    │   └── widgets.py
+    ├── classification/         # UI components for Classification
+    │   ├── media_player/       # [Package] Center Panel components
+    │   │   ├── preview.py      # Video player wrapper
+    │   │   ├── controls.py     # Navigation toolbar
+    │   │   └── __init__.py     # Exposes ClassificationMediaPlayer
+    │   │
+    │   └── event_editor/       # [Package] Right Panel components
+    │       ├── dynamic_widgets.py # Schema-driven widgets (Radio/Check)
+    │       ├── editor.py       # Layout container
+    │       └── __init__.py     # Exposes ClassificationEventEditor
     │
-    └── localization/           # UI specific to Localization task
-        ├── panels.py
-        └── widgets/
-            ├── clip_explorer.py
-            ├── media_player.py
-            └── event_editor.py
+    └── localization/           # UI components for Localization
+        ├── media_player/       # [Package] Center Panel components
+        │   ├── preview.py      # Video player wrapper
+        │   ├── timeline.py     # Custom Zoomable Timeline
+        │   ├── controls.py     # Playback control bar
+        │   └── __init__.py     # Exposes LocCenterPanel
+        │
+        └── event_editor/       # [Package] Right Panel components
+            ├── annotation_table.py  # Event list table
+            ├── spotting_controls.py # Tabbed spotting interface
+            └── __init__.py          # Exposes LocRightPanel
 
 ```
 
@@ -67,8 +83,6 @@ These files form the backbone of the application infrastructure.
 Contains the visual definitions for the application.
 
 * **`style.qss`**: CSS-like definitions for the default **Dark Theme**.
-
-> Note: The Day/Light theme stylesheet has been removed. The application currently ships with a single (dark) theme.
 
 ### 3. Controllers (`/controllers`)
 
@@ -92,21 +106,37 @@ Pure Python logic handling business rules, data manipulation, and application fl
 
 ### 4. User Interface (`/ui`)
 
-PyQt6 widgets and layout definitions. Contains no business logic.
+PyQt6 widgets and layout definitions. The UI structure has been refactored to be modular and flattened.
 
-#### Common (`/ui/common`)
+#### Common Components (`/ui/common`)
 
-* **`dialogs.py`**: Contains modal dialogs such as the **Project Creation Wizard** and the custom **Folder Picker**.
-* **`project_controls.py`**: Contains shared UI components including the unified 3x2 control panel (Create, Load, Add, Close, Save, Export) and the unified video clip explorer list.
+* **`main_window.py`**: The top-level UI container. It manages the `QStackedLayout` to switch between the Welcome Screen, Classification Interface, and Localization Interface.
+* **`workspace.py`**: Defines `UnifiedTaskPanel`. This is a generic 3-column layout skeleton used by both modes to ensure a consistent "Left-Center-Right" look and feel.
+* **`clip_explorer.py`**: Defines `CommonProjectTreePanel`. The universal left sidebar containing project control buttons, the file tree, and filter options.
+* **`dialogs.py`**: Contains modal dialogs such as the **Project Creation Wizard** and custom **Folder Picker**.
 
-#### Classification (`/ui/classification`)
+#### Classification Components (`/ui/classification`)
 
-* **`panels.py`**: Defines the `LeftPanel` (List), `CenterPanel` (Player), and `RightPanel` (Annotation inputs) layouts.
-* **`widgets.py`**: Custom widgets including `DynamicSingleLabelGroup` (Radio buttons) and `DynamicMultiLabelGroup` (Checkboxes) generated from the project schema.
+* **`media_player/`**: Contains the **Center Panel** logic.
+* `preview.py`: Video player with integrated slider.
+* `controls.py`: Navigation buttons (Prev/Next Action/Clip).
 
-#### Localization (`/ui/localization`)
 
-* **`panels.py`**: Defines the layout containers for the localization interface.
-* **`widgets/clip_explorer.py`**: The left sidebar widget for managing the list of video clips (wraps common components).
-* **`widgets/media_player.py`**: The center widget containing the video player, custom zoomable timeline, and playback controls.
-* **`widgets/event_editor.py`**: The right sidebar widget containing the multi-tab spotting interface and the editable event table.
+* **`event_editor/`**: Contains the **Right Panel** logic.
+* `dynamic_widgets.py`: Auto-generated Radio Button groups or Checkbox groups based on the JSON schema.
+* `editor.py`: The container widget that holds task info, schema editor, and annotation inputs.
+
+
+
+#### Localization Components (`/ui/localization`)
+
+* **`media_player/`**: Contains the **Center Panel** logic.
+* `timeline.py`: A complex, custom-drawn timeline widget supporting zooming, markers, and auto-scrolling.
+* `controls.py`: Playback controls including frame stepping and playback speed adjustment.
+
+
+* **`event_editor/`**: Contains the **Right Panel** logic.
+* `spotting_controls.py`: Multi-tab interface for "spotting" actions (adding timestamps).
+* `annotation_table.py`: Editable table view displaying the list of captured events.
+
+
