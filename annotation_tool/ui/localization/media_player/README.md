@@ -1,4 +1,4 @@
-# Localization Media Player Package
+# Localization Media Player Widget
 
 This package contains the UI components responsible for video playback, timeline visualization, and transport controls within the **Localization (Action Spotting)** mode.
 
