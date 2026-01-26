@@ -22,3 +22,55 @@ ui/localization/
     ├── __init__.py         # Assembles and exports LocRightPanel
     ├── spotting_controls.py# Tabbed interface for creating new events (Spotting)
     └── annotation_table.py # Table view for listing and editing existing events
+
+```
+
+---
+
+## 📝 Component Descriptions
+
+### 1. Left Sidebar (Common Component)
+
+*Note: The left sidebar is now a shared component located in `ui/common/clip_explorer.py`.*
+
+* **Function:** Displays the hierarchical list of "Clips / Sequences".
+* **Features:** Handles filtering (Show Labelled/No Labelled) and standard project file operations (Save, Load, Export).
+
+### 2. `media_player/` (Center Area)
+
+This package defines the `LocCenterPanel`, handling all visual aspects of the video.
+
+* **`preview.py` (MediaPreviewWidget)**:
+* Handles the low-level `QMediaPlayer` and `QAudioOutput` logic.
+* Ensures video rendering and audio synchronization.
+
+
+* **`timeline.py` (TimelineWidget)**:
+* **Core Feature**: A custom-painted widget representing the video duration.
+* **Visual Markers**: Draws colored lines on the track where events have occurred.
+* **Zoom System**: Supports dynamic zooming to expand the slider for frame-perfect navigation.
+* **Auto-Scroll**: Logic to keep the playhead centered during playback when zoomed in.
+
+
+* **`controls.py` (PlaybackControlBar)**:
+* Provides granular navigation buttons: `<< 1s`, `>> 1s`, `Prev/Next Clip`.
+* Variable playback speed controls (0.25x - 4.0x).
+
+
+
+### 3. `event_editor/` (Right Sidebar)
+
+This package defines the `LocRightPanel`, handling the data entry workflow.
+
+* **`spotting_controls.py`**:
+* **`AnnotationManagementWidget`**: A tabbed container generated dynamically from the project Schema (JSON).
+* **`HeadSpottingPage`**: A grid of buttons inside each tab. Clicking a button triggers an event creation at the current timestamp.
+* **Context Menus**: Supports right-clicking tabs to rename categories (Heads) or delete them.
+
+
+* **`annotation_table.py`**:
+* **`AnnotationTableWidget`**: Displays a detailed list of all recorded events for the active video.
+* **In-place Editing**: Implements a custom Model (`AnnotationTableModel`) allowing users to double-click cells to directly edit the Time, Category, or Label.
+* **Sync**: Selecting a row automatically seeks the video player to that timestamp.
+
+
