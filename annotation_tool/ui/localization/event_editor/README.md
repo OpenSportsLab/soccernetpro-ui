@@ -1,4 +1,4 @@
-# Event Editor Module (`ui/localization/event_editor/`)
+# Event Editor Widget
 
 ## Overview
 
