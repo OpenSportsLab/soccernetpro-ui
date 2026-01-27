@@ -2,7 +2,7 @@
 
 This project is a professional video annotation desktop application built with **PyQt6**. It features a dual-mode architecture supporting both **Whole-Video Classification** and **Action Spotting (Localization)** tasks.
 
-The project follows a modular **MVC (Model-View-Controller)** design pattern to ensure separation of concerns between data handling, business logic, and user interface. Recent updates have unified the UI architecture using a composite design pattern.
+The project follows a modular **MVC (Model-View-Controller)** design pattern to ensure separation of concerns between data handling, business logic, and user interface. Recent updates have unified the UI architecture using a composite design pattern and migrated the resource management to a robust **Qt Model/View** architecture.
 
 ## 📂 Project Structure Overview
 
@@ -10,14 +10,18 @@ The project follows a modular **MVC (Model-View-Controller)** design pattern to 
 annotation_tool/
 ├── main.py                     # Application entry point
 ├── viewer.py                   # Main Window controller (orchestrates UI & Logic)
-├── models.py                   # Data models, application state, and JSON validation
 ├── utils.py                    # Helper functions and constants
 ├── __init__.py                 # Package initialization
+│
+├── models/                     # [Model Layer] Data Structures & State
+│   ├── __init__.py
+│   ├── app_state.py            # Global Application State & Undo/Redo Stack
+│   └── project_tree.py         # Shared QStandardItemModel for File Tree (MV Pattern)
 │
 ├── style/                      # Visual theme assets
 │   └── style.qss               # Dark mode stylesheet (default)
 │
-├── controllers/                # [Logic Layer] Business logic
+├── controllers/                # [Controller Layer] Business logic
 │   ├── __init__.py
 │   ├── router.py               # Routing logic (Project loading & mode switching)
 │   ├── history_manager.py      # Universal Undo/Redo system
@@ -25,17 +29,17 @@ annotation_tool/
 │   ├── classification/         # Logic for Classification mode
 │   │   ├── annotation_manager.py
 │   │   ├── class_file_manager.py
-│   │   └── navigation_manager.py
+│   │   └── navigation_manager.py # Handles interaction with the shared Tree Model
 │   │
 │   └── localization/           # Logic for Localization mode
 │       ├── loc_file_manager.py
-│       └── localization_manager.py
+│       └── localization_manager.py # Handles interaction with the shared Tree Model
 │
 └── ui/                         # [View Layer] Interface definitions
     ├── common/                 # Shared widgets & layouts
     │   ├── main_window.py      # Main UI Assembler (Stacks Views)
     │   ├── workspace.py        # Generic 3-Column Layout (UnifiedTaskPanel)
-    │   ├── clip_explorer.py    # Universal Left Sidebar (Tree & Filters)
+    │   ├── clip_explorer.py    # Universal Left Sidebar (QTreeView implementation)
     │   ├── project_controls.py # Unified control buttons (Save, Export, etc.)
     │   ├── dialogs.py          # Pop-up dialogs (Wizard, File Picker)
     │   └── welcome_widget.py   # Welcome screen
@@ -62,9 +66,6 @@ annotation_tool/
             ├── annotation_table.py  # Event list table
             ├── spotting_controls.py # Tabbed spotting interface
             └── __init__.py          # Exposes LocRightPanel
-
-```
-
 ---
 
 ## 📝 File & Module Descriptions
