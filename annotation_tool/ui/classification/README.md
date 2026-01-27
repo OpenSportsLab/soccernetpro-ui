@@ -65,7 +65,8 @@ ui/classification/
 * **`__init__.py`**:
 * Exposes **`ClassificationMediaPlayer`**: The assembled widget that combines the preview area and the navigation toolbar into a vertical layout.
 
-
+### 3.Left Sidebar (Clip / Sequence Explorer)
+Clip Explorer Sidebar: Displays the hierarchical list of `Clips/Sequences`, supports filtering (`Labelled/Not Labelled`) and project operations (`Save/Load/Export`). This UI is provided and driven by `ui/common/clip_explorer.py`.
 
 ---
 
