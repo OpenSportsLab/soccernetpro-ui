@@ -1,20 +1,29 @@
 import os
 import copy
-from PyQt6.QtWidgets import QMessageBox, QInputDialog, QTreeWidgetItem, QFileDialog, QMenu
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtWidgets import QMessageBox, QInputDialog, QMenu, QAbstractItemView
+from PyQt6.QtCore import Qt, QUrl, QModelIndex
 from PyQt6.QtGui import QColor
 from PyQt6.QtMultimedia import QMediaPlayer
+
+# [Refactor] Updated imports based on new structure recommendations
+# If you haven't moved files yet, change these imports back to where they are.
 from utils import natural_sort_key
 from models import CmdType 
+# Assuming ProjectTreeModel is accessible via main_window or imports if needed for type hinting
 
 class LocalizationManager:
     """
     Manages logic for the UI2 Localization Interface.
-    Redesigned to support Multi-Head Tabs, Integrated Label Management, and Table Interaction.
+    Refactored to support QTreeView + QStandardItemModel (MV Architecture).
     """
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
+        
+        # [MV] Access the shared Tree Model created in viewer.py
+        # Ensure viewer.py initializes: self.tree_model = ProjectTreeModel(self)
+        self.tree_model = main_window.tree_model 
+        
         self.ui_root = main_window.ui.localization_ui
         
         self.left_panel = self.ui_root.left_panel
@@ -32,8 +41,9 @@ class LocalizationManager:
         pc.saveRequested.connect(self._on_save_clicked)
         pc.exportRequested.connect(self._on_export_clicked)
         
-        # Tree Interactions
-        self.left_panel.tree.currentItemChanged.connect(self.on_clip_selected)
+        # [MV Fix] Tree Interactions
+        # QTreeView does not have currentItemChanged. We must use the selection model.
+        self.left_panel.tree.selectionModel().currentChanged.connect(self.on_clip_selected)
         
         # Right Click Context Menu
         self.left_panel.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -70,7 +80,7 @@ class LocalizationManager:
         tabs.headDeleted.connect(self._on_head_deleted)
         tabs.headSelected.connect(self._on_head_selected)
         
-        # Label & Spotting Logic (From inside Tabs)
+        # Label & Spotting Logic
         tabs.spottingTriggered.connect(self._on_spotting_triggered)
         tabs.labelAddReq.connect(self._on_label_add_req)
         tabs.labelRenameReq.connect(self._on_label_rename_req)
@@ -79,7 +89,6 @@ class LocalizationManager:
         # Table Logic
         table.annotationSelected.connect(lambda ms: media.set_position(ms))
         table.annotationDeleted.connect(self._on_delete_single_annotation)
-        # This signal is now triggered via direct cell edits in the table model
         table.annotationModified.connect(self._on_annotation_modified)
 
     # --- Media Sync ---
@@ -89,6 +98,7 @@ class LocalizationManager:
         self.right_panel.annot_mgmt.tabs.update_current_time(time_str)
 
     # --- Head Management (Tab Operations) ---
+    # ... (Kept as is, these logic parts are fine) ...
     def _on_head_selected(self, head_name):
         self.current_head = head_name
 
@@ -96,16 +106,10 @@ class LocalizationManager:
         if any(h.lower() == head_name.lower() for h in self.model.label_definitions):
             self.main.show_temp_msg("Error", f"Head '{head_name}' already exists!", icon=QMessageBox.Icon.Warning)
             return
-            
         definition = {"type": "single_label", "labels": []}
-        
-        # 1. Push Undo
         self.model.push_undo(CmdType.SCHEMA_ADD_CAT, head=head_name, definition=definition)
-        
-        # 2. Execute
         self.model.label_definitions[head_name] = definition
         self.model.is_data_dirty = True
-        
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(head_name)
         self.main.show_temp_msg("Head Added", f"Created '{head_name}'")
@@ -113,25 +117,17 @@ class LocalizationManager:
 
     def _on_head_renamed(self, old_name, new_name):
         if old_name == new_name: return
-        
         if any(h.lower() == new_name.lower() for h in self.model.label_definitions):
             self.main.show_temp_msg("Error", "Name already exists!", icon=QMessageBox.Icon.Warning)
             return
-            
-        # 1. Push Undo
         self.model.push_undo(CmdType.SCHEMA_REN_CAT, old_name=old_name, new_name=new_name)
-            
-        # 2. Execute (Update Defs)
         self.model.label_definitions[new_name] = self.model.label_definitions.pop(old_name)
-        
-        # Execute (Update Events)
         count = 0
         for vid_path, events in self.model.localization_events.items():
             for evt in events:
                 if evt.get('head') == old_name:
                     evt['head'] = new_name
                     count += 1
-                    
         self.model.is_data_dirty = True
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(new_name)
@@ -147,8 +143,6 @@ class LocalizationManager:
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
         )
         if res != QMessageBox.StandardButton.Yes: return
-        
-        # 1. Capture Affected Data for Undo
         loc_affected = {}
         removed_count = 0
         for vid_path, events in self.model.localization_events.items():
@@ -156,27 +150,12 @@ class LocalizationManager:
             if affected_evts:
                 loc_affected[vid_path] = affected_evts
                 removed_count += len(affected_evts)
-        
         definition = copy.deepcopy(self.model.label_definitions.get(head_name))
-        
-        # 2. Push Undo
-        self.model.push_undo(
-            CmdType.SCHEMA_DEL_CAT, 
-            head=head_name, 
-            definition=definition, 
-            loc_affected_events=loc_affected
-        )
-        
-        # 3. Execute
+        self.model.push_undo(CmdType.SCHEMA_DEL_CAT, head=head_name, definition=definition, loc_affected_events=loc_affected)
         if head_name in self.model.label_definitions:
             del self.model.label_definitions[head_name]
-            
         for vid_path in self.model.localization_events:
-            self.model.localization_events[vid_path] = [
-                e for e in self.model.localization_events[vid_path] 
-                if e.get('head') != head_name
-            ]
-            
+            self.model.localization_events[vid_path] = [e for e in self.model.localization_events[vid_path] if e.get('head') != head_name]
         self.model.is_data_dirty = True
         self._refresh_schema_ui()
         self._refresh_current_clip_events()
@@ -185,93 +164,59 @@ class LocalizationManager:
 
     # --- Label Management ---
     def _on_label_add_req(self, head):
-        """
-        Flow: Pause video -> Get current time -> Input label -> Add Schema & Spot -> Resume
-        """
-        # 1. Get player state and pause
         player = self.center_panel.media_preview.player
         was_playing = (player.playbackState() == QMediaPlayer.PlaybackState.PlayingState)
-        if was_playing:
-            player.pause()
-            
+        if was_playing: player.pause()
         current_pos = player.position()
         time_str = self._fmt_ms(current_pos)
 
-        # 2. Show dialog
-        text, ok = QInputDialog.getText(
-            self.main, 
-            "Add New Label & Spot", 
-            f"Add new label to '{head}' and spot at {time_str}?"
-        )
-        
+        text, ok = QInputDialog.getText(self.main, "Add New Label & Spot", f"Add new label to '{head}' and spot at {time_str}?")
         if not ok or not text.strip():
-            # Resume if cancelled
             if was_playing: player.play()
             return
-            
         label_name = text.strip()
         labels_list = self.model.label_definitions[head].get('labels', [])
-        
         if any(l.lower() == label_name.lower() for l in labels_list):
             self.main.show_temp_msg("Error", "Label exists!", icon=QMessageBox.Icon.Warning)
             if was_playing: player.play()
             return
             
-        # 3. Action 1: Modify Schema (Add Label)
         self.model.push_undo(CmdType.SCHEMA_ADD_LBL, head=head, label=label_name)
         labels_list.append(label_name)
         self.model.label_definitions[head]['labels'] = labels_list
         self.model.is_data_dirty = True
         
-        # 4. Action 2: Modify Data (Create Event)
         if self.current_video_path:
-            new_event = {
-                "head": head,
-                "label": label_name,
-                "position_ms": current_pos
-            }
-            # Note: Undo Stack will have two operations.
+            new_event = {"head": head, "label": label_name, "position_ms": current_pos}
             self.model.push_undo(CmdType.LOC_EVENT_ADD, video_path=self.current_video_path, event=new_event)
-            
             if self.current_video_path not in self.model.localization_events:
                 self.model.localization_events[self.current_video_path] = []
             self.model.localization_events[self.current_video_path].append(new_event)
         
-        # 5. Refresh UI
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(head)
         self._display_events_for_item(self.current_video_path)
-        self.populate_tree() 
+        self.refresh_tree_icons() # [MV] Just refresh icons, don't rebuild
         self.main.show_temp_msg("Added & Spotted", f"{head}: {label_name} at {time_str}")
         self.main.update_save_export_button_state()
-
-        # 6. Resume
-        if was_playing:
-            player.play()
+        if was_playing: player.play()
 
     def _on_label_rename_req(self, head, old_label):
         new_label, ok = QInputDialog.getText(self.main, "Rename Label", f"Rename '{old_label}' to:", text=old_label)
         if not ok or not new_label.strip() or new_label == old_label: return
         new_label = new_label.strip()
         labels_list = self.model.label_definitions[head].get('labels', [])
-        
         if any(l.lower() == new_label.lower() for l in labels_list if l != old_label):
              self.main.show_temp_msg("Error", "Label exists!", icon=QMessageBox.Icon.Warning); return
-        
-        # 1. Push Undo
         self.model.push_undo(CmdType.SCHEMA_REN_LBL, head=head, old_lbl=old_label, new_lbl=new_label)
-             
-        # 2. Execute
         index = labels_list.index(old_label)
         labels_list[index] = new_label
-        
         count = 0
         for vid_path, events in self.model.localization_events.items():
             for evt in events:
                 if evt.get('head') == head and evt.get('label') == old_label:
                     evt['label'] = new_label
                     count += 1
-                    
         self.model.is_data_dirty = True
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(head)
@@ -285,34 +230,17 @@ class LocalizationManager:
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
         )
         if res != QMessageBox.StandardButton.Yes: return
-        
-        # 1. Capture Affected Data
         loc_affected = {}
-        removed_count = 0
         for vid_path, events in self.model.localization_events.items():
             aff = [copy.deepcopy(e) for e in events if e.get('head') == head and e.get('label') == label]
-            if aff:
-                loc_affected[vid_path] = aff
-                removed_count += len(aff)
-        
-        # 2. Push Undo
-        self.model.push_undo(
-            CmdType.SCHEMA_DEL_LBL, 
-            head=head, 
-            label=label, 
-            loc_affected_events=loc_affected
-        )
-
-        # 3. Execute
+            if aff: loc_affected[vid_path] = aff
+        self.model.push_undo(CmdType.SCHEMA_DEL_LBL, head=head, label=label, loc_affected_events=loc_affected)
         labels_list = self.model.label_definitions[head].get('labels', [])
-        if label in labels_list:
-            labels_list.remove(label)
-            
+        if label in labels_list: labels_list.remove(label)
         for vid_path in self.model.localization_events:
             events = self.model.localization_events[vid_path]
             new_events = [e for e in events if not (e.get('head') == head and e.get('label') == label)]
             self.model.localization_events[vid_path] = new_events
-            
         self.model.is_data_dirty = True
         self._refresh_schema_ui()
         self.right_panel.annot_mgmt.tabs.set_current_head(head)
@@ -324,94 +252,55 @@ class LocalizationManager:
         if not self.current_video_path:
             QMessageBox.warning(self.main, "Warning", "No video selected."); return
         pos_ms = self.center_panel.media_preview.player.position()
-        
-        new_event = {
-            "head": head,
-            "label": label,
-            "position_ms": pos_ms
-        }
-        
-        # 1. Push Undo
+        new_event = {"head": head, "label": label, "position_ms": pos_ms}
         self.model.push_undo(CmdType.LOC_EVENT_ADD, video_path=self.current_video_path, event=new_event)
-        
-        # 2. Execute
         if self.current_video_path not in self.model.localization_events:
             self.model.localization_events[self.current_video_path] = []
         self.model.localization_events[self.current_video_path].append(new_event)
-        
         self.model.is_data_dirty = True
         self._display_events_for_item(self.current_video_path)
-        self.populate_tree() 
+        self.refresh_tree_icons() 
         self.main.show_temp_msg("Event Created", f"{head}: {label}")
         self.main.update_save_export_button_state() 
 
-    # --- Table Modification (New Logic) ---
+    # --- Table Modification ---
     def _on_annotation_modified(self, old_event, new_event):
-        """
-        Called when a cell in the table is edited directly.
-        """
         events = self.model.localization_events.get(self.current_video_path, [])
         try:
-            # We need to find the specific event object reference to replace or index
-            # Since old_event might be a copy from the model, we rely on value equality
             index = events.index(old_event)
-        except ValueError:
-            return 
-
-        # 1. Push Undo
-        self.model.push_undo(
-            CmdType.LOC_EVENT_MOD, 
-            video_path=self.current_video_path, 
-            old_event=copy.deepcopy(old_event), 
-            new_event=new_event
-        )
-
-        # 2. Execute
+        except ValueError: return 
+        self.model.push_undo(CmdType.LOC_EVENT_MOD, video_path=self.current_video_path, old_event=copy.deepcopy(old_event), new_event=new_event)
         new_head = new_event['head']
         new_label = new_event['label']
         schema_changed = False
-        
-        # Logic to auto-create schema if edited via Table (Optional but good UX)
         if new_head not in self.model.label_definitions:
             self.model.label_definitions[new_head] = {"type": "single_label", "labels": []}
             schema_changed = True
-            
         if new_label and new_label != "???":
             labels_list = self.model.label_definitions[new_head]['labels']
             if not any(l.lower() == new_label.lower() for l in labels_list):
                 labels_list.append(new_label)
                 schema_changed = True
-        
         events[index] = new_event
         self.model.is_data_dirty = True
-        
         if schema_changed:
             self._refresh_schema_ui()
             self.right_panel.annot_mgmt.tabs.set_current_head(new_head)
-            
         self._display_events_for_item(self.current_video_path)
-        self.populate_tree()
+        self.refresh_tree_icons()
         self.main.show_temp_msg("Event Updated", "Modified")
         self.main.update_save_export_button_state() 
 
     def _on_delete_single_annotation(self, item_data):
         events = self.model.localization_events.get(self.current_video_path, [])
         if item_data not in events: return
-
-        reply = QMessageBox.question(
-            self.main, "Delete Event", "Delete this event?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
+        reply = QMessageBox.question(self.main, "Delete Event", "Delete this event?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply != QMessageBox.StandardButton.Yes: return
-
-        # 1. Push Undo
         self.model.push_undo(CmdType.LOC_EVENT_DEL, video_path=self.current_video_path, event=copy.deepcopy(item_data))
-
-        # 2. Execute
         events.remove(item_data)
         self.model.is_data_dirty = True
         self._display_events_for_item(self.current_video_path)
-        self.populate_tree()
+        self.refresh_tree_icons()
         self.main.update_save_export_button_state() 
 
     # --- Helper Refresh Methods ---
@@ -433,36 +322,35 @@ class LocalizationManager:
         if not files: return
         if not self.model.current_working_directory:
             self.model.current_working_directory = os.path.dirname(files[0])
+        
         added_count = 0
         for file_path in files:
+            # Check duplicates using AppStateModel
             if any(d['path'] == file_path for d in self.model.action_item_data):
                 continue
+            
             name = os.path.basename(file_path)
+            # 1. Update Data Model
             self.model.action_item_data.append({'name': name, 'path': file_path, 'source_files': [file_path]})
             self.model.action_path_to_name[file_path] = name
+            
+            # 2. Update Tree Model [MV]
+            item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
+            self.model.action_item_map[file_path] = item
+            
             added_count += 1
+
         if added_count > 0:
             self.model.is_data_dirty = True
-            self.populate_tree()
+            # No need to call populate_tree(), model update reflects in View automatically
             self.main.show_temp_msg("Videos Added", f"Added {added_count} clips.")
 
-    # --- Clear All & Remove Video Logic ---
-
     def _on_clear_all_clicked(self):
-        """Removes all videos, clears player, and clears right panel including Schema."""
-        if not self.model.action_item_data:
-            return
+        if not self.model.action_item_data: return
+        res = QMessageBox.question(self.main, "Clear All", "Are you sure you want to remove ALL videos and clear the workspace?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if res != QMessageBox.StandardButton.Yes: return
 
-        res = QMessageBox.question(
-            self.main, "Clear All", 
-            "Are you sure you want to remove ALL videos and clear the workspace?\n"
-            "This will remove all videos and RESET the label schema.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if res != QMessageBox.StandardButton.Yes:
-            return
-
-        # 1. Clear Data (Includes Schema/Label Definitions)
+        # 1. Clear Data
         self.model.action_item_data = []
         self.model.action_path_to_name = {}
         self.model.localization_events = {}
@@ -470,8 +358,6 @@ class LocalizationManager:
         self.model.is_data_dirty = False 
         self.current_video_path = None
         self.current_head = None 
-        
-        # Undo stack should probably be cleared on full reset
         self.model.undo_stack.clear()
         self.model.redo_stack.clear()
 
@@ -481,10 +367,10 @@ class LocalizationManager:
         self.center_panel.media_preview.video_widget.update()
         self.center_panel.timeline.set_markers([])
 
-        # 3. Clear Tree
-        self.left_panel.tree.clear()
+        # 3. Clear Tree [MV]
+        self.tree_model.clear()
         
-        # 4. Clear Right Panel (Top & Bottom)
+        # 4. Clear Right Panel
         self._refresh_schema_ui() 
         self.right_panel.table.set_data([]) 
         
@@ -492,31 +378,30 @@ class LocalizationManager:
         self.main.update_save_export_button_state() 
 
     def _on_tree_context_menu(self, pos):
-        item = self.left_panel.tree.itemAt(pos)
-        if not item: return
+        # [MV] Use indexAt instead of itemAt
+        index = self.left_panel.tree.indexAt(pos)
+        if not index.isValid(): return
 
-        path = item.data(0, Qt.ItemDataRole.UserRole)
-        name = item.text(0)
+        # Extract data from model index
+        # Note: If ProjectTreeModel uses a custom role for path, use that.
+        path = index.data(Qt.ItemDataRole.UserRole)
+        name = index.data(Qt.ItemDataRole.DisplayRole)
 
         menu = QMenu(self.left_panel.tree)
         remove_action = menu.addAction(f"Remove '{name}'")
-        
         action = menu.exec(self.left_panel.tree.mapToGlobal(pos))
         
         if action == remove_action:
-            self._remove_single_video(path)
+            self._remove_single_video(path, index)
 
-    def _remove_single_video(self, path):
-        # 1. Remove from Model
+    def _remove_single_video(self, path, index):
+        # 1. Remove from App State
         self.model.action_item_data = [d for d in self.model.action_item_data if d['path'] != path]
-        if path in self.model.action_path_to_name:
-            del self.model.action_path_to_name[path]
-        if path in self.model.localization_events:
-            del self.model.localization_events[path]
-            
+        if path in self.model.action_path_to_name: del self.model.action_path_to_name[path]
+        if path in self.model.localization_events: del self.model.localization_events[path]
         self.model.is_data_dirty = True
 
-        # 2. If removing the CURRENTLY playing video
+        # 2. If removing current video
         if self.current_video_path == path:
             self.current_video_path = None
             self.center_panel.media_preview.stop()
@@ -524,8 +409,11 @@ class LocalizationManager:
             self.right_panel.table.set_data([])
             self.center_panel.timeline.set_markers([])
 
-        # 3. Refresh Tree
-        self.populate_tree()
+        # 3. Remove from Tree Model [MV]
+        # We need the QStandardItem to remove the row, or remove by row index
+        if index.isValid():
+             self.tree_model.removeRow(index.row(), index.parent())
+
         self.main.show_temp_msg("Removed", "Video removed from list.")
         self.main.update_save_export_button_state() 
 
@@ -533,70 +421,84 @@ class LocalizationManager:
 
     def populate_tree(self):
         """
-        Refreshes the clip tree.
-        Blocks signals throughout the entire process to prevent
-        accidental triggering of on_clip_selected (which resets video playback).
+        [MV] Re-populates the tree model entirely from action_item_data.
+        Useful when loading a full JSON project.
         """
-        previous_path = self.current_video_path
-        
-        # 1. Start blocking signals BEFORE clearing
+        # Block signals on the VIEW, not the widget (though View inherits Widget)
         self.left_panel.tree.blockSignals(True) 
         
-        self.left_panel.tree.clear()
+        self.tree_model.clear()
+        self.model.action_item_map.clear()
         
         sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get('name', '')))
-        item_to_restore = None
-        first_item = None
+        
+        previous_path = self.current_video_path
+        item_to_restore_idx = None
+        first_idx = None
         
         for i, data in enumerate(sorted_list):
             name = data['name']
             path = data['path']
-            item = QTreeWidgetItem(self.left_panel.tree, [name])
-            item.setData(0, Qt.ItemDataRole.UserRole, path)
-            events = self.model.localization_events.get(path, [])
-            item.setIcon(0, self.main.done_icon if events else self.main.empty_icon)
             
-            if i == 0: first_item = item
-            if path == previous_path: item_to_restore = item
+            # [MV] Add to model
+            item = self.tree_model.add_entry(name, path, data.get('source_files'))
+            self.model.action_item_map[path] = item
+            
+            # Icon logic
+            events = self.model.localization_events.get(path, [])
+            item.setIcon(self.main.done_icon if events else self.main.empty_icon)
+            
+            if i == 0: first_idx = item.index()
+            if path == previous_path: item_to_restore_idx = item.index()
         
         self.left_panel.project_controls.set_project_loaded_state(True)
         self._refresh_schema_ui()
-        
         if self.current_head:
              self.right_panel.annot_mgmt.tabs.set_current_head(self.current_head)
         
         self._apply_clip_filter(self.left_panel.filter_combo.currentIndex())
         
-        # 2. Restore Selection Logic
-        if item_to_restore:
-            self.left_panel.tree.setCurrentItem(item_to_restore)
-        elif previous_path is None and first_item:
-            self.left_panel.tree.setCurrentItem(first_item)
+        # Restore selection
+        if item_to_restore_idx and item_to_restore_idx.isValid():
+            self.left_panel.tree.setCurrentIndex(item_to_restore_idx)
+        elif previous_path is None and first_idx and first_idx.isValid():
+            self.left_panel.tree.setCurrentIndex(first_idx)
+            # Trigger load manually if needed
+            self.on_clip_selected(first_idx, None)
         
-        # 3. Finally Unblock Signals
         self.left_panel.tree.blockSignals(False)
 
-        # 4. Handle the "New Load" case manually
-        if not item_to_restore and previous_path is None and first_item:
-             self.on_clip_selected(first_item, None)
+    def refresh_tree_icons(self):
+        """[MV] Efficiently update icons without rebuilding tree."""
+        for path, item in self.model.action_item_map.items():
+            events = self.model.localization_events.get(path, [])
+            item.setIcon(self.main.done_icon if events else self.main.empty_icon)
 
-    def _apply_clip_filter(self, index):
-        root = self.left_panel.tree.invisibleRootItem()
-        for i in range(root.childCount()):
+    def _apply_clip_filter(self, combo_index):
+        # [MV] QTreeView uses setRowHidden. 
+        # Note: Ideally use QSortFilterProxyModel, but iterating rows works for simple cases.
+        root = self.tree_model.invisibleRootItem()
+        for i in range(root.rowCount()):
             item = root.child(i)
-            path = item.data(0, Qt.ItemDataRole.UserRole)
+            path = item.data(Qt.ItemDataRole.UserRole)
             events = self.model.localization_events.get(path, [])
             has_anno = len(events) > 0
+            
             should_hide = False
-            if index == 1 and not has_anno: should_hide = True
-            elif index == 2 and has_anno: should_hide = True
-            item.setHidden(should_hide)
+            if combo_index == 1 and not has_anno: should_hide = True # Show Labelled
+            elif combo_index == 2 and has_anno: should_hide = True   # Show No Labelled
+            
+            self.left_panel.tree.setRowHidden(i, QModelIndex(), should_hide)
 
-    def on_clip_selected(self, current, previous):
-        if not current: 
+    def on_clip_selected(self, current_idx, previous_idx):
+        """
+        [MV] Slot for QItemSelectionModel.currentChanged
+        """
+        if not current_idx.isValid(): 
             self.current_video_path = None
             return
-        path = current.data(0, Qt.ItemDataRole.UserRole)
+        
+        path = current_idx.data(Qt.ItemDataRole.UserRole)
         
         if path == self.current_video_path: 
             return
@@ -608,7 +510,10 @@ class LocalizationManager:
         else:
             if path: QMessageBox.warning(self.main, "Error", f"File not found: {path}")
 
+    # ... [Rest of methods like _display_events_for_item, _navigate_clip need minimal adjustments] ...
+    
     def _display_events_for_item(self, path):
+        # Unchanged
         events = self.model.localization_events.get(path, [])
         display_data = []
         clip_name = os.path.basename(path)
@@ -618,35 +523,24 @@ class LocalizationManager:
             display_data.append(e) 
         display_data.sort(key=lambda x: x.get('position_ms', 0))
         self.right_panel.table.set_data(display_data)
-        
         markers = [{'start_ms': e.get('position_ms', 0), 'color': QColor("#00BFFF")} for e in events]
         self.center_panel.timeline.set_markers(markers)
 
-    def _on_save_clicked(self):
-        self.main.router.loc_fm.overwrite_json()
-
-    def _on_export_clicked(self):
-        self.main.router.loc_fm.export_json()
-
     def _navigate_clip(self, step):
+        # [MV] Navigate based on Visible rows in View
         tree = self.left_panel.tree
-        curr = tree.currentItem()
-        if not curr: return
-        visible_items = []
-        root = tree.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
-            if not item.isHidden():
-                visible_items.append(item)
-        if not visible_items: return
-        try:
-            curr_idx = visible_items.index(curr)
-            new_idx = curr_idx + step
-            if 0 <= new_idx < len(visible_items):
-                tree.setCurrentItem(visible_items[new_idx])
-        except ValueError:
-            pass
+        curr_idx = tree.currentIndex()
+        if not curr_idx.isValid(): return
+        
+        # Simplified navigation logic for MV
+        # We can just move selection up/down using the View's native methods or loop indices
+        next_idx = tree.indexBelow(curr_idx) if step > 0 else tree.indexAbove(curr_idx)
+        
+        # Check if we should skip hidden items (indexBelow usually handles visual order)
+        if next_idx.isValid():
+            tree.setCurrentIndex(next_idx)
 
+    # _navigate_annotation, _select_row_by_time, _fmt_ms ... Unchanged
     def _navigate_annotation(self, step):
         if not self.current_video_path: return
         events = self.model.localization_events.get(self.current_video_path, [])
@@ -687,3 +581,9 @@ class LocalizationManager:
         m = s // 60
         h = m // 60
         return f"{h:02}:{m%60:02}:{s%60:02}.{ms%1000:03}"
+
+    def _on_save_clicked(self):
+        self.main.router.loc_fm.overwrite_json()
+
+    def _on_export_clicked(self):
+        self.main.router.loc_fm.export_json()
