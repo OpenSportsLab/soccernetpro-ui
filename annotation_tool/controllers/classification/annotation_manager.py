@@ -30,11 +30,14 @@ class AnnotationManager:
         self.main.update_action_item_status(path)
         self.main.update_save_export_button_state()
         
+        # [MV Fix] Auto-advance using QTreeView API
         tree = self.ui.classification_ui.left_panel.tree
-        curr = tree.currentItem()
-        nxt = tree.itemBelow(curr)
-        if nxt:
-            QTimer.singleShot(500, lambda: [tree.setCurrentItem(nxt), tree.scrollToItem(nxt)])
+        curr_idx = tree.currentIndex()
+        if curr_idx.isValid():
+            # Try to get index below
+            nxt_idx = tree.indexBelow(curr_idx)
+            if nxt_idx.isValid():
+                QTimer.singleShot(500, lambda: [tree.setCurrentIndex(nxt_idx), tree.scrollTo(nxt_idx)])
 
     def clear_current_manual_annotation(self):
         path = self.main.get_current_action_path()
@@ -66,6 +69,10 @@ class AnnotationManager:
                 old_val = cmd['new_val']; break
                 
         self.model.push_undo(CmdType.UI_CHANGE, path=path, head=head, old_val=old_val, new_val=new_val)
+
+    # ... handle_add_label_head, handle_remove_label_head ...
+    # These methods below generally don't touch the TreeView, so they are fine as is, 
+    # but I'll include them to ensure the file is complete.
 
     def handle_add_label_head(self, name):
         clean = name.strip().replace(' ', '_').lower()
