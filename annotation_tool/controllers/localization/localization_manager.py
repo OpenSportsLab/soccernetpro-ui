@@ -7,7 +7,6 @@ from PyQt6.QtMultimedia import QMediaPlayer
 
 from utils import natural_sort_key
 from models import CmdType 
-# Assuming ProjectTreeModel is accessible via main_window or imports if needed for type hinting
 
 class LocalizationManager:
     """
@@ -37,8 +36,7 @@ class LocalizationManager:
         pc.saveRequested.connect(self._on_save_clicked)
         pc.exportRequested.connect(self._on_export_clicked)
         
-        # [MV Fix] Tree Interactions
-        # QTreeView does not have currentItemChanged. We must use the selection model.
+        # Tree Interactions
         self.left_panel.tree.selectionModel().currentChanged.connect(self.on_clip_selected)
         
         # Right Click Context Menu
