@@ -76,6 +76,8 @@ class ClassFileManager:
 
         self.model.current_json_path = file_path
         self.model.json_loaded = True
+        
+        # [MV Note] populate_action_tree now uses self.main.tree_model internally
         self.main.populate_action_tree()
         self.main.update_save_export_button_state()
         
@@ -195,7 +197,10 @@ class ClassFileManager:
             self.ui.show_classification_view()
 
     def _clear_workspace(self, full_reset=False):
-        self.ui.classification_ui.left_panel.tree.clear()
+        # [MV Fix] Clear the Model, not the View
+        # self.ui.classification_ui.left_panel.tree.clear() # Old QTreeWidget code
+        self.main.tree_model.clear()
+        
         self.model.reset(full_reset)
         self.main.update_save_export_button_state()
         self.ui.classification_ui.right_panel.manual_box.setEnabled(False)
