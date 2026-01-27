@@ -1,12 +1,14 @@
 import os
 from PyQt6.QtWidgets import QMessageBox, QFileDialog
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QModelIndex
+from ui.common.tree_model import ProjectTreeModel
 from utils import SUPPORTED_EXTENSIONS
 
 class NavigationManager:
     """
     Handles file navigation (action tree), adding videos, and playback flow 
     for the Classification mode.
+    Refactored for QTreeView (MV).
     """
     def __init__(self, main_window):
         self.main = main_window
@@ -38,8 +40,9 @@ class NavigationManager:
             
             name = os.path.basename(file_path)
             self.model.action_item_data.append({'name': name, 'path': file_path, 'source_files': [file_path]})
-            # Create mapping for quick lookup
-            item = self.ui.classification_ui.left_panel.add_tree_item(name, file_path, [file_path])
+            
+            # [MV Fix] Add to Model directly
+            item = self.main.tree_model.add_entry(name, file_path, [file_path])
             self.model.action_item_map[file_path] = item
             added_count += 1
             
@@ -48,8 +51,11 @@ class NavigationManager:
             self.apply_action_filter()
             self.main.show_temp_msg("Added", f"Added {added_count} items.")
 
-    def remove_single_action_item(self, item):
-        path = item.data(0, Qt.ItemDataRole.UserRole)
+    def remove_single_action_item(self, index: QModelIndex):
+        """
+        Removes an item given its QModelIndex.
+        """
+        path = index.data(ProjectTreeModel.FilePathRole)
         
         # 1. Remove from Data
         self.model.action_item_data = [d for d in self.model.action_item_data if d['path'] != path]
@@ -61,9 +67,8 @@ class NavigationManager:
         if path in self.model.manual_annotations:
             del self.model.manual_annotations[path]
             
-        # 3. Remove from UI
-        index = self.ui.classification_ui.left_panel.tree.indexOfTopLevelItem(item)
-        self.ui.classification_ui.left_panel.tree.takeTopLevelItem(index)
+        # 3. Remove from UI (Model)
+        self.main.tree_model.removeRow(index.row(), index.parent())
         
         self.model.is_data_dirty = True
         self.main.show_temp_msg("Removed", "Item removed.")
@@ -74,20 +79,18 @@ class NavigationManager:
         Called when the user clicks a different item in the left tree.
         Loads the video and forces playback.
         """
-        if not current: return
+        if not current.isValid(): return
         
-        path = current.data(0, Qt.ItemDataRole.UserRole)
+        path = current.data(ProjectTreeModel.FilePathRole)
         
         # Update Right Panel (Annotations)
         self.main.annot_manager.display_manual_annotation(path)
         self.ui.classification_ui.right_panel.manual_box.setEnabled(True)
         
-        
         # Update Center Panel (Video)
         self.ui.classification_ui.center_panel.show_single_view(path)
         
-        # [Fix] Force play when switching clips
-        # Use QTimer with 0ms to ensure the event loop processes the load before playing
+        # Force play when switching clips
         self.ui.classification_ui.center_panel.single_view_widget.player.play()
         
     def play_video(self):
@@ -95,25 +98,40 @@ class NavigationManager:
         self.ui.classification_ui.center_panel.toggle_play_pause()
 
     def show_all_views(self):
-        curr = self.ui.classification_ui.left_panel.tree.currentItem()
-        if not curr or curr.childCount() == 0: return
-        paths = [curr.child(i).data(0, Qt.ItemDataRole.UserRole) for i in range(curr.childCount())]
+        # [MV] Handle Multi-View
+        tree_view = self.ui.classification_ui.left_panel.tree
+        curr_idx = tree_view.currentIndex()
+        if not curr_idx.isValid(): return
+        
+        # Check if item has children rows
+        model = self.main.tree_model
+        if model.rowCount(curr_idx) == 0: return
+        
+        paths = []
+        for i in range(model.rowCount(curr_idx)):
+            child_idx = model.index(i, 0, curr_idx)
+            paths.append(child_idx.data(ProjectTreeModel.FilePathRole))
+            
         self.ui.classification_ui.center_panel.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
 
     def apply_action_filter(self):
-        """Filters the tree items based on Done/Not Done status."""
+        """Filters the tree items based on Done/Not Done status using setRowHidden."""
         idx = self.ui.classification_ui.left_panel.filter_combo.currentIndex()
-        root = self.ui.classification_ui.left_panel.tree.invisibleRootItem()
-        for i in range(root.childCount()):
+        tree_view = self.ui.classification_ui.left_panel.tree
+        model = self.main.tree_model
+        
+        root = model.invisibleRootItem()
+        for i in range(root.rowCount()):
             item = root.child(i)
-            path = item.data(0, Qt.ItemDataRole.UserRole)
+            # We access data via the item (QStandardItem) or index
+            path = item.data(ProjectTreeModel.FilePathRole)
             is_done = (path in self.model.manual_annotations and bool(self.model.manual_annotations[path]))
             
             should_hide = False
             if idx == self.main.FILTER_DONE and not is_done: should_hide = True
             elif idx == self.main.FILTER_NOT_DONE and is_done: should_hide = True
             
-            item.setHidden(should_hide)
+            tree_view.setRowHidden(i, QModelIndex(), should_hide)
 
     def nav_prev_action(self): self._nav_tree(step=-1, level='top')
     def nav_next_action(self): self._nav_tree(step=1, level='top')
@@ -122,33 +140,40 @@ class NavigationManager:
     
     def _nav_tree(self, step, level):
         tree = self.ui.classification_ui.left_panel.tree
-        curr = tree.currentItem()
-        if not curr: return
+        curr = tree.currentIndex()
+        if not curr.isValid(): return
+        
+        model = self.main.tree_model
         
         if level == 'top':
-            # Navigate Top Level Items
-            item = curr if curr.parent() is None else curr.parent()
-            idx = tree.indexOfTopLevelItem(item)
-            new_idx = idx + step
+            # Navigate Top Level Items (Siblings)
+            # If current is a child, get parent first
+            if curr.parent().isValid():
+                curr = curr.parent()
+                
+            new_row = curr.row() + step
             
-            # Find next visible item (respecting filter)
-            while 0 <= new_idx < tree.topLevelItemCount():
-                nxt = tree.topLevelItem(new_idx)
-                if not nxt.isHidden():
-                    tree.setCurrentItem(nxt); tree.scrollToItem(nxt)
-                    break
-                new_idx += step
+            # Simple bounds check, logic can be improved to skip hidden items
+            if 0 <= new_row < model.rowCount(QModelIndex()):
+                # Check visibility (filter)
+                while 0 <= new_row < model.rowCount(QModelIndex()):
+                    if not tree.isRowHidden(new_row, QModelIndex()):
+                        new_idx = model.index(new_row, 0, QModelIndex())
+                        tree.setCurrentIndex(new_idx)
+                        tree.scrollTo(new_idx)
+                        break
+                    new_row += step
         else:
-            # Navigate Children (if applicable)
+            # Navigate Children
             parent = curr.parent()
-            if not parent:
-                # If currently on top level, try to go to child
-                if step == 1 and curr.childCount() > 0:
-                    nxt = curr.child(0)
-                    tree.setCurrentItem(nxt); tree.scrollToItem(nxt)
+            if not parent.isValid():
+                # Currently on top, go to child 0 if step 1
+                if step == 1 and model.rowCount(curr) > 0:
+                    nxt = model.index(0, 0, curr)
+                    tree.setCurrentIndex(nxt); tree.scrollTo(nxt)
             else:
-                idx = parent.indexOfChild(curr)
-                new_idx = idx + step
-                if 0 <= new_idx < parent.childCount():
-                    nxt = parent.child(new_idx)
-                    tree.setCurrentItem(nxt); tree.scrollToItem(nxt)
+                # Currently on child
+                new_row = curr.row() + step
+                if 0 <= new_row < model.rowCount(parent):
+                    nxt = model.index(new_row, 0, parent)
+                    tree.setCurrentIndex(nxt); tree.scrollTo(nxt)
