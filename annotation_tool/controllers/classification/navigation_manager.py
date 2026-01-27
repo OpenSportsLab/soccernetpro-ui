@@ -153,7 +153,7 @@ class NavigationManager:
                 
             new_row = curr.row() + step
             
-            # Simple bounds check, logic can be improved to skip hidden items
+            # Simple bounds check
             if 0 <= new_row < model.rowCount(QModelIndex()):
                 # Check visibility (filter)
                 while 0 <= new_row < model.rowCount(QModelIndex()):
