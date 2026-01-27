@@ -66,6 +66,7 @@ annotation_tool/
             ├── annotation_table.py  # Event list table
             ├── spotting_controls.py # Tabbed spotting interface
             └── __init__.py          # Exposes LocRightPanel
+```
 ---
 
 ## 📝 File & Module Descriptions
