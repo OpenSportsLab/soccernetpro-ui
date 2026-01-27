@@ -1,9 +1,9 @@
 import os
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
-    QLabel, QComboBox, QPushButton, QMenu
+    QWidget, QVBoxLayout, QHBoxLayout, QTreeView, # CHANGED: QTreeView instead of QTreeWidget
+    QLabel, QComboBox, QPushButton, QMenu, QAbstractItemView
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QModelIndex
 
 # Import the shared controls
 from ui.common.project_controls import UnifiedProjectControls
@@ -11,15 +11,12 @@ from ui.common.project_controls import UnifiedProjectControls
 class CommonProjectTreePanel(QWidget):
     """
     A unified Left Panel for both Classification and Localization.
-    Contains:
-    1. UnifiedProjectControls (New, Load, Save...)
-    2. A Title Label
-    3. A QTreeWidget (The list)
-    4. A Filter and Clear button row at the bottom
+    Refactored to follow Model/View architecture using QTreeView.
     """
     
     # Signal emitted when "Remove Item" is clicked in context menu
-    request_remove_item = pyqtSignal(QTreeWidgetItem)
+    # Emits the QModelIndex of the item to be removed
+    request_remove_item = pyqtSignal(QModelIndex)
 
     def __init__(self, 
                  tree_title="Project Items", 
@@ -50,9 +47,11 @@ class CommonProjectTreePanel(QWidget):
         self.lbl_title.setStyleSheet("font-weight: bold; color: #888; margin-top: 10px;")
         layout.addWidget(self.lbl_title)
         
-        # 3. The Tree Widget
-        self.tree = QTreeWidget()
+        # 3. The Tree View (MV Architecture)
+        self.tree = QTreeView()
         self.tree.setHeaderHidden(True)
+        self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         layout.addWidget(self.tree)
         
         # Context Menu Logic
@@ -78,31 +77,15 @@ class CommonProjectTreePanel(QWidget):
         bottom_layout.addWidget(self.clear_btn)
         
         layout.addLayout(bottom_layout)
-        
-
-    def add_tree_item(self, name, path, source_files=None, icon=None):
-        """
-        Helper to add a standard item to the tree.
-        """
-        item = QTreeWidgetItem(self.tree, [name])
-        item.setData(0, Qt.ItemDataRole.UserRole, path)
-        
-        if icon:
-            item.setIcon(0, icon)
-        
-        # Handle child items (e.g. multi-view inputs)
-        if source_files and len(source_files) > 1:
-            for src in source_files:
-                child = QTreeWidgetItem(item, [os.path.basename(src)])
-                child.setData(0, Qt.ItemDataRole.UserRole, src)
-                
-        return item
 
     def _show_context_menu(self, pos):
-        item = self.tree.itemAt(pos)
-        if item:
+        """
+        Handles the context menu request. Maps position to Model Index.
+        """
+        index = self.tree.indexAt(pos)
+        if index.isValid():
             menu = QMenu()
             remove_action = menu.addAction("Remove Item")
             action = menu.exec(self.tree.mapToGlobal(pos))
             if action == remove_action:
-                self.request_remove_item.emit(item)
+                self.request_remove_item.emit(index)
