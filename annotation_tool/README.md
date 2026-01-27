@@ -15,7 +15,7 @@ annotation_tool/
 │
 ├── models/                     # [Model Layer] Data Structures & State
 │   ├── __init__.py
-│   ├── app_state.py            # Global Application State & Undo/Redo Stack
+│   ├── app_state.py            # Global Application State & Undo/Redo Stack & Data Validation
 │   └── project_tree.py         # Shared QStandardItemModel for File Tree (MV Pattern)
 │
 ├── style/                      # Visual theme assets
@@ -76,69 +76,70 @@ annotation_tool/
 These files form the backbone of the application infrastructure.
 
 * **`main.py`**: The bootstrap script. Initializes the `QApplication` and launches the main window.
-* **`viewer.py`**: Defines the `ActionClassifierApp` (Main Window). It acts as the primary bridge, initializing the UI layout and connecting UI signals to their respective Controllers.
-* **`models.py`**: The **Model**. Stores runtime data (`manual_annotations`, `localization_events`), defines the Undo/Redo stacks, and contains strict JSON schema validation logic.
+* **`viewer.py`**: Defines the `ActionClassifierApp` (Main Window). It acts as the primary **Controller**, initializing the shared `ProjectTreeModel` and connecting UI signals to specific Logic Controllers.
 * **`utils.py`**: Utility functions for file handling, natural sorting, and icon generation.
 
-### 2. Style (`/style`)
+### 2. Models (`/models`)
 
-Contains the visual definitions for the application.
+The **Data Layer**. These files handle the application state, data structures, and validation logic. They are completely decoupled from the UI.
 
-* **`style.qss`**: CSS-like definitions for the default **Dark Theme**.
+* **`app_state.py`** (formerly `models.py`): The core Application State. Stores runtime data (`manual_annotations`, `localization_events`), defines Undo/Redo stacks (`CmdType`), and contains strict JSON schema validation logic.
+* **`project_tree.py`**: The **Qt Standard Item Model**. This is the data source for the project tree. It inherits from `QStandardItemModel` and manages the hierarchical data of clips and source files using standard Qt roles.
+* **`__init__.py`**: Exposes the models as a package.
 
-### 3. Controllers (`/controllers`)
+### 3. User Interface (`/ui`)
 
-Pure Python logic handling business rules, data manipulation, and application flow.
-
-#### Shared Controllers
-
-* **`router.py`**: Handles project lifecycle. It determines whether to load the "Classification" view or "Localization" view based on the input JSON structure.
-* **`history_manager.py`**: Manages the Command Pattern implementation for the Undo/Redo system, ensuring UI updates trigger correctly after history operations.
-
-#### Classification Sub-module (`/controllers/classification`)
-
-* **`class_file_manager.py`**: Handles JSON I/O for classification tasks, including relative path calculation and workspace clearing.
-* **`navigation_manager.py`**: Manages the video list navigation, filtering (Done/Not Done), and playback flow for whole-video tasks.
-* **`annotation_manager.py`**: Handles the logic for dynamic schema creation (adding/removing labels) and saving user selections to the model.
-
-#### Localization Sub-module (`/controllers/localization`)
-
-* **`loc_file_manager.py`**: Handles JSON I/O for localization tasks, including path fallback mechanisms for cross-device compatibility.
-* **`localization_manager.py`**: The core logic for action spotting. It synchronizes the video player, timeline, and event table, handling timestamp capture and modification.
-
-### 4. User Interface (`/ui`)
-
-PyQt6 widgets and layout definitions. The UI structure has been refactored to be modular and flattened.
+The **View Layer**. Contains PyQt6 widgets and layout definitions. The UI structure uses **Passive Views**—widgets generally do not contain business logic.
 
 #### Common Components (`/ui/common`)
 
-* **`main_window.py`**: The top-level UI container. It manages the `QStackedLayout` to switch between the Welcome Screen, Classification Interface, and Localization Interface.
-* **`workspace.py`**: Defines `UnifiedTaskPanel`. This is a generic 3-column layout skeleton used by both modes to ensure a consistent "Left-Center-Right" look and feel.
-* **`clip_explorer.py`**: Defines `CommonProjectTreePanel`. The universal left sidebar containing project control buttons, the file tree, and filter options.
+* **`main_window.py`**: The top-level UI container. Manages the `QStackedLayout` to switch between Welcome, Classification, and Localization views.
+* **`workspace.py`**: Defines `UnifiedTaskPanel`. A generic 3-column skeleton that embeds the shared `CommonProjectTreePanel` on the left.
+* **`clip_explorer.py`**: Defines `CommonProjectTreePanel`. The **Shared View** for the project list.
+* *MVC Update*: Now uses `QTreeView` instead of `QTreeWidget`. It acts purely as a viewer for `ProjectTreeModel` and does not store data itself.
+
+
 * **`dialogs.py`**: Contains modal dialogs such as the **Project Creation Wizard** and custom **Folder Picker**.
+* **`project_controls.py`**: Unified control buttons (Save, Export, Add Video) used in the sidebar.
 
 #### Classification Components (`/ui/classification`)
 
-* **`media_player/`**: Contains the **Center Panel** logic.
-* `preview.py`: Video player with integrated slider.
-* `controls.py`: Navigation buttons (Prev/Next Action/Clip).
-
-
-* **`event_editor/`**: Contains the **Right Panel** logic.
-* `dynamic_widgets.py`: Auto-generated Radio Button groups or Checkbox groups based on the JSON schema.
-* `editor.py`: The container widget that holds task info, schema editor, and annotation inputs.
-
-
+* **`media_player/`**: Contains the **Center Panel** widgets (Video Player, Slider).
+* **`event_editor/`**: Contains the **Right Panel** widgets (Dynamic Radio/Checkbox groups driven by Schema).
 
 #### Localization Components (`/ui/localization`)
 
-* **`media_player/`**: Contains the **Center Panel** logic.
-* `timeline.py`: A complex, custom-drawn timeline widget supporting zooming, markers, and auto-scrolling.
-* `controls.py`: Playback controls including frame stepping and playback speed adjustment.
+* **`media_player/`**: Contains the **Center Panel** widgets (Timeline, Custom Video Player).
+* **`event_editor/`**: Contains the **Right Panel** widgets (Tabbed Spotting Interface, Annotation Table).
+
+### 4. Controllers (`/controllers`)
+
+The **Logic Layer**. Pure Python logic handling business rules, data manipulation, and bridging Models and Views.
+
+#### Shared Controllers
+
+* **`router.py`**: Handles project lifecycle (Load/Create/Close). Determines which mode to launch and manages the global state reset.
+* **`history_manager.py`**: Manages the Command Pattern implementation for the Undo/Redo system.
+
+#### Classification Sub-module (`/controllers/classification`)
+
+* **`class_file_manager.py`**: Handles JSON I/O for classification. Clears the **Model** (`ProjectTreeModel`) directly upon workspace reset.
+* **`navigation_manager.py`**: Manages video navigation.
+* *MVC Update*: Manipulates the `ProjectTreeModel` (e.g., adding/removing rows) instead of the UI widget. Filters are applied via `setRowHidden` on the View based on Model data.
 
 
-* **`event_editor/`**: Contains the **Right Panel** logic.
-* `spotting_controls.py`: Multi-tab interface for "spotting" actions (adding timestamps).
-* `annotation_table.py`: Editable table view displaying the list of captured events.
+* **`annotation_manager.py`**: Handles schema logic and saving user selections. Adapts UI signals to update the `AppStateModel`.
+
+#### Localization Sub-module (`/controllers/localization`)
+
+* **`loc_file_manager.py`**: Handles JSON I/O for localization.
+* **`localization_manager.py`**: Core logic for action spotting.
+* *MVC Update*: Listens to `selectionModel().currentChanged` from the View to trigger video loading. Updates the `ProjectTreeModel` directly when clips are added or removed.
+
+
+
+### 5. Style (`/style`)
+
+* **`style.qss`**: CSS-like definitions for the default **Dark Theme**.
 
 
