@@ -27,16 +27,18 @@ The goal of this module is to adhere to the **DRY (Don't Repeat Yourself)** prin
 
 ## 📂 Widget Components
 
-### 3. `clip_explorer.py`
+### 3. `clip_explorer.py` (MV Refactored)
 * **Purpose:** The standardized **Left Sidebar** for resource management.
 * **Key Class:** **`CommonProjectTreePanel`**
+    * **Architecture:** Uses **Qt Model/View** pattern.
+        * Replaced `QTreeWidget` (item-based) with **`QTreeView`**.
+        * Requires a data model (e.g., `ProjectTreeModel`) to be set via the controller.
     * **Composition:**
         * Embeds `UnifiedProjectControls` at the top.
-        * Contains a `QTreeWidget` to display videos/clips.
+        * Contains the `QTreeView` to display clips/actions hierarchy.
         * Contains a bottom row with a **Filter ComboBox** and a **Clear Button**.
-    * **Customization:** Accepts parameters for `tree_title` and `filter_items` to adapt text for Classification ("Actions") vs. Localization ("Clips").
     * **Signals:**
-        * `request_remove_item(QTreeWidgetItem)`: Emitted via context menu.
+        * `request_remove_item(QModelIndex)`: Emitted via context menu for the Controller to handle data deletion.
 
 ### 4. `project_controls.py`
 * **Purpose:** A reusable button grid for project lifecycle management.
@@ -52,7 +54,6 @@ The goal of this module is to adhere to the **DRY (Don't Repeat Yourself)** prin
 * **Key Classes:**
     * **`ProjectTypeDialog`**: Selection window for choosing between Classification/Localization modes.
     * **`CreateProjectDialog`**: A wizard for setting up new projects (Task Name, Modality, Description, and **Dynamic Schema Editor**).
-    * **`FolderPickerDialog`**: A custom file tree allowing multi-folder selection via checkboxes (optimizing UX over standard OS dialogs).
 
 ### 6. `welcome_widget.py`
 * **Purpose:** The landing screen displayed when no project is open.
