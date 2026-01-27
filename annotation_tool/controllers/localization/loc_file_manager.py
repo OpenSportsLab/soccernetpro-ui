@@ -324,7 +324,7 @@ class LocFileManager:
         """
         if hasattr(self.main, "loc_manager"):
             # Left panel: clear clip tree
-            self.main.loc_manager.left_panel.tree.clear()
+            self.main.tree_model.clear() 
 
             # Center panel: stop media preview and clear source
             self.main.loc_manager.center_panel.media_preview.stop()
