@@ -3,6 +3,8 @@
 This directory contains the specific user interface components designed for the **Whole-Video Classification** task.
 
 Unlike the previous monolithic structure, this module is split into two specialized sub-packages (`event_editor` and `media_player`) that plug into the application's common workspace.
+<img width="2096" height="976" alt="10dcdefb36c63c4a33002f85d0f53ae1" src="https://github.com/user-attachments/assets/7983f1a6-281a-45c4-8fff-ec4092460b60" />
+
 
 ## 📂 Directory Structure
 
