@@ -5,8 +5,6 @@ from PyQt6.QtCore import Qt, QUrl, QModelIndex
 from PyQt6.QtGui import QColor
 from PyQt6.QtMultimedia import QMediaPlayer
 
-# [Refactor] Updated imports based on new structure recommendations
-# If you haven't moved files yet, change these imports back to where they are.
 from utils import natural_sort_key
 from models import CmdType 
 # Assuming ProjectTreeModel is accessible via main_window or imports if needed for type hinting
@@ -20,8 +18,6 @@ class LocalizationManager:
         self.main = main_window
         self.model = main_window.model
         
-        # [MV] Access the shared Tree Model created in viewer.py
-        # Ensure viewer.py initializes: self.tree_model = ProjectTreeModel(self)
         self.tree_model = main_window.tree_model 
         
         self.ui_root = main_window.ui.localization_ui
@@ -98,7 +94,6 @@ class LocalizationManager:
         self.right_panel.annot_mgmt.tabs.update_current_time(time_str)
 
     # --- Head Management (Tab Operations) ---
-    # ... (Kept as is, these logic parts are fine) ...
     def _on_head_selected(self, head_name):
         self.current_head = head_name
 
@@ -420,10 +415,6 @@ class LocalizationManager:
     # ----------------------------------------------
 
     def populate_tree(self):
-        """
-        [MV] Re-populates the tree model entirely from action_item_data.
-        Useful when loading a full JSON project.
-        """
         # Block signals on the VIEW, not the widget (though View inherits Widget)
         self.left_panel.tree.blockSignals(True) 
         
@@ -469,14 +460,11 @@ class LocalizationManager:
         self.left_panel.tree.blockSignals(False)
 
     def refresh_tree_icons(self):
-        """[MV] Efficiently update icons without rebuilding tree."""
         for path, item in self.model.action_item_map.items():
             events = self.model.localization_events.get(path, [])
             item.setIcon(self.main.done_icon if events else self.main.empty_icon)
 
     def _apply_clip_filter(self, combo_index):
-        # [MV] QTreeView uses setRowHidden. 
-        # Note: Ideally use QSortFilterProxyModel, but iterating rows works for simple cases.
         root = self.tree_model.invisibleRootItem()
         for i in range(root.rowCount()):
             item = root.child(i)
@@ -487,13 +475,10 @@ class LocalizationManager:
             should_hide = False
             if combo_index == 1 and not has_anno: should_hide = True # Show Labelled
             elif combo_index == 2 and has_anno: should_hide = True   # Show No Labelled
-            
+        
             self.left_panel.tree.setRowHidden(i, QModelIndex(), should_hide)
 
     def on_clip_selected(self, current_idx, previous_idx):
-        """
-        [MV] Slot for QItemSelectionModel.currentChanged
-        """
         if not current_idx.isValid(): 
             self.current_video_path = None
             return
@@ -510,7 +495,6 @@ class LocalizationManager:
         else:
             if path: QMessageBox.warning(self.main, "Error", f"File not found: {path}")
 
-    # ... [Rest of methods like _display_events_for_item, _navigate_clip need minimal adjustments] ...
     
     def _display_events_for_item(self, path):
         # Unchanged
@@ -527,20 +511,14 @@ class LocalizationManager:
         self.center_panel.timeline.set_markers(markers)
 
     def _navigate_clip(self, step):
-        # [MV] Navigate based on Visible rows in View
         tree = self.left_panel.tree
         curr_idx = tree.currentIndex()
         if not curr_idx.isValid(): return
         
-        # Simplified navigation logic for MV
-        # We can just move selection up/down using the View's native methods or loop indices
         next_idx = tree.indexBelow(curr_idx) if step > 0 else tree.indexAbove(curr_idx)
         
-        # Check if we should skip hidden items (indexBelow usually handles visual order)
         if next_idx.isValid():
             tree.setCurrentIndex(next_idx)
-
-    # _navigate_annotation, _select_row_by_time, _fmt_ms ... Unchanged
     def _navigate_annotation(self, step):
         if not self.current_video_path: return
         events = self.model.localization_events.get(self.current_video_path, [])
