@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QModelIndex
 
 # Import the shared controls
 from ui.common.project_controls import UnifiedProjectControls
-
+ 
 class CommonProjectTreePanel(QWidget):
     """
     A unified Left Panel for both Classification and Localization.
