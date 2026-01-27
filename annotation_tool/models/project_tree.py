@@ -9,7 +9,7 @@ class ProjectTreeModel(QStandardItemModel):
     
     # Define custom role for storing file paths
     FilePathRole = Qt.ItemDataRole.UserRole
-
+ 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setColumnCount(1)
