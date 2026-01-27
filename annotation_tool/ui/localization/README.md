@@ -4,7 +4,8 @@ This directory contains the user interface components specifically designed for 
 
 The layout architecture relies on the **Unified Workspace** pattern, where specialized components defined here are injected into a common application skeleton.
 
-<img width="2076" height="1094" alt="localization" src="https://github.com/user-attachments/assets/9220ed90-db63-410c-b277-422131a2a6bb" />
+<img width="2098" height="1154" alt="52437227-65d8-4edc-97fc-d441e3d43d5f" src="https://github.com/user-attachments/assets/c682a6ed-367b-4575-95c2-450620bb19cb" />
+
 
 ## 📂 Directory Structure
 
