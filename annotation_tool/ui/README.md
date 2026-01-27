@@ -1,100 +1,56 @@
-# User Interface (UI) Module
+# 🛠️ Common UI Components
 
-This directory contains the **View layer** of the application's MVC architecture. It is responsible solely for the graphical presentation and user interaction components.
+This directory contains **shared interface widgets and layout containers** used across the application. 
 
-**Note:** No business logic or data manipulation is performed here. All user interactions (clicks, edits) are emitted as Qt Signals to be handled by the `controllers` module.
+The goal of this module is to adhere to the **DRY (Don't Repeat Yourself)** principle, ensuring a consistent user experience and architecture for both **Classification** and **Localization** tasks.
 
-## 📂 Directory Structure
+## 📂 Structural Components
 
-The UI is organized by functional domain, with a unified common layer and symmetrical structures for specific tasks:
+### 1. `main_window.py`
+* **Purpose:** The top-level UI container for the application.
+* **Key Class:** **`MainWindowUI`**
+    * Uses a `QStackedLayout` to manage the high-level views.
+    * **View 0:** `WelcomeWidget` (Entry screen).
+    * **View 1:** `Classification` Interface (assembled via `UnifiedTaskPanel`).
+    * **View 2:** `Localization` Interface (assembled via `UnifiedTaskPanel`).
 
-```text
-ui/
-├── common/             # Core layout, dialogs, and reusable widgets
-│   ├── main_window.py      # The top-level application container
-│   ├── workspace.py        # The unified 3-column layout skeleton
-│   ├── clip_explorer.py    # The shared left-side project tree
-│   ├── project_controls.py # The shared 3x2 button grid
-│   └── dialogs.py          # Pop-up dialogs (New Project, Folder Picker)
-│
-├── classification/     # Components for Whole-Video Classification
-│   ├── media_player/       # Video preview and navigation controls
-│   └── event_editor/       # Dynamic form generation for labeling
-│
-└── localization/       # Components for Temporal Action Spotting
-    ├── media_player/       # Video preview, timeline, and zoom controls
-    └── event_editor/       # Annotation tables and spotting tabs
-
-```
+### 2. `workspace.py`
+* **Purpose:** Defines the generic layout skeleton used by specific tasks.
+* **Key Class:** **`UnifiedTaskPanel`**
+    * Implements the standard **3-Column Layout** strategy:
+        * **Left (Fixed):** `CommonProjectTreePanel` (Shared resource list).
+        * **Center (Expandable):** Task-specific visualizer (e.g., Media Player).
+        * **Right (Fixed):** Task-specific editor (e.g., Annotation Editor).
+    * This ensures both modes look visually consistent while hosting different logic.
 
 ---
 
-## 🧩 Modules Description
+## 📂 Widget Components
 
-### 1. Common (`ui/common/`)
+### 3. `clip_explorer.py` (MV Refactored)
+* **Purpose:** The standardized **Left Sidebar** for resource management.
+* **Key Class:** **`CommonProjectTreePanel`**
+    * **Architecture:** Uses **Qt Model/View** pattern.
+        * Replaced `QTreeWidget` (item-based) with **`QTreeView`**.
+        * Requires a data model (e.g., `ProjectTreeModel`) to be set via the controller.
+    * **Composition:**
+        * Embeds `UnifiedProjectControls` at the top.
+        * Contains the `QTreeView` to display clips/actions hierarchy.
+        * Contains a bottom row with a **Filter ComboBox** and a **Clear Button**.
+    * **Signals:**
+        * `request_remove_item(QModelIndex)`: Emitted via context menu for the Controller to handle data deletion.
 
-Contains the structural backbone of the application to ensure a consistent user experience across different modes.
+### 4. `project_controls.py`
+* **Purpose:** A reusable button grid for project lifecycle management.
+* **Key Class:** **`UnifiedProjectControls`**
+    * **Layout:** A 3x2 Grid containing 6 essential buttons:
+        * `New Project`, `Load Project`
+        * `Add Data`, `Close Project`
+        * `Save`, `Export`
+    * **Signals:** `createRequested`, `loadRequested`, `addVideoRequested`, `closeRequested`, `saveRequested`, `exportRequested`.
 
-* **`main_window.py`**:
-* The entry point for the GUI.
-* Uses a `QStackedLayout` to switch between the Welcome Screen, Classification View, and Localization View.
-* Composes the views by injecting specific widgets into the generic `UnifiedTaskPanel`.
-
-
-* **`workspace.py`**:
-* Defines the **`UnifiedTaskPanel`**: A generic shell that enforces the standard "Left-Center-Right" layout.
-* Standardizes the look and feel so both Classification and Localization modes appear consistent.
-
-
-* **`clip_explorer.py`**:
-* Implements the **Left Panel** used in both modes.
-* Contains the project tree (Clips/Actions), filter dropdowns, and the Unified Project Controls.
-
-
-* **`dialogs.py`**:
-* `ProjectTypeDialog`: Forces the user to choose between Classification and Localization modes.
-* `CreateProjectDialog`: A wizard for setting up new tasks and defining the initial Label Schema.
-* `FolderPickerDialog`: A custom file tree for efficient multi-folder selection.
-
-
-
-### 2. Classification (`ui/classification/`)
-
-Implements the interface for **Whole-Video Classification** (assigning global labels to an entire video clip).
-
-* **`media_player/`** (Center Panel):
-* **`preview.py`**: A standard video player with a `ClickableSlider` for absolute positioning.
-* **`controls.py`**: Basic navigation buttons (Next/Prev Clip, Play/Pause).
-
-
-* **`event_editor/`** (Right Panel):
-* **`editor.py`**: The container for the schema editor and annotation forms.
-* **`dynamic_widgets.py`**: Logic to generate `RadioButtons` (single-label) or `Checkboxes` (multi-label) dynamically based on the JSON schema.
-
-
-
-### 3. Localization (`ui/localization/`)
-
-Implements the interface for **Action Spotting** (identifying specific timestamps within a video).
-
-* **`media_player/`** (Center Panel):
-* **`preview.py`**: Handles video rendering.
-* **`timeline.py`**: A complex, custom-drawn widget that supports **zooming**, **panning**, and visual event markers.
-* **`controls.py`**: Advanced playback controls, including playback speed (0.25x - 4.0x) and frame stepping.
-
-
-* **`event_editor/`** (Right Panel):
-* **`spotting_controls.py`**: A multi-tab interface ("Heads") containing grids of buttons for quick timestamp marking.
-* **`annotation_table.py`**: A spreadsheet-like view (`QTableView`) for viewing and editing specific timestamps and labels.
-
-
-
----
-
-## 🎨 Design Principles
-
-1. **Composition over Inheritance**: The application uses a generic `UnifiedTaskPanel` (Workspace) and injects specific functional widgets (Media Players/Editors) into it, rather than creating separate hardcoded layouts.
-2. **Passive View**: These classes do not modify the `model` directly. They only display data provided by the controller and emit signals when the user acts.
-3. **Dynamic Generation**: The annotation forms (buttons/checkboxes/tabs) are not hardcoded; they are generated dynamically at runtime based on the loaded JSON schema.
-4. **Functional Sphericity**: Components are grouped by what they *are* (e.g., `media_player`), creating self-contained packages that handle their own logic.
-
+### 5. `dialogs.py`
+* **Purpose:** Modal dialogs for configuration and initialization.
+* **Key Classes:**
+    * **`ProjectTypeDialog`**: Selection window for choosing between Classification/Localization modes.
+    * **`CreateProjectDialog`**: A wizard for setting up new projects (Task Name, Modality, Description, and **Dynamic Schema Editor**).
