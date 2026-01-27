@@ -1,7 +1,7 @@
 import os
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut
+from PyQt6.QtCore import Qt, QTimer, QModelIndex
+from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut, QStandardItem
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtWidgets import QMainWindow, QMessageBox
 
@@ -12,8 +12,8 @@ from controllers.localization.localization_manager import LocalizationManager
 from controllers.router import AppRouter
 from models import AppStateModel
 
-# [CHANGE] Import from the new common location
 from ui.common.main_window import MainWindowUI
+from ui.common.tree_model import ProjectTreeModel
 from utils import create_checkmark_icon, natural_sort_key, resource_path
 
 
@@ -35,6 +35,16 @@ class ActionClassifierApp(QMainWindow):
         self.setCentralWidget(self.ui)
         self.model = AppStateModel()
 
+        # [NEW] Instantiate the Project Tree Model
+        self.tree_model = ProjectTreeModel(self)
+        
+        # Bind the model to the Classification View
+        self.ui.classification_ui.left_panel.tree.setModel(self.tree_model)
+        
+        # [FIXED] Bind the model to the Localization View as well.
+        # This fixes the 'NoneType' error for selectionModel().
+        self.ui.localization_ui.left_panel.tree.setModel(self.tree_model)
+
         # --- Controllers ---
         self.router = AppRouter(self)
         self.history_manager = HistoryManager(self)
@@ -51,7 +61,6 @@ class ActionClassifierApp(QMainWindow):
         self.connect_signals()
         self.load_stylesheet()
         
-        # [CHANGE] Access classification UI via .classification_ui
         self.ui.classification_ui.right_panel.manual_box.setEnabled(False)
         
         self.setup_dynamic_ui()
@@ -70,7 +79,7 @@ class ActionClassifierApp(QMainWindow):
         self.ui.welcome_widget.import_btn.clicked.connect(self.router.import_annotations)
         self.ui.welcome_widget.create_btn.clicked.connect(self.router.create_new_project_flow)
 
-        # [CHANGE] Classification - Left panel
+        # Classification - Left panel
         cls_left = self.ui.classification_ui.left_panel
         cls_controls = cls_left.project_controls
         
@@ -82,13 +91,16 @@ class ActionClassifierApp(QMainWindow):
         cls_controls.exportRequested.connect(self.router.class_fm.export_json)
 
         cls_left.clear_btn.clicked.connect(self._on_class_clear_clicked)
-        cls_left.request_remove_item.connect(self.nav_manager.remove_single_action_item)
         
-        # [FIX] Changed 'action_tree' to 'tree' to match CommonProjectTreePanel
-        cls_left.tree.currentItemChanged.connect(self.nav_manager.on_item_selected)
+        # [MV Adapter] Context menu remove
+        cls_left.request_remove_item.connect(self._on_remove_item_requested)
+        
+        # [MV Adapter] Selection Change
+        cls_left.tree.selectionModel().currentChanged.connect(self._on_tree_selection_changed)
+        
         cls_left.filter_combo.currentIndexChanged.connect(self.nav_manager.apply_action_filter)
 
-        # [CHANGE] Classification - Center panel
+        # Classification - Center panel
         cls_center = self.ui.classification_ui.center_panel
         cls_center.play_btn.clicked.connect(self.nav_manager.play_video)
         cls_center.multi_view_btn.clicked.connect(self.nav_manager.show_all_views)
@@ -97,19 +109,17 @@ class ActionClassifierApp(QMainWindow):
         cls_center.next_clip.clicked.connect(self.nav_manager.nav_next_clip)
         cls_center.next_action.clicked.connect(self.nav_manager.nav_next_action)
 
-        # [CHANGE] Classification - Right panel
+        # Classification - Right panel
         cls_right = self.ui.classification_ui.right_panel
         cls_right.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation)
         cls_right.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
         cls_right.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
         cls_right.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
 
-        # Undo/redo (both panels share the same stacks)
-        # [CHANGE] Use new paths for classification buttons
+        # Undo/redo
         cls_right.undo_btn.clicked.connect(self.history_manager.perform_undo)
         cls_right.redo_btn.clicked.connect(self.history_manager.perform_redo)
         
-        # Localization Undo/Redo
         self.ui.localization_ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
         self.ui.localization_ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
 
@@ -118,11 +128,11 @@ class ActionClassifierApp(QMainWindow):
         loc_controls.createRequested.connect(self.router.create_new_project_flow)
         loc_controls.closeRequested.connect(self.router.close_project)
 
+        # This will now work because setModel was called above
         self.loc_manager.setup_connections()
 
     def _setup_shortcuts(self) -> None:
         """Register common keyboard shortcuts."""
-
         QShortcut(QKeySequence("Ctrl+O"), self).activated.connect(self.router.import_annotations)
         QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._dispatch_save)
         QShortcut(QKeySequence("Ctrl+Shift+S"), self).activated.connect(self._dispatch_export)
@@ -151,6 +161,19 @@ class ActionClassifierApp(QMainWindow):
         )
 
     # ---------------------------------------------------------------------
+    # MV Adapter Methods
+    # ---------------------------------------------------------------------
+    def _on_tree_selection_changed(self, current: QModelIndex, previous: QModelIndex):
+        if current.isValid():
+            self.nav_manager.on_item_selected(current, previous)
+
+    def _on_remove_item_requested(self, index: QModelIndex):
+        """Handle context menu remove request via Model Index."""
+        # We need the item or the path to identify what to remove
+        if index.isValid():
+            self.nav_manager.remove_single_action_item(index)
+
+    # ---------------------------------------------------------------------
     # Mode-aware dispatchers
     # ---------------------------------------------------------------------
     def _is_loc_mode(self) -> bool:
@@ -176,14 +199,15 @@ class ActionClassifierApp(QMainWindow):
             else:
                 player.play()
         else:
-            self.nav_manager.play_video()
+            player = self.ui.classification_ui.center_panel.single_view_widget.player
+
+        if not player:
+            return
 
     def _dispatch_seek(self, delta_ms: int) -> None:
-        """Seek the active player by delta_ms (milliseconds)."""
         if self._is_loc_mode():
             player = self.loc_manager.center_panel.media_preview.player
         else:
-            # [CHANGE] Use classification_ui path
             player = self.ui.classification_ui.center_panel.single_view_widget.player
 
         if not player:
@@ -192,7 +216,6 @@ class ActionClassifierApp(QMainWindow):
         player.setPosition(max(0, player.position() + delta_ms))
 
     def _dispatch_add_annotation(self) -> None:
-        """Add an annotation in the current mode."""
         if self._is_loc_mode():
             current_head = self.loc_manager.current_head
             if not current_head:
@@ -218,7 +241,6 @@ class ActionClassifierApp(QMainWindow):
             self.router.class_fm._clear_workspace(full_reset=True)
 
     def load_stylesheet(self) -> None:
-        """Load the main (dark) theme stylesheet."""
         style_path = resource_path(os.path.join("style", "style.qss"))
         try:
             with open(style_path, "r", encoding="utf-8") as f:
@@ -227,7 +249,6 @@ class ActionClassifierApp(QMainWindow):
             print(f"Style error: {exc}")
 
     def check_and_close_current_project(self) -> bool:
-        """Ask for confirmation if a project is open, especially with unsaved changes."""
         if not self.model.json_loaded:
             return True
 
@@ -247,7 +268,6 @@ class ActionClassifierApp(QMainWindow):
         return msg_box.clickedButton() == btn_yes
 
     def closeEvent(self, event) -> None:
-        """Prompt to save if there are unsaved changes worth exporting."""
         is_loc_mode = self._is_loc_mode()
         has_data = bool(self.model.localization_events) if is_loc_mode else bool(self.model.manual_annotations)
         can_export = self.model.json_loaded and has_data
@@ -277,111 +297,98 @@ class ActionClassifierApp(QMainWindow):
             event.ignore()
 
     def update_save_export_button_state(self) -> None:
-        """Enable/disable save/export + undo/redo buttons based on current state."""
         is_loc_mode = self._is_loc_mode()
         has_data = bool(self.model.localization_events) if is_loc_mode else bool(self.model.manual_annotations)
 
         can_export = self.model.json_loaded and has_data
         can_save = can_export and (self.model.current_json_path is not None) and self.model.is_data_dirty
 
-        # [CHANGE] Unified controls (Classification uses new path)
         self.ui.classification_ui.left_panel.project_controls.btn_save.setEnabled(can_save)
         self.ui.classification_ui.left_panel.project_controls.btn_export.setEnabled(can_export)
         
-        # Localization uses existing path
         self.ui.localization_ui.left_panel.project_controls.btn_save.setEnabled(can_save)
         self.ui.localization_ui.left_panel.project_controls.btn_export.setEnabled(can_export)
 
         can_undo = len(self.model.undo_stack) > 0
         can_redo = len(self.model.redo_stack) > 0
 
-        # [CHANGE] Classification panel buttons
         self.ui.classification_ui.right_panel.undo_btn.setEnabled(can_undo)
         self.ui.classification_ui.right_panel.redo_btn.setEnabled(can_redo)
-
-        # Localization panel buttons
         self.ui.localization_ui.right_panel.undo_btn.setEnabled(can_undo)
         self.ui.localization_ui.right_panel.redo_btn.setEnabled(can_redo)
 
-    def show_temp_msg(
-        self,
-        title: str,
-        msg: str,
-        duration: int = 1500,
-        icon: QMessageBox.Icon = QMessageBox.Icon.Information,
-    ) -> None:
-        """Show a short-lived message box (auto-closes)."""
+    def show_temp_msg(self, title: str, msg: str, duration: int = 1500, icon: QMessageBox.Icon = QMessageBox.Icon.Information) -> None:
         box = QMessageBox(self)
         box.setWindowTitle(title)
         box.setText(msg)
         box.setIcon(icon)
         box.setStandardButtons(QMessageBox.StandardButton.NoButton)
-
         QTimer.singleShot(duration, box.accept)
         box.exec()
 
     def get_current_action_path(self):
-        """Return the selected action path from the tree (top-level item path)."""
-        # [CHANGE] Access tree via classification_ui
-        curr = self.ui.classification_ui.left_panel.tree.currentItem()
-        if not curr:
+        """
+        Return the selected action path from the tree (top-level item path).
+        """
+        tree_view = self.ui.classification_ui.left_panel.tree
+        idx = tree_view.selectionModel().currentIndex()
+        
+        if not idx.isValid():
             return None
 
-        if curr.parent() is None:
-            return curr.data(0, Qt.ItemDataRole.UserRole)
+        # Check if it has a parent
+        if idx.parent().isValid():
+            return idx.parent().data(ProjectTreeModel.FilePathRole)
 
-        return curr.parent().data(0, Qt.ItemDataRole.UserRole)
+        # It's top level
+        return idx.data(ProjectTreeModel.FilePathRole)
 
-    # [FIX] Renamed to populate_action_tree to match ClassFileManager calls
     def populate_action_tree(self) -> None:
-        """Rebuild the action tree from model data and select the first item."""
-        # [CHANGE] Access tree via classification_ui
-        tree = self.ui.classification_ui.left_panel.tree
-        tree.clear()
+        """
+        Rebuild the action tree from model data using the new ProjectTreeModel.
+        """
+        self.tree_model.clear()
         self.model.action_item_map.clear()
 
         sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", "")))
+        
         for data in sorted_list:
-            # [CHANGE] Use helper method from left panel
-            item = self.ui.classification_ui.left_panel.add_tree_item(data["name"], data["path"], data.get("source_files"))
+            item = self.tree_model.add_entry(
+                name=data["name"], 
+                path=data["path"], 
+                source_files=data.get("source_files")
+            )
             self.model.action_item_map[data["path"]] = item
 
-        # Update completion icons once items exist
         for path in self.model.action_item_map.keys():
             self.update_action_item_status(path)
 
         self.nav_manager.apply_action_filter()
 
-        if tree.topLevelItemCount() > 0:
-            first_item = tree.topLevelItem(0)
-            tree.setCurrentItem(first_item)
+        if self.tree_model.rowCount() > 0:
+            first_idx = self.tree_model.index(0, 0)
+            tree_view = self.ui.classification_ui.left_panel.tree
+            tree_view.setCurrentIndex(first_idx)
             QTimer.singleShot(200, self.nav_manager.play_video)
 
     def update_action_item_status(self, action_path: str) -> None:
-        """Set the checkmark icon if an action has at least one manual annotation."""
-        item = self.model.action_item_map.get(action_path)
+        item: QStandardItem = self.model.action_item_map.get(action_path)
         if not item:
             return
 
         is_done = action_path in self.model.manual_annotations and bool(self.model.manual_annotations[action_path])
-        item.setIcon(0, self.done_icon if is_done else self.empty_icon)
+        item.setIcon(self.done_icon if is_done else self.empty_icon)
 
-        # Keep filter in sync as statuses change
         self.nav_manager.apply_action_filter()
 
     def setup_dynamic_ui(self) -> None:
-        """Build right-panel label groups from the current task definition."""
-        # [CHANGE] Access right panel via classification_ui
         cls_right = self.ui.classification_ui.right_panel
         cls_right.setup_dynamic_labels(self.model.label_definitions)
         cls_right.task_label.setText(f"Task: {self.model.current_task_name}")
         self._connect_dynamic_type_buttons()
 
     def _connect_dynamic_type_buttons(self) -> None:
-        """Bind dynamic label widgets to the annotation manager."""
-        # [CHANGE] Access label_groups via classification_ui
         for head, group in self.ui.classification_ui.right_panel.label_groups.items():
-            # Avoid duplicate connections when rebuilding the UI
             try:
                 group.add_btn.clicked.disconnect()
             except Exception:
@@ -400,18 +407,18 @@ class ActionClassifierApp(QMainWindow):
             group.value_changed.connect(lambda h, v: self.annot_manager.handle_ui_selection_change(h, v))
 
     def refresh_ui_after_undo_redo(self, action_path: str) -> None:
-        """Refresh tree selection, status icons, and right panel after undo/redo."""
         if not action_path:
             return
 
         self.update_action_item_status(action_path)
 
-        # [CHANGE] Access tree via classification_ui
-        tree = self.ui.classification_ui.left_panel.tree
-        item = self.model.action_item_map.get(action_path)
+        item: QStandardItem = self.model.action_item_map.get(action_path)
+        tree_view = self.ui.classification_ui.left_panel.tree
         
-        if item and tree.currentItem() != item:
-            tree.setCurrentItem(item)
+        if item:
+            idx = item.index()
+            if tree_view.currentIndex() != idx:
+                tree_view.setCurrentIndex(idx)
 
         current = self.get_current_action_path()
         if current == action_path:
