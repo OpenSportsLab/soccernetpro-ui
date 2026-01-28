@@ -63,7 +63,7 @@ class HeadSpottingPage(QWidget):
         layout.setSpacing(10)
 
         self.time_label = QLabel("Current Time: 00:00.000")
-        self.time_label.setStyleSheet("color: #00BFFF; font-weight: bold; font-family: monospace; font-size: 14px;")
+        self.time_label.setStyleSheet("color: #00BFFF; font-weight: bold; font-family: Menlo; font-size: 14px;")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.time_label)
 
