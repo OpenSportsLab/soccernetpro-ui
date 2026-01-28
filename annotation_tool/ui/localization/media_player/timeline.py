@@ -60,7 +60,7 @@ class TimelineWidget(QWidget):
         # 1. Time Label
         self.time_label = QLabel("00:00.000 / 00:00.000")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.time_label.setStyleSheet("font-family: 'Courier New', monospace; font-size: 12px; font-weight: bold; color: #EEE;")
+        self.time_label.setStyleSheet("font-family: 'Courier New', Menlo; font-size: 12px; font-weight: bold; color: #EEE;")
         main_layout.addWidget(self.time_label)
         
         # 2. Timeline Row
