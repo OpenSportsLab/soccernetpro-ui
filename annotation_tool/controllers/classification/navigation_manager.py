@@ -1,7 +1,7 @@
 import os
 from PyQt6.QtWidgets import QMessageBox, QFileDialog
 from PyQt6.QtCore import Qt, QModelIndex
-from ui.common.tree_model import ProjectTreeModel
+from models.project_tree import ProjectTreeModel
 from utils import SUPPORTED_EXTENSIONS
 
 class NavigationManager:
