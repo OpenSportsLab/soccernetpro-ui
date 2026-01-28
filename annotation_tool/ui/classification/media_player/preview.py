@@ -66,7 +66,7 @@ class MediaPreview(QWidget):
         self.time_label = QLabel("00:00 / 00:00")
         self.time_label.setFixedWidth(120)
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.time_label.setStyleSheet("font-family: monospace; font-weight: bold;")
+        self.time_label.setStyleSheet("font-family: Menlo; font-weight: bold;")
         
         # 3. Layout
         self.v_layout = QVBoxLayout(self)
