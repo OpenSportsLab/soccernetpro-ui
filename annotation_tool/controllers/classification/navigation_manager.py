@@ -1,6 +1,7 @@
 import os
 from PyQt6.QtWidgets import QMessageBox, QFileDialog
-from PyQt6.QtCore import Qt, QModelIndex
+from PyQt6.QtCore import Qt, QModelIndex, QTimer
+# [Ref] Import from the correct models location
 from models.project_tree import ProjectTreeModel
 from utils import SUPPORTED_EXTENSIONS
 
@@ -87,11 +88,19 @@ class NavigationManager:
         self.main.annot_manager.display_manual_annotation(path)
         self.ui.classification_ui.right_panel.manual_box.setEnabled(True)
         
-        # Update Center Panel (Video)
+        # [FIX] Get player instance
+        player = self.ui.classification_ui.center_panel.single_view_widget.player
+        
+        # [FIX] Explicitly stop the player before loading a new source.
+        # This helps reset the video pipeline and prevents black screens on some systems.
+        player.stop()
+        
+        # Update Center Panel (Video) - This loads the new source
         self.ui.classification_ui.center_panel.show_single_view(path)
         
-        # Force play when switching clips
-        self.ui.classification_ui.center_panel.single_view_widget.player.play()
+        # [FIX] Force play with increased delay (150ms).
+        # 150ms-200ms is a safer buffer for PyQt6 QMediaPlayer.
+        QTimer.singleShot(150, player.play)
         
     def play_video(self):
         """Toggle Play/Pause"""
@@ -153,7 +162,7 @@ class NavigationManager:
                 
             new_row = curr.row() + step
             
-            # Simple bounds check
+            # Simple bounds check, logic can be improved to skip hidden items
             if 0 <= new_row < model.rowCount(QModelIndex()):
                 # Check visibility (filter)
                 while 0 <= new_row < model.rowCount(QModelIndex()):
