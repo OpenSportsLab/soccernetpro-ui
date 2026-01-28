@@ -13,7 +13,7 @@ from controllers.router import AppRouter
 from models import AppStateModel
 
 from ui.common.main_window import MainWindowUI
-from ui.common.tree_model import ProjectTreeModel
+from models.project_tree import ProjectTreeModel
 from utils import create_checkmark_icon, natural_sort_key, resource_path
 
 
