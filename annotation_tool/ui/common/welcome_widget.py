@@ -16,19 +16,19 @@ class WelcomeWidget(QWidget):
         
         # Title Label
         title = QLabel("SoccerNet Annotation Tool")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #00BFFF;")
+        title.setObjectName("welcome_title_lbl")
         layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignHCenter)
         
         # Create Project Button
         self.create_btn = QPushButton("Create New Project")
         self.create_btn.setFixedSize(200, 50)
-        self.create_btn.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.create_btn.setProperty("class", "welcome_action_btn")
         self.create_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # Import Project Button
         self.import_btn = QPushButton("Import Project JSON")
         self.import_btn.setFixedSize(200, 50)
-        self.import_btn.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.import_btn.setProperty("class", "welcome_action_btn")
         self.import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
         layout.addWidget(self.create_btn, alignment=Qt.AlignmentFlag.AlignHCenter)

@@ -19,21 +19,7 @@ class LabelButton(QPushButton):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(40)
-        # Styling for the label buttons
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #444; 
-                color: white; 
-                border: 1px solid #555;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 13px;
-                text-align: center;
-                padding: 4px;
-            }
-            QPushButton:hover { background-color: #555; border-color: #777; }
-            QPushButton:pressed { background-color: #0078D7; border-color: #0078D7; }
-        """)
+        self.setProperty("class", "spotting_label_btn")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
@@ -69,7 +55,7 @@ class HeadSpottingPage(QWidget):
 
         # Time display
         self.time_label = QLabel("Current Time: 00:00.000")
-        self.time_label.setStyleSheet("color: #00BFFF; font-weight: bold; font-family: Menlo; font-size: 14px;")
+        self.time_label.setProperty("class", "spotting_time_lbl")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.time_label)
 
@@ -77,7 +63,7 @@ class HeadSpottingPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet("background: transparent;")
+        scroll.setProperty("class", "spotting_scroll_area")
         
         self.grid_container = QWidget()
         self.grid_layout = QGridLayout(self.grid_container)
@@ -124,18 +110,8 @@ class HeadSpottingPage(QWidget):
         add_btn = QPushButton("Add new label at current time")
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.setMinimumHeight(45) 
-        add_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078D7;
-                color: white;
-                border: 1px solid #005A9E;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover { background-color: #1084E3; border-color: #2094F3; }
-            QPushButton:pressed { background-color: #005A9E; }
-        """)
+        add_btn.setProperty("class", "spotting_add_btn")
+
         add_btn.clicked.connect(self.addLabelRequested.emit)
         
         if col != 0: 
@@ -174,23 +150,10 @@ class SpottingTabWidget(QTabWidget):
         self.setTabBarAutoHide(False)
         self.setMovable(False)
         self.setTabsClosable(False) 
-        self.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #444; border-radius: 4px; background: #2E2E2E; }
-            QTabBar::tab {
-                background: #3A3A3A; color: #BBB; padding: 8px 12px;
-                border-top-left-radius: 4px; border-top-right-radius: 4px;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected { background: #2E2E2E; color: white; font-weight: bold; border-bottom: 2px solid #00BFFF; }
-            QTabBar::tab:hover { background: #444; color: white; }
-        """)
+        self.setProperty("class", "spotting_tabs")
         
-        # [MODIFIED] Use tabBarClicked for the "+" button logic.
-        # This fixes the issue where clicking the "+" tab (when it's the only one) 
-        # wouldn't trigger currentChanged because the index didn't change.
         self.tabBar().tabBarClicked.connect(self._on_tab_bar_clicked)
         
-        # Keep currentChanged for normal navigation between existing heads
         self.currentChanged.connect(self._on_tab_changed)
         
         self.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -309,7 +272,7 @@ class AnnotationManagementWidget(QWidget):
         layout.setSpacing(5)
         
         title_label = QLabel("Create Annotation")
-        title_label.setStyleSheet("font-weight: bold; color: #888; margin-bottom: 2px;")
+        title_label.setProperty("class", "panel_header_lbl")
         layout.addWidget(title_label)
         
         self.tabs = SpottingTabWidget()

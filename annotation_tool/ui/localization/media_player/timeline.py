@@ -60,7 +60,7 @@ class TimelineWidget(QWidget):
         # 1. Time Label
         self.time_label = QLabel("00:00.000 / 00:00.000")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.time_label.setStyleSheet("font-family: 'Courier New', Menlo; font-size: 12px; font-weight: bold; color: #EEE;")
+        self.time_label.setProperty("class", "timeline_time_lbl")
         main_layout.addWidget(self.time_label)
         
         # 2. Timeline Row
@@ -69,19 +69,10 @@ class TimelineWidget(QWidget):
         timeline_row.setContentsMargins(5, 0, 5, 0)
         timeline_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        btn_style = """
-            QPushButton { 
-                background-color: #444; color: white; border: 1px solid #555; 
-                border-radius: 4px; font-weight: bold; font-size: 14px;
-            }
-            QPushButton:hover { background-color: #555; }
-            QPushButton:pressed { background-color: #666; }
-        """
-
         # Zoom Out
         self.btn_zoom_out = QPushButton("-")
         self.btn_zoom_out.setFixedSize(24, 24)
-        self.btn_zoom_out.setStyleSheet(btn_style)
+        self.btn_zoom_out.setProperty("class", "timeline_zoom_btn")
         self.btn_zoom_out.clicked.connect(lambda: self._change_zoom(-1))
         timeline_row.addWidget(self.btn_zoom_out)
 
@@ -92,50 +83,15 @@ class TimelineWidget(QWidget):
         self.scroll_area.setFixedHeight(30)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setProperty("class", "timeline_scroll_area")
         
-        self.scroll_area.setStyleSheet("""
-            QScrollArea { background: transparent; }
-            QScrollBar:horizontal {
-                border: none;
-                background: #222;
-                height: 12px;
-                margin: 0px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:horizontal {
-                background: #666;
-                min-width: 20px;
-                border-radius: 6px;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
-        """)
 
         self.scroll_bar = self.scroll_area.horizontalScrollBar()
         self.scroll_bar.sliderPressed.connect(self._on_user_scroll_start)
         self.scroll_bar.sliderReleased.connect(self._on_user_scroll_end)
 
         self.slider = AnnotationSlider(Qt.Orientation.Horizontal)
-        self.slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #3A3A3A;
-                height: 6px;
-                background: #202020;
-                margin: 0px;
-                border-radius: 3px;
-            }
-            QSlider::handle:horizontal {
-                background: #FF3333;
-                border: 1px solid #FF3333;
-                width: 8px; 
-                height: 16px;
-                margin: -5px 0;
-                border-radius: 4px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #444;
-                border-radius: 3px;
-            }
-        """)
+        self.slider.setProperty("class", "timeline_slider")
         self.slider.sliderPressed.connect(self._on_slider_pressed)
         self.slider.sliderMoved.connect(self._on_slider_moved)
         self.slider.sliderReleased.connect(self._on_slider_released)
@@ -146,7 +102,7 @@ class TimelineWidget(QWidget):
         # Zoom In
         self.btn_zoom_in = QPushButton("+")
         self.btn_zoom_in.setFixedSize(24, 24)
-        self.btn_zoom_in.setStyleSheet(btn_style)
+        self.btn_zoom_in.setProperty("class", "timeline_zoom_btn")
         self.btn_zoom_in.clicked.connect(lambda: self._change_zoom(1))
         timeline_row.addWidget(self.btn_zoom_in)
         

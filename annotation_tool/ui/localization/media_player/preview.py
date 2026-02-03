@@ -14,8 +14,7 @@ class MediaPreviewWidget(QWidget):
         layout.setContentsMargins(0,0,0,0)
         
         self.video_widget = QVideoWidget()
-        # Black background helps verify the widget geometry is valid
-        self.video_widget.setStyleSheet("background-color: black;")
+        self.video_widget.setProperty("class", "video_preview_widget")
         self.video_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         self.player = QMediaPlayer()

@@ -27,7 +27,7 @@ class ProjectTypeDialog(QDialog):
         layout.setContentsMargins(30, 30, 30, 30)
 
         lbl = QLabel("Please select the type of project you want to create:")
-        lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ccc;")
+        lbl.setProperty("class", "dialog_instruction_lbl")
         layout.addWidget(lbl)
 
         # Two large buttons side-by-side
@@ -36,26 +36,12 @@ class ProjectTypeDialog(QDialog):
 
         self.btn_cls = QPushButton("Classification")
         self.btn_cls.setMinimumSize(QSize(0, 80))
-        self.btn_cls.setStyleSheet(
-            """
-            QPushButton {
-                font-size: 16px; background-color: #2A2A2A; border: 2px solid #444; border-radius: 8px;
-            }
-            QPushButton:hover { background-color: #3A3A3A; border-color: #00BFFF; }
-            """
-        )
+        self.btn_cls.setProperty("class", "dialog_mode_btn")
         self.btn_cls.clicked.connect(lambda: self._finish("classification"))
 
         self.btn_loc = QPushButton("Localization\n(Action Spotting)")
         self.btn_loc.setMinimumSize(QSize(0, 80))
-        self.btn_loc.setStyleSheet(
-            """
-            QPushButton {
-                font-size: 16px; background-color: #2A2A2A; border: 2px solid #444; border-radius: 8px;
-            }
-            QPushButton:hover { background-color: #3A3A3A; border-color: #00BFFF; }
-            """
-        )
+        self.btn_loc.setProperty("class", "dialog_mode_btn")
         self.btn_loc.clicked.connect(lambda: self._finish("localization"))
 
         btn_layout.addWidget(self.btn_cls)

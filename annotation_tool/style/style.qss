@@ -174,3 +174,340 @@ QSlider::sub-page:horizontal {
     background: #007ACC; /* Filled portion */
     border-radius: 3px;
 }
+
+/* =======================================================
+   Unified UI Component Styles
+   ======================================================= */
+
+/* --- Project Controls (Left Panel Buttons) --- */
+/* Target: ui/common/project_controls.py */
+QPushButton[class="project_control_btn"] {
+    border-radius: 6px;
+    padding: 5px;
+    background-color: #444;
+    color: #EEE;
+    border: 1px solid #555;
+    font-weight: bold;
+    min-height: 35px; /* Moved from setMinimumHeight in Python if desired, or keep logic there */
+}
+
+QPushButton[class="project_control_btn"]:hover {
+    background-color: #555;
+    border-color: #777;
+}
+
+QPushButton[class="project_control_btn"]:pressed {
+    background-color: #0078D7;
+    border-color: #0078D7;
+}
+
+QPushButton[class="project_control_btn"]:disabled {
+    background-color: #333;
+    color: #777;
+    border-color: #333;
+}
+
+/* --- Dialogs: Project Type Selection --- */
+/* Target: ui/common/dialogs.py */
+
+/* The instruction text */
+QLabel[class="dialog_instruction_lbl"] {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ccc;
+}
+
+/* The large Classification/Localization buttons */
+QPushButton[class="dialog_mode_btn"] {
+    font-size: 16px;
+    background-color: #2A2A2A;
+    border: 2px solid #444;
+    border-radius: 8px;
+    min-height: 80px; /* Enforce height here */
+}
+
+QPushButton[class="dialog_mode_btn"]:hover {
+    background-color: #3A3A3A;
+    border-color: #00BFFF; /* The cyan highlight color */
+}
+
+/* --- Welcome Screen --- */
+/* Target: ui/common/welcome_widget.py */
+
+QLabel#welcome_title_lbl {
+    font-size: 24px;
+    font-weight: bold;
+    color: #00BFFF;
+}
+
+QPushButton[class="welcome_action_btn"] {
+    font-size: 16px;
+    font-weight: bold;
+    /* Size (200x50) is better handled in Layout/Python, 
+       but colors fall back to default QPushButton styles unless overridden here */
+}
+
+/* --- Common Project Tree Panel --- */
+/* Target: ui/common/clip_explorer.py */
+
+QLabel[class="panel_header_lbl"] {
+    font-weight: bold;
+    color: #888;
+    margin-top: 10px;
+}
+
+QPushButton#panel_clear_btn {
+    padding: 4px 8px;
+}
+
+/* =======================================================
+   Classification Mode Styles
+   ======================================================= */
+
+/* --- Event Editor Panel --- */
+/* Target: ui/classification/event_editor/editor.py */
+
+/* Undo/Redo Buttons */
+QPushButton[class="editor_control_btn"] {
+    background-color: #444;
+    color: #DDD;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px;
+    font-weight: bold;
+}
+
+QPushButton[class="editor_control_btn"]:hover {
+    background-color: #555;
+    border-color: #777;
+}
+
+QPushButton[class="editor_control_btn"]:disabled {
+    color: #666;
+    background-color: #333;
+}
+
+/* Task Info Label */
+QLabel[class="editor_task_lbl"] {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+/* Save/Confirm Annotation Button */
+QPushButton[class="editor_save_btn"] {
+    background-color: #0078D7;
+    color: white;
+    font-weight: bold;
+}
+
+QPushButton[class="editor_save_btn"]:hover {
+    background-color: #008AE6;
+}
+
+/* --- Dynamic Widgets (Label Groups) --- */
+/* Target: ui/classification/event_editor/dynamic_widgets.py */
+
+/* Common Header Style */
+QLabel[class="group_head_lbl"] {
+    font-weight: bold;
+    font-size: 13px;
+}
+
+/* Specific Colors for Single vs Multi Label Headers */
+QLabel[class="group_head_single"] {
+    color: #00BFFF; /* Cyan */
+}
+
+QLabel[class="group_head_multi"] {
+    color: #32CD32; /* Lime Green */
+}
+
+/* Small 'X' Remove Buttons (Replaces utils.get_square_remove_btn_style) */
+QPushButton[class="icon_remove_btn"] {
+    background-color: transparent;
+    color: #888;
+    border: none;
+    font-weight: bold;
+    font-size: 16px;
+    border-radius: 3px;
+}
+
+QPushButton[class="icon_remove_btn"]:hover {
+    color: #FF4444; /* Red on hover */
+    background-color: rgba(255, 68, 68, 0.1);
+}
+
+/* --- Media Player --- */
+/* Target: ui/classification/media_player/preview.py */
+
+/* Time Display Label (00:00 / 00:00) */
+QLabel[class="player_time_lbl"] {
+    font-family: Menlo, Consolas, "Courier New", monospace;
+    font-weight: bold;
+    color: #EEE;
+}
+
+
+
+/* =======================================================
+   Localization Mode Styles
+   ======================================================= */
+
+/* --- Media Player Preview --- */
+/* Target: ui/localization/media_player/preview.py */
+QWidget[class="video_preview_widget"] {
+    background-color: black;
+}
+
+/* --- Timeline Widget --- */
+/* Target: ui/localization/media_player/timeline.py */
+
+/* Time Label (00:00 / 00:00) */
+QLabel[class="timeline_time_lbl"] {
+    font-family: 'Courier New', Menlo, monospace;
+    font-size: 12px;
+    font-weight: bold;
+    color: #EEE;
+}
+
+/* Zoom Buttons (+/-) */
+QPushButton[class="timeline_zoom_btn"] {
+    background-color: #444;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 14px;
+}
+QPushButton[class="timeline_zoom_btn"]:hover { background-color: #555; }
+QPushButton[class="timeline_zoom_btn"]:pressed { background-color: #666; }
+
+/* Timeline ScrollArea (Container) */
+QScrollArea[class="timeline_scroll_area"] {
+    background: transparent;
+    border: none;
+}
+
+/* Timeline ScrollBar */
+QScrollArea[class="timeline_scroll_area"] QScrollBar:horizontal {
+    border: none;
+    background: #222;
+    height: 12px;
+    margin: 0px;
+    border-radius: 6px;
+}
+QScrollArea[class="timeline_scroll_area"] QScrollBar::handle:horizontal {
+    background: #666;
+    min-width: 20px;
+    border-radius: 6px;
+}
+QScrollArea[class="timeline_scroll_area"] QScrollBar::add-line:horizontal,
+QScrollArea[class="timeline_scroll_area"] QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* Timeline Slider (The Track) */
+QSlider[class="timeline_slider"]::groove:horizontal {
+    border: 1px solid #3A3A3A;
+    height: 6px;
+    background: #202020;
+    margin: 0px;
+    border-radius: 3px;
+}
+QSlider[class="timeline_slider"]::handle:horizontal {
+    background: #FF3333;
+    border: 1px solid #FF3333;
+    width: 8px;
+    height: 16px;
+    margin: -5px 0;
+    border-radius: 4px;
+}
+QSlider[class="timeline_slider"]::sub-page:horizontal {
+    background: #444;
+    border-radius: 3px;
+}
+
+/* --- Spotting Controls (Tabs & Labels) --- */
+/* Target: ui/localization/event_editor/spotting_controls.py */
+
+/* Label Grid Buttons */
+QPushButton[class="spotting_label_btn"] {
+    background-color: #444;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 13px;
+    text-align: center;
+    padding: 4px;
+}
+QPushButton[class="spotting_label_btn"]:hover { background-color: #555; border-color: #777; }
+QPushButton[class="spotting_label_btn"]:pressed { background-color: #0078D7; border-color: #0078D7; }
+
+/* Time Display in Tab */
+QLabel[class="spotting_time_lbl"] {
+    color: #00BFFF;
+    font-weight: bold;
+    font-family: Menlo, monospace;
+    font-size: 14px;
+}
+
+/* Transparent ScrollArea for Buttons */
+QScrollArea[class="spotting_scroll_area"] {
+    background: transparent;
+    border: none;
+}
+
+/* "Add Label" Button */
+QPushButton[class="spotting_add_btn"] {
+    background-color: #0078D7;
+    color: white;
+    border: 1px solid #005A9E;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 13px;
+    min-height: 45px;
+}
+QPushButton[class="spotting_add_btn"]:hover { background-color: #1084E3; border-color: #2094F3; }
+QPushButton[class="spotting_add_btn"]:pressed { background-color: #005A9E; }
+
+/* Spotting Tab Widget */
+QTabWidget[class="spotting_tabs"]::pane {
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #2E2E2E;
+}
+QTabWidget[class="spotting_tabs"] > QTabBar::tab {
+    background: #3A3A3A;
+    color: #BBB;
+    padding: 8px 12px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    margin-right: 2px;
+}
+QTabWidget[class="spotting_tabs"] > QTabBar::tab:selected {
+    background: #2E2E2E;
+    color: white;
+    font-weight: bold;
+    border-bottom: 2px solid #00BFFF;
+}
+QTabWidget[class="spotting_tabs"] > QTabBar::tab:hover {
+    background: #444;
+    color: white;
+}
+
+/* --- Annotation Table --- */
+/* Target: ui/localization/event_editor/annotation_table.py */
+
+QTableView[class="annotation_table"] {
+    background-color: #2E2E2E;
+    gridline-color: #555;
+    color: #DDD;
+    selection-background-color: #0078D7;
+    selection-color: white;
+    alternate-background-color: #3A3A3A;
+}
+QTableView[class="annotation_table"] QHeaderView::section {
+    background-color: #444; color: white; border: 1px solid #555; padding: 4px;
+}

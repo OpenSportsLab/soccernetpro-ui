@@ -28,21 +28,14 @@ class ClassificationEventEditor(QWidget):
         for btn in [self.undo_btn, self.redo_btn]:
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setEnabled(False) 
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #444; color: #DDD; border: 1px solid #555;
-                    border-radius: 4px; padding: 4px; font-weight: bold;
-                }
-                QPushButton:hover { background-color: #555; border-color: #777; }
-                QPushButton:disabled { color: #666; background-color: #333; }
-            """)
+            btn.setProperty("class", "editor_control_btn")
         h_undo.addWidget(self.undo_btn)
         h_undo.addWidget(self.redo_btn)
         layout.addLayout(h_undo)
         
         # 2. Task Information
         self.task_label = QLabel("Task: N/A")
-        self.task_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
+        self.task_label.setProperty("class", "editor_task_lbl")
         layout.addWidget(self.task_label)
 
         # 3. Schema Editor
@@ -76,7 +69,7 @@ class ClassificationEventEditor(QWidget):
         btn_row = QHBoxLayout()
         self.confirm_btn = QPushButton("Save Annotation")
         self.clear_sel_btn = QPushButton("Clear Selection")
-        self.confirm_btn.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold;")
+        self.confirm_btn.setProperty("class", "editor_save_btn")
         self.confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clear_sel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         

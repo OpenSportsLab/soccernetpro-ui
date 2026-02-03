@@ -3,7 +3,6 @@ from PyQt6.QtWidgets import (
     QLineEdit, QButtonGroup, QRadioButton, QCheckBox
 )
 from PyQt6.QtCore import pyqtSignal, Qt
-from utils import get_square_remove_btn_style
 
 class DynamicSingleLabelGroup(QWidget):
     value_changed = pyqtSignal(str, str) # head, selected_label
@@ -21,12 +20,12 @@ class DynamicSingleLabelGroup(QWidget):
         # Header
         header_layout = QHBoxLayout()
         self.lbl_head = QLabel(head_name)
-        self.lbl_head.setStyleSheet("font-weight: bold; font-size: 13px; color: #00BFFF;")
+        self.lbl_head.setProperty("class", "group_head_lbl group_head_single")
         
         self.btn_del_cat = QPushButton("×")
         self.btn_del_cat.setFixedSize(20, 20)
         self.btn_del_cat.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_del_cat.setStyleSheet(get_square_remove_btn_style())
+        self.btn_del_cat.setProperty("class", "icon_remove_btn")
         self.btn_del_cat.clicked.connect(lambda: self.remove_category_signal.emit(self.head_name))
         
         header_layout.addWidget(self.lbl_head)
@@ -78,7 +77,7 @@ class DynamicSingleLabelGroup(QWidget):
             del_label_btn = QPushButton("×")
             del_label_btn.setFixedSize(20, 20)
             del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            del_label_btn.setStyleSheet(get_square_remove_btn_style())
+            del_label_btn.setProperty("class", "icon_remove_btn")
             del_label_btn.clicked.connect(lambda _, l=lbl_text: self.remove_label_signal.emit(l, self.head_name))
             
             row_layout.addWidget(rb)
@@ -121,11 +120,11 @@ class DynamicMultiLabelGroup(QWidget):
         # Header
         header_layout = QHBoxLayout()
         self.lbl_head = QLabel(head_name + " (Multi)")
-        self.lbl_head.setStyleSheet("font-weight: bold; font-size: 13px; color: #32CD32;")
+        self.lbl_head.setProperty("class", "group_head_lbl group_head_multi")
         
         self.btn_del_cat = QPushButton("×")
         self.btn_del_cat.setFixedSize(20, 20)
-        self.btn_del_cat.setStyleSheet(get_square_remove_btn_style())
+        self.btn_del_cat.setProperty("class", "icon_remove_btn")
         self.btn_del_cat.clicked.connect(lambda: self.remove_category_signal.emit(self.head_name))
         
         header_layout.addWidget(self.lbl_head)
@@ -171,7 +170,7 @@ class DynamicMultiLabelGroup(QWidget):
             del_label_btn = QPushButton("×")
             del_label_btn.setFixedSize(20, 20)
             del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            del_label_btn.setStyleSheet(get_square_remove_btn_style())
+            del_label_btn.setProperty("class", "icon_remove_btn")
             del_label_btn.clicked.connect(lambda _, n=type_name: self.remove_label_signal.emit(n, self.head_name))
 
             row_layout.addWidget(cb)

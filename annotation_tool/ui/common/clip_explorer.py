@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QModelIndex
 
 # Import the shared controls
 from ui.common.project_controls import UnifiedProjectControls
- 
+
 class CommonProjectTreePanel(QWidget):
     """
     A unified Left Panel for both Classification and Localization.
@@ -44,7 +44,7 @@ class CommonProjectTreePanel(QWidget):
         
         # 2. Tree Title
         self.lbl_title = QLabel(tree_title)
-        self.lbl_title.setStyleSheet("font-weight: bold; color: #888; margin-top: 10px;")
+        self.lbl_title.setProperty("class", "panel_header_lbl")
         layout.addWidget(self.lbl_title)
         
         # 3. The Tree View (MV Architecture)
@@ -70,7 +70,7 @@ class CommonProjectTreePanel(QWidget):
             
         self.clear_btn = QPushButton(clear_text)
         self.clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.clear_btn.setStyleSheet("padding: 4px 8px;")
+        self.clear_btn.setObjectName("panel_clear_btn")
         
         bottom_layout.addWidget(self.lbl_filter)
         bottom_layout.addWidget(self.filter_combo, 1) # Stretch

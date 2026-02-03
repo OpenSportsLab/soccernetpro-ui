@@ -137,23 +137,11 @@ class AnnotationTableWidget(QWidget):
         layout = QVBoxLayout(self)
         
         lbl = QLabel("Events List")
-        lbl.setStyleSheet("font-weight: bold; color: #888; margin-top: 10px;")
+        lbl.setProperty("class", "panel_header_lbl")
         layout.addWidget(lbl)
         
         self.table = QTableView()
-        self.table.setStyleSheet("""
-            QTableView {
-                background-color: #2E2E2E;
-                gridline-color: #555;
-                color: #DDD;
-                selection-background-color: #0078D7;
-                selection-color: white;
-                alternate-background-color: #3A3A3A;
-            }
-            QHeaderView::section {
-                background-color: #444; color: white; border: 1px solid #555; padding: 4px;
-            }
-        """)
+        self.table.setProperty("class", "annotation_table")
         
         self.model = AnnotationTableModel()
         self.model.itemChanged.connect(self.annotationModified.emit)

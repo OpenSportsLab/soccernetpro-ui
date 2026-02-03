@@ -57,19 +57,7 @@ class UnifiedProjectControls(QWidget):
         for btn in btns:
             btn.setMinimumHeight(35)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet("""
-                QPushButton {
-                    border-radius: 6px;
-                    padding: 5px;
-                    background-color: #444;
-                    color: #EEE;
-                    border: 1px solid #555;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background-color: #555; border-color: #777; }
-                QPushButton:pressed { background-color: #0078D7; border-color: #0078D7; }
-                QPushButton:disabled { background-color: #333; color: #777; border-color: #333; }
-            """)
+            btn.setProperty("class", "project_control_btn")
         
         # Add to Grid (Widget, Row, Column)
         grid_layout.addWidget(self.btn_create, 0, 0)
