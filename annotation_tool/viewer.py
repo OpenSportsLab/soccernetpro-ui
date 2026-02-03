@@ -248,10 +248,11 @@ class ActionClassifierApp(QMainWindow):
         self.ui.classification_ui.right_panel.manual_box.setEnabled(True)
         self.ui.classification_ui.right_panel.task_label.setText(f"Task: {self.model.current_task_name}")
         
+
         self.show_temp_msg(
-            "New Project Created", 
-            "Workspace is ready. You can now use the Schema Editor (Right Panel) to add Categories and Labels.",
-            duration=2500
+            "New Project Created",
+            "Workspace ready. Add labels in the Category Editor."
+            duration=800
         )
 
     def prepare_new_localization_ui(self) -> None:
