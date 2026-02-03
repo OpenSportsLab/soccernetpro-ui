@@ -41,8 +41,7 @@ class ActionClassifierApp(QMainWindow):
         # Bind the model to the Classification View
         self.ui.classification_ui.left_panel.tree.setModel(self.tree_model)
         
-        # [FIXED] Bind the model to the Localization View as well.
-        # This fixes the 'NoneType' error for selectionModel().
+        #  Bind the model to the Localization View as well.
         self.ui.localization_ui.left_panel.tree.setModel(self.tree_model)
 
         # --- Controllers ---
@@ -61,6 +60,7 @@ class ActionClassifierApp(QMainWindow):
         self.connect_signals()
         self.load_stylesheet()
         
+        # Default state: classification right panel is disabled until project loads
         self.ui.classification_ui.right_panel.manual_box.setEnabled(False)
         
         self.setup_dynamic_ui()
@@ -239,6 +239,34 @@ class ActionClassifierApp(QMainWindow):
 
         if msg.exec() == QMessageBox.StandardButton.Yes:
             self.router.class_fm._clear_workspace(full_reset=True)
+
+    def prepare_new_project_ui(self) -> None:
+        """
+        [NEW] Unlocks the Classification UI components for a fresh blank project.
+        """
+        # Unlock the Schema Editor (Right Panel)
+        self.ui.classification_ui.right_panel.manual_box.setEnabled(True)
+        self.ui.classification_ui.right_panel.task_label.setText(f"Task: {self.model.current_task_name}")
+        
+        self.show_temp_msg(
+            "New Project Created", 
+            "Workspace is ready. You can now use the Schema Editor (Right Panel) to add Categories and Labels.",
+            duration=2500
+        )
+
+    def prepare_new_localization_ui(self) -> None:
+        """
+        [NEW] Unlocks the Localization UI components for a fresh blank project.
+        Allows adding Heads/Labels without a video loaded.
+        """
+        # Unlock the Right Panel (contains Annotations, Schema Editor, etc.)
+        self.ui.localization_ui.right_panel.setEnabled(True)
+        
+        self.show_temp_msg(
+            "New Project Created", 
+            "Workspace ready. You can now use the Right Panel to add Heads (+) and Labels.",
+            duration=2500
+        )
 
     def load_stylesheet(self) -> None:
         style_path = resource_path(os.path.join("style", "style.qss"))
