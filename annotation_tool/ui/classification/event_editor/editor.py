@@ -46,7 +46,7 @@ class ClassificationEventEditor(QWidget):
         layout.addWidget(self.task_label)
 
         # 3. Schema Editor
-        schema_box = QGroupBox("Schema Editor")
+        schema_box = QGroupBox("Category Editor")
         schema_layout = QHBoxLayout(schema_box)
         self.new_head_edit = QLineEdit()
         self.new_head_edit.setPlaceholderText("New Category Name...")
