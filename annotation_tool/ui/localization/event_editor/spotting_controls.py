@@ -7,7 +7,10 @@ from PyQt6.QtCore import pyqtSignal, Qt
 # ==================== Custom Widgets ====================
 
 class LabelButton(QPushButton):
-    """Custom Label Button that supports Right-Click signal."""
+    """
+    Custom Label Button that supports Right-Click signal.
+    Used for the grid of labels inside each Head page.
+    """
     rightClicked = pyqtSignal()
     doubleClicked = pyqtSignal()
 
@@ -16,6 +19,7 @@ class LabelButton(QPushButton):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(40)
+        # Styling for the label buttons
         self.setStyleSheet("""
             QPushButton {
                 background-color: #444; 
@@ -47,6 +51,7 @@ class LabelButton(QPushButton):
 class HeadSpottingPage(QWidget):
     """
     A single page (Head/Category) containing a grid of LabelButtons.
+    This corresponds to the content of one tab.
     """
     labelClicked = pyqtSignal(str)       
     addLabelRequested = pyqtSignal()     
@@ -62,11 +67,13 @@ class HeadSpottingPage(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(10)
 
+        # Time display
         self.time_label = QLabel("Current Time: 00:00.000")
         self.time_label.setStyleSheet("color: #00BFFF; font-weight: bold; font-family: Menlo; font-size: 14px;")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.time_label)
 
+        # Scroll area for buttons
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
@@ -91,6 +98,7 @@ class HeadSpottingPage(QWidget):
         self._populate_grid()
 
     def _populate_grid(self):
+        # Clear existing items
         while self.grid_layout.count():
             item = self.grid_layout.takeAt(0)
             if item.widget():
@@ -99,6 +107,7 @@ class HeadSpottingPage(QWidget):
         cols = 2 
         row, col = 0, 0
         
+        # Add label buttons
         for lbl in self.labels:
             display_text = lbl.replace('_', ' ')
             btn = LabelButton(display_text)
@@ -111,6 +120,7 @@ class HeadSpottingPage(QWidget):
                 col = 0
                 row += 1
 
+        # Add "Add Label" button at the bottom
         add_btn = QPushButton("Add new label at current time")
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.setMinimumHeight(45) 
@@ -174,28 +184,45 @@ class SpottingTabWidget(QTabWidget):
             QTabBar::tab:selected { background: #2E2E2E; color: white; font-weight: bold; border-bottom: 2px solid #00BFFF; }
             QTabBar::tab:hover { background: #444; color: white; }
         """)
+        
+        # [MODIFIED] Use tabBarClicked for the "+" button logic.
+        # This fixes the issue where clicking the "+" tab (when it's the only one) 
+        # wouldn't trigger currentChanged because the index didn't change.
+        self.tabBar().tabBarClicked.connect(self._on_tab_bar_clicked)
+        
+        # Keep currentChanged for normal navigation between existing heads
         self.currentChanged.connect(self._on_tab_changed)
+        
         self.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tabBar().customContextMenuRequested.connect(self._show_tab_context_menu)
+        
         self._ignore_change = False
         self._plus_tab_index = -1
         self._head_keys_map = []
+        self._previous_index = -1
 
     def update_schema(self, label_definitions):
+        """Rebuilds the tabs based on the new schema."""
         self._ignore_change = True
         self.clear()
         self._head_keys_map = []
+        
         heads = sorted(label_definitions.keys())
         for head in heads:
             labels = label_definitions[head].get('labels', [])
             page = HeadSpottingPage(head, labels)
+            
+            # Forward signals from page to main controller
             page.labelClicked.connect(lambda l, h=head: self.spottingTriggered.emit(h, l))
             page.addLabelRequested.connect(lambda h=head: self.labelAddReq.emit(h))
             page.renameLabelRequested.connect(lambda l, h=head: self.labelRenameReq.emit(h, l))
             page.deleteLabelRequested.connect(lambda l, h=head: self.labelDeleteReq.emit(h, l))
+            
             display_head = head.replace('_', ' ')
             self.addTab(page, display_head)
             self._head_keys_map.append(head) 
+            
+        # Add the "+" tab at the end
         self._plus_tab_index = self.addTab(QWidget(), "+")
         self._ignore_change = False
 
@@ -208,18 +235,44 @@ class SpottingTabWidget(QTabWidget):
         if head_name in self._head_keys_map:
             idx = self._head_keys_map.index(head_name)
             self.setCurrentIndex(idx)
+            self._previous_index = idx
+
+    def _on_tab_bar_clicked(self, index):
+        """
+        [NEW] Handles clicks on the tab bar. 
+        Specifically catches clicks on the "+" tab to trigger add_head.
+        """
+        if index == self._plus_tab_index and index != -1:
+            # If user clicked the plus tab, prompt for new head
+            self._handle_add_head()
 
     def _on_tab_changed(self, index):
+        """
+        Handles navigation between valid Head tabs.
+        Ignores the "+" tab (handled by clicked event).
+        """
         if self._ignore_change: return
-        if index == self._plus_tab_index and index != -1:
-            self.setCurrentIndex(max(0, index - 1))
-            self._handle_add_head()
-        else:
+
+        # If we somehow navigated to the plus tab (e.g. keyboard), 
+        # we can either trigger the add or just try to bounce back.
+        # Since we handle triggering in `tabBarClicked`, we mostly just ignore logic here
+        # or update the valid head selection.
+        
+        if index != self._plus_tab_index and index != -1:
+            # Logic for valid head selection
             if 0 <= index < len(self._head_keys_map):
                 real_head = self._head_keys_map[index]
                 self.headSelected.emit(real_head)
+                self._previous_index = index
+        
+        elif index == self._plus_tab_index:
+            # If we landed on the plus tab (via keyboard/code), 
+            # ideally we stay on the previous one to avoid showing an empty page,
+            # but if it's the *only* tab, we can't switch away.
+            pass
 
     def _handle_add_head(self):
+        """Opens dialog to add a new category."""
         name, ok = QInputDialog.getText(self, "New Task Head", "Enter head name (e.g. 'player_action'):")
         if ok and name.strip():
             self.headAdded.emit(name.strip())
@@ -227,12 +280,15 @@ class SpottingTabWidget(QTabWidget):
     def _show_tab_context_menu(self, pos):
         index = self.tabBar().tabAt(pos)
         if index == -1 or index == self._plus_tab_index: return
+        
         if 0 <= index < len(self._head_keys_map):
             real_head_name = self._head_keys_map[index]
             display_head_name = self.tabText(index)
+            
             menu = QMenu(self)
             rename_act = menu.addAction(f"Rename '{display_head_name}'")
             delete_act = menu.addAction(f"Delete '{display_head_name}'")
+            
             action = menu.exec(self.mapToGlobal(pos))
             if action == rename_act:
                 new_name, ok = QInputDialog.getText(self, "Rename Head", f"Rename '{real_head_name}' to:", text=real_head_name)
@@ -251,9 +307,11 @@ class AnnotationManagementWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
+        
         title_label = QLabel("Create Annotation")
         title_label.setStyleSheet("font-weight: bold; color: #888; margin-bottom: 2px;")
         layout.addWidget(title_label)
+        
         self.tabs = SpottingTabWidget()
         layout.addWidget(self.tabs)
 

@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from PyQt6.QtCore import QUrl
 
 from utils import natural_sort_key
-from ui.common.dialogs import CreateProjectDialog  # import
 
 
 class LocFileManager:
@@ -16,59 +15,53 @@ class LocFileManager:
 
     def create_new_project(self):
         """
-        Create a new Localization project.
+        Create a new Localization project (Blank).
+        Skips the wizard dialog and immediately unlocks the workspace.
         """
         # 1) Check whether the current project needs to be saved/closed
         if not self.main.check_and_close_current_project():
             return
 
-        # 2) Pop up the creation dialog, with project_type="localization"
-        dlg = CreateProjectDialog(self.main, project_type="localization")
+        # 2) Clear the existing workspace (Full Reset)
+        # This clears the UI and resets model data
+        self._clear_workspace(full_reset=True)
 
-        if dlg.exec():
-            # 3) Clear the existing workspace
-            self._clear_workspace(full_reset=True)
+        # 3) Initialize default "Blank Project" state in the Model
+        self.model.current_task_name = "Untitled Task"
+        self.model.project_description = ""
+        self.model.modalities = ["video"]
+        # Empty schema initially. User will add heads via the UI.
+        self.model.label_definitions = {} 
 
-            # 4) Get user configuration from the dialog
-            data = dlg.get_data()
+        # Set Localization-mode states
+        self.model.current_working_directory = None
+        self.model.current_json_path = None
+        
+        # [KEY STEP] Mark project as loaded to enable UI interactions
+        self.model.json_loaded = True
+        self.model.is_data_dirty = True
 
-            # 5) Initialize model fields
-            self.model.current_task_name = data["task"]
-            self.model.project_description = data["description"]
-            self.model.modalities = data["modalities"]
-            self.model.label_definitions = data["labels"]
+        # 4) Refresh Localization UI
+        # This updates the tabs to show ONLY the "+" button.
+        self.main.loc_manager.right_panel.annot_mgmt.update_schema(self.model.label_definitions)
+        
+        # Reset the left tree (empty at creation time)
+        self.main.loc_manager.populate_tree()
 
-            # Set Localization-mode states
-            self.model.current_working_directory = None
-            self.model.current_json_path = None
-            self.model.json_loaded = True
-            self.model.is_data_dirty = True
+        # 5) Switch view to Localization
+        self.main.ui.show_localization_view()
+        self.main.update_save_export_button_state()
 
-            # 6) Refresh Localization UI
-            # Update the schema on the right panel
-            self.main.loc_manager.right_panel.annot_mgmt.update_schema(self.model.label_definitions)
+        # 6) [CRITICAL] Explicitly unlock the Localization UI
+        # This ensures the Right Panel is enabled (clickable) even with 0 videos.
+        if hasattr(self.main, "prepare_new_localization_ui"):
+            self.main.prepare_new_localization_ui()
 
-            # Auto-select the first head (if any)
-            if self.model.label_definitions:
-                first_head = list(self.model.label_definitions.keys())[0]
-                self.main.loc_manager.current_head = first_head
-                self.main.loc_manager.right_panel.annot_mgmt.tabs.set_current_head(first_head)
-
-            # Refresh the left tree (empty at creation time)
-            self.main.loc_manager.populate_tree()
-
-            # 7) Switch view
-            self.main.ui.show_localization_view()
-            self.main.update_save_export_button_state()
-
-            self.main.show_temp_msg("Project Created", f"Task: {self.model.current_task_name}")
+        self.main.show_temp_msg("Project Created", "Localization Workspace Ready")
 
     def load_project(self, data, file_path):
         """
-        Load a Localization project.
-
-        Returns:
-            bool: True if loaded successfully; False if failed or canceled.
+        Load a Localization project from JSON.
         """
         # Validate JSON if the model provides a validator
         if hasattr(self.model, "validate_loc_json"):
@@ -142,10 +135,7 @@ class LocFileManager:
 
             final_path = raw_path
 
-            # Resolve path:
-            # 1) If it's an absolute existing path, use it directly
-            # 2) Otherwise try to resolve relative to the project root
-            # 3) If still not found, try "flattened" resolution (project_root + filename)
+            # Path resolution logic
             if os.path.isabs(raw_path) and os.path.exists(raw_path):
                 final_path = raw_path
             else:
@@ -161,7 +151,6 @@ class LocFileManager:
                     if os.path.exists(abs_path_flat):
                         final_path = abs_path_flat
                     else:
-                        # Keep the best guess for display/reference, but record as missing
                         final_path = abs_path_strict
                         missing_files.append(f"{aid}: {filename}")
 
@@ -216,7 +205,6 @@ class LocFileManager:
                 msg += "\n..."
             QMessageBox.warning(self.main, "Load Warning", msg)
         else:
-            # Show a short info toast (1.5s)
             self.main.show_temp_msg(
                 "Mode Switched",
                 f"Successfully loaded {loaded_count} clips.\n\nCurrent Mode: LOCALIZATION",
@@ -227,17 +215,13 @@ class LocFileManager:
         return True
 
     def overwrite_json(self):
-        """
-        Overwrite the current JSON if a path exists; otherwise fall back to export.
-        """
+        """Overwrite current JSON if exists, else export."""
         if self.model.current_json_path:
             return self._write_json(self.model.current_json_path)
         return self.export_json()
 
     def export_json(self):
-        """
-        Export Localization JSON to a user-selected file path.
-        """
+        """Export Localization JSON to a user-selected file path."""
         path, _ = QFileDialog.getSaveFileName(
             self.main, "Export Localization JSON", "", "JSON (*.json)"
         )
@@ -249,9 +233,7 @@ class LocFileManager:
         return False
 
     def _write_json(self, path):
-        """
-        Write the current Localization project state into a JSON file.
-        """
+        """Write the current Localization project state into a JSON file."""
         output = {
             "version": "2.0",
             "date": "2025-12-16",
@@ -274,7 +256,7 @@ class LocFileManager:
             abs_path = data["path"]
             events = self.model.localization_events.get(abs_path, [])
 
-            # Store path as relative if possible (portable exports)
+            # Store path as relative if possible
             try:
                 rel_path = os.path.relpath(abs_path, base_dir).replace(os.sep, "/")
             except Exception:
@@ -287,7 +269,6 @@ class LocFileManager:
                     {
                         "head": e.get("head"),
                         "label": e.get("label"),
-                        # Keep as string to match your existing JSON format
                         "position_ms": str(e.get("position_ms")),
                     }
                 )
@@ -318,9 +299,6 @@ class LocFileManager:
     def _clear_workspace(self, full_reset=False):
         """
         Clear UI panels and reset the model state.
-
-        Args:
-            full_reset (bool): If True, also switch back to the welcome view.
         """
         if hasattr(self.main, "loc_manager"):
             # Left panel: clear clip tree
@@ -330,8 +308,9 @@ class LocFileManager:
             self.main.loc_manager.center_panel.media_preview.stop()
             self.main.loc_manager.center_panel.media_preview.player.setSource(QUrl())
 
-            # Right panel: clear table
+            # Right panel: clear table and schema
             self.main.loc_manager.right_panel.table.set_data([])
+            self.main.loc_manager.right_panel.annot_mgmt.update_schema({})
 
         # Reset model data
         self.model.reset(full_reset)

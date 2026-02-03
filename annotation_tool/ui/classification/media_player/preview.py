@@ -7,6 +7,8 @@ from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 
+
+
 class ClickableSlider(QSlider):
     """
     A custom QSlider that jumps to the click position immediately.

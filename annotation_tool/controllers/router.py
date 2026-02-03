@@ -21,13 +21,16 @@ class AppRouter:
         """
         Unified entry point for creating a new project.
         """
-        # 1. Ask user for project type
+        # 1. Safety Check: Ensure current project is closed/saved first
+        if not self.main.check_and_close_current_project():
+            return
+
+        # 2. Ask user for project type
         dlg = ProjectTypeDialog(self.main)
         if dlg.exec():
             mode = dlg.selected_mode
             
-            # 2. Delegate to specific manager logic
-            # Note: Managers should handle 'check_and_close_current_project' internally
+            # 3. Delegate to specific manager logic
             if mode == "classification":
                 self.class_fm.create_new_project()
                 

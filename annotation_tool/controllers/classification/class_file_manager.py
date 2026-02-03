@@ -2,7 +2,6 @@ import os
 import json
 import datetime
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
-from ui.common.dialogs import CreateProjectDialog
 from utils import natural_sort_key
 
 class ClassFileManager:
@@ -176,29 +175,37 @@ class ClassFileManager:
             return False
 
     def create_new_project(self):
-        if not self.main.check_and_close_current_project(): return
-        dlg = CreateProjectDialog(self.main)
-        if dlg.exec():
-            self._clear_workspace(full_reset=True)
-            data = dlg.get_data()
-            self.model.current_task_name = data['task']
-            self.model.modalities = data['modalities']
-            self.model.label_definitions = data['labels']
-            self.model.project_description = data['description']
-            
-            self.model.json_loaded = True
-            self.model.is_data_dirty = True
-            
-            self.model.current_json_path = None
-            self.model.current_working_directory = None 
-            
-            self.main.setup_dynamic_ui()
-            self.main.update_save_export_button_state()
-            self.ui.show_classification_view()
+        """
+        Creates a blank project immediately, allowing the user to 
+        build the schema in the right-hand panel.
+        """
+        # 1. Clear existing data (Full Reset)
+        self._clear_workspace(full_reset=True)
+
+        # 2. Initialize default "Blank Project" state in the Model
+        self.model.current_task_name = "Untitled Task"
+        self.model.modalities = ["video"]
+        self.model.label_definitions = {} # Empty Category (Category Editor start blank)
+        self.model.project_description = ""
+        
+        # 3. Set flags to allow interaction
+        self.model.json_loaded = True 
+        self.model.is_data_dirty = True
+        
+        # No file: None
+        self.model.current_json_path = None
+        self.model.current_working_directory = None 
+        
+        # 4. Refresh UI and switch view
+        self.main.setup_dynamic_ui()
+        self.main.update_save_export_button_state()
+        self.ui.show_classification_view()
+        
+        # 5. [IMPORTANT] Explicitly unlock the UI for editing
+        self.main.prepare_new_project_ui()
 
     def _clear_workspace(self, full_reset=False):
         # [MV Fix] Clear the Model, not the View
-        # self.ui.classification_ui.left_panel.tree.clear() # Old QTreeWidget code
         self.main.tree_model.clear()
         
         self.model.reset(full_reset)
