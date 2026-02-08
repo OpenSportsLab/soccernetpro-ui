@@ -1,8 +1,8 @@
 # SoccerNet Pro Annotation Tool
 
-This project is a professional video annotation desktop application built with **PyQt6**. It features a comprehensive **quad-mode** architecture supporting **Whole-Video Classification**, **Action Spotting (Localization)**, **Video Captioning (Global Description)**, and **Dense Video Captioning (Dense Description)** tasks.
+This project is a professional video annotation desktop application built with **PyQt6**. It features a comprehensive **quad-mode** architecture supporting **Whole-Video Classification**, **Action Spotting (Localization)**, **Video Captioning (Description)**, and the newly integrated **Dense Video Captioning (Dense Description)**.
 
-The project follows a modular **MVC (Model-View-Controller)** design pattern to ensure a clean separation of concerns. By utilizing a **Qt Model/View** architecture for data handling and a **Unified Media Controller** for playback, the tool provides a high-performance and race-condition-free environment for complex video labeling.
+The project follows a modular **MVC (Model-View-Controller)** design pattern to ensure strict separation of concerns. It leverages **Qt's Model/View architecture** for resource management and a unified **Media Controller** to ensure stable, high-performance video playback across all modalities.
 
 ---
 
@@ -11,101 +11,104 @@ The project follows a modular **MVC (Model-View-Controller)** design pattern to 
 ```text
 annotation_tool/
 ├── main.py                     # Application entry point
-├── viewer.py                   # Main Window controller (orchestrates UI & Logic)
+├── viewer.py                   # Main Window controller (Orchestrator)
 ├── utils.py                    # Helper functions and constants
 ├── __init__.py                 # Package initialization
 │
 ├── models/                     # [Model Layer] Data Structures & State
-│   ├── app_state.py            # Central state & strict JSON validation for all 4 modes
-│   └── project_tree.py         # Shared QStandardItemModel for the Project Tree
+│   ├── app_state.py            # Global State, Undo/Redo Stacks, & JSON Validation
+│   └── project_tree.py         # Shared QStandardItemModel for the sidebar tree
 │
-├── controllers/                # [Controller Layer] Business logic
-│   ├── router.py               # Global routing & project type auto-detection
+├── controllers/                # [Controller Layer] Business Logic
+│   ├── router.py               # Mode detection & Project lifecycle management
 │   ├── history_manager.py      # Universal Undo/Redo system
-│   ├── media_controller.py     # Standardized playback logic (Load/Stop/Delay/Play)
+│   ├── media_controller.py     # Unified playback logic (Anti-freeze/Visual clearing)
 │   ├── classification/         # Logic for Classification mode
-│   ├── localization/           # Logic for Localization mode
-│   ├── description/            # Logic for Global Captioning mode
-│   └── dense_description/      # [NEW] Logic for Dense Captioning mode
+│   ├── localization/           # Logic for Action Spotting (Localization) mode
+│   ├── description/            # Logic for Global Captioning (Description) mode
+│   └── dense_description/      # [NEW] Logic for Dense Captioning (Text-at-Timestamp)
+│       ├── dense_manager.py      # Core logic for dense annotations & UI sync
+│       └── dense_file_manager.py   # JSON I/O specifically for Dense tasks
 │
-├── ui/                         # [View Layer] Interface definitions
-│   ├── common/                 # Shared widgets (VideoSurface, Workspace skeleton)
-│   ├── classification/         # UI components for Video Classification
-│   ├── localization/           # UI components for Action Spotting (Timeline-based)
-│   ├── description/            # UI components for Global Captioning (Text-based)
-│   └── dense_description/      # [NEW] UI components for Dense Captioning
+├── ui/                         # [View Layer] Interface Definitions
+│   ├── common/                 # Shared widgets (Main Window, Sidebar, Video Surface)
+│   │   ├── main_window.py        # Top-level UI (Stacked layout management)
+│   │   ├── video_surface.py      # Shared Pure QVideoWidget + QMediaPlayer
+│   │   ├── workspace.py          # Unified 3-column skeleton
+│   │   └── dialogs.py            # Project wizards and mode selectors
+│   ├── classification/         # UI specific to Classification
+│   ├── localization/           # UI specific to Localization (Timeline + Tabbed Spotting)
+│   ├── description/            # UI specific to Global Captioning (Full-video text)
+│   └── dense_description/      # [NEW] UI specific to Dense Description
+│       └── event_editor/
+│           ├── __init__.py       # Right panel assembler for Dense mode
+│           ├── desc_input_widget.py # Text input & timestamp submission
+│           └── dense_table.py    # Specialized Table Model for Lang/Text columns
 │
-└── style/
-    └── style.qss               # Centralized Dark mode styling (ID-based)
+└── style/                      # Visual theme assets
+    └── style.qss               # Centralized Dark mode stylesheet
 
 ```
 
 ---
 
-## 🏗️ Core Architecture & Component Reuse
-
-The application is designed for maximum **code reusability** and **UI consistency**. The architecture leverages inheritance and component composition across all four modes.
-
-### 1. The Quad-Mode System
-
-The application distinguishes between modes based on the annotation granularity and UI requirements:
-
-| Mode | Task Type | Key UI Features | Data Structure |
-| --- | --- | --- | --- |
-| **Classification** | Global Labeling | Single View / Multi-view slider | Dictionary (Head -> Label) |
-| **Localization** | Action Spotting | **Timeline**, Markers, Action Tabs | List of events (Head, Label, Time) |
-| **Description** | Global Caption | Text Editor | Global text captions |
-| **Dense Description** | Dense Caption | **Timeline**, Markers, **Text Input** | List of events (Text, Time) |
-
-### 2. Cross-Mode Component Reuse
-
-* **The Skeleton (`UnifiedTaskPanel`)**: All modes use a 3-column layout (Sidebar, Video Center, Editor Right).
-* **The Project Tree**: All modes share `ProjectTreeModel` and `CommonProjectTreePanel`, ensuring the file list behaves identically across tasks.
-* **The Media Engine**: All modes use `VideoSurface` for rendering and `MediaController` for robust playback, preventing "black screens" or "ghost frames."
-* **Localization & Dense Description (Heavy Reuse)**:
-* **Dense Description** reuses the `LocCenterPanel` from the Localization mode, which includes the specialized **Zoomable Timeline** and **Marker system**.
-* **Dense Description**'s table model (`DenseTableModel`) inherits from `AnnotationTableModel`, simply overriding the columns to display "Text" instead of "Label."
-
-
-
----
-
 ## 📝 Detailed Module Descriptions
 
-### 1. Models (`/models`)
+### 1. Core Infrastructure & Routing
 
-* **`app_state.py`**: The "Source of Truth." It maintains the internal state for all four modes. It contains `validate_loc_json`, `validate_desc_json`, and `validate_dense_json` to ensure strict schema compliance.
-* **`project_tree.py`**: Implements a standard Qt Model that stores file paths and natural-sorts clip names.
+* **`main.py`**: Initializes the `QApplication` and the high-level event loop.
+* **`viewer.py`**: The heart of the application. It instantiates all Managers, connects signals between UI components and Logic Controllers, and implements `stop_all_players()` to prevent media resource leaks during mode switching.
+* **`router.py`**: Features a heuristic detection engine that identifies project types from JSON keys (e.g., detecting `"dense"` tasks to trigger the Dense Description mode).
+* **`media_controller.py`**: Manages the "Stop -> Load -> Delay -> Play" sequence to eliminate black screens and GPU buffer artifacts.
 
-### 2. Controllers (`/controllers`)
+### 2. The Model Layer (`/models`)
 
-* **`router.py`**: The "Traffic Cop." It detects the project type by inspecting the `task` field in the JSON (e.g., `dense_video_captioning`) and switches the UI to the correct index.
-* **`media_controller.py`**: Manages the video lifecycle. It enforces a specific sequence (Stop -> Clear Source -> Load -> 150ms Delay -> Play) to ensure the GPU buffer is cleared between clips.
-* **`dense_description/dense_manager.py`**: Manages the logic for dense captioning. It captures the current `position_ms` from the player when a description is submitted and updates the timeline markers.
+* **`app_state.py`**: Maintains the "Source of Truth" for the application. It stores `manual_annotations` (Class), `localization_events` (Loc), and `dense_description_events` (Dense). It also contains strict JSON Schema validators for each task.
+* **`project_tree.py`**: A `QStandardItemModel` used by all modes to display clips in the sidebar.
 
-### 3. User Interface (`/ui`)
+### 3. Modality Logic (`/controllers`)
 
-* **`common/video_surface.py`**: A pure wrapper around `QVideoWidget`. It ensures volume is managed and rendering is consistent.
-* **`localization/media_player/timeline.py`**: A custom-drawn widget that renders markers on a zoomable axis. It is used in both Localization and Dense Description modes.
-* **`dense_description/event_editor/desc_input_widget.py`**: Specifically designed for Dense Description, providing a `QTextEdit` for long-form text instead of the predefined category buttons used in Localization.
+* **`localization_manager.py`**: Logic for "Spotting" (mapping a label to a timestamp).
+* **`dense_manager.py`**: **[NEW]** Logic for mapping free-text descriptions to timestamps. It handles the submission from the `DenseDescriptionInputWidget` and updates the timeline markers.
+* **`dense_file_manager.py`**: Handles JSON persistence for dense tasks, ensuring the `text` and `position_ms` fields are properly serialized.
+
+### 4. The View Layer (`/ui`)
+
+* **`video_surface.py`**: A shared rendering component used by **every** mode to ensure consistent video performance.
+* **`dense_table.py`**: A specialized view inheriting from the Localization table model. It replaces the "Label/Head" columns with "Lang/Description" while maintaining the same timestamp-jump functionality.
+* **`desc_input_widget.py`**: Provides a `QTextEdit` for long-form text and an "Add" button that captures the exact current playback frame.
 
 ---
 
-## 🔄 Is Dense Description Reusing Localization Code?
+## 🔄 Reusability & Modality Comparison
 
-**Yes.** The Dense Description mode was specifically designed to leverage the infrastructure of the Localization mode.
+The application is built on a "Composite Design" strategy. While each mode serves a different task, they share significant architectural DNA.
 
-1. **Shared Center Panel**: It uses the same `LocCenterPanel` (Video + Timeline). When you add a text description, it appears as a marker on the timeline, exactly like an action spot in Localization mode.
-2. **Shared Table Logic**: The right-panel table uses a modified version of the Localization table. The underlying logic for jumping to a timestamp when a row is clicked is preserved.
-3. **Data Flow**: Both modes use a `position_ms` based event system. The primary difference is that Localization uses **discrete labels** from a schema, while Dense Description uses **free-form text**.
+### Is Dense Description a reuse of Localization?
+
+**Yes.** The Dense Description modality is essentially a **specialized evolution** of the Localization mode.
+
+* **Shared Center Panel**: Both use the `LocCenterPanel`, which includes the zoomable `TimelineWidget` and `VideoSurface`.
+* **Shared Data Logic**: Both are "Event-based" (data is tied to a `position_ms`) rather than "Clip-based".
+* **Shared Table Interface**: The `DenseTableModel` is a direct subclass of `AnnotationTableModel`, inheriting all natural sorting and timestamp-parsing logic.
+
+### Modality Feature Matrix
+
+| Feature | Classification | Localization | Global Description | Dense Description |
+| --- | --- | --- | --- | --- |
+| **Primary Data** | Multi-choice Labels | Timestamped Labels | Global Video Text | Timestamped Text |
+| **Center UI** | Multi-view Player | Timeline + Player | Slider + Player | Timeline + Player |
+| **Right UI** | Schema Editor | Tabbed Spotting | Text Editor | Text Input + Table |
+| **Code Base** | Unique | Shared with Dense | Unique | Shared with Loc |
 
 ---
 
 ## 🚀 Getting Started
 
-1. **Select Mode**: Upon creating a "New Project," choose between Classification, Localization, or Description (Global).
-2. **Auto-Detection**: When importing a JSON, the tool will automatically detect if it is a **Dense Description** project based on the presence of `text` fields within the `events` list or the `task` key in the header.
-3. **Annotation**:
-* In **Dense Description**, navigate the video, type your description in the right panel, and click "Add Description" (or use Shortcut **'A'**) to mark the point.
-* Use **Undo/Redo** to revert any text edits or timestamp changes.
+1. **Select Mode**: Launch the app and use the "New Project" wizard to select one of the four modes.
+2. **Import**: The `AppRouter` will automatically detect the correct modality if you import an existing JSON.
+3. **Annotate**:
+* In **Dense mode**, navigate to a point in the video, type your description in the right panel, and click "Add Description".
+* Use the **Timeline** to jump between existing text annotations.
+
 
