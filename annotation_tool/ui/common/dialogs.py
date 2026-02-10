@@ -11,15 +11,16 @@ from utils import get_square_remove_btn_style
 
 class ProjectTypeDialog(QDialog):
     """
-    Project type chooser (Classification vs. Localization).
-    This is the only dialog shown after clicking 'New Project'.
+    Project type chooser.
+    Shown after clicking 'New Project' to select the operating mode.
+    Updated to include Classification, Localization, and Description.
     """
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
 
         self.setWindowTitle("Select Project Type")
-        self.resize(400, 250)
+        self.resize(600, 250) # Widen slightly to fit 3 buttons
         self.selected_mode: str | None = None
 
         layout = QVBoxLayout(self)
@@ -30,37 +31,56 @@ class ProjectTypeDialog(QDialog):
         lbl.setProperty("class", "dialog_instruction_lbl")
         layout.addWidget(lbl)
 
-        # Two large buttons side-by-side
+        # Three large buttons side-by-side
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(20)
 
+        # 1. Classification Button
         self.btn_cls = QPushButton("Classification")
         self.btn_cls.setMinimumSize(QSize(0, 80))
-        self.btn_cls.setProperty("class", "dialog_mode_btn")
-        self.btn_cls.clicked.connect(lambda: self._finish("classification"))
-
-        self.btn_loc = QPushButton("Localization\n(Action Spotting)")
+        self.btn_cls.setProperty("class", "project_type_btn") # CSS class for styling
+        
+        # 2. Localization Button
+        self.btn_loc = QPushButton("Localization")
         self.btn_loc.setMinimumSize(QSize(0, 80))
-        self.btn_loc.setProperty("class", "dialog_mode_btn")
-        self.btn_loc.clicked.connect(lambda: self._finish("localization"))
+        self.btn_loc.setProperty("class", "project_type_btn")
 
+        # 3. [NEW] Description Button
+        self.btn_desc = QPushButton("Description")
+        self.btn_desc.setMinimumSize(QSize(0, 80))
+        self.btn_desc.setProperty("class", "project_type_btn")
+
+        # 3. [NEW] Description Button
+        self.btn_dense = QPushButton("Dense Description")
+        self.btn_dense.setMinimumSize(QSize(0, 80))
+        self.btn_dense.setProperty("class", "project_type_btn")
+
+        # Add buttons to layout
         btn_layout.addWidget(self.btn_cls)
         btn_layout.addWidget(self.btn_loc)
+        btn_layout.addWidget(self.btn_desc) # [NEW]
+        btn_layout.addWidget(self.btn_dense) # [NEW]
 
         layout.addLayout(btn_layout)
-        layout.addStretch()
 
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        layout.addWidget(cancel_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        # Connect signals
+        # Lambda is used to pass the mode string to the handler
+        self.btn_cls.clicked.connect(lambda: self.finalize_selection("classification"))
+        self.btn_loc.clicked.connect(lambda: self.finalize_selection("localization"))
+        self.btn_desc.clicked.connect(lambda: self.finalize_selection("description")) 
+        self.btn_dense.clicked.connect(lambda: self.finalize_selection("dense_description")) # [NEW]
 
-    def _finish(self, mode: str) -> None:
+    def finalize_selection(self, mode: str):
+        """Stores the selected mode and closes the dialog."""
         self.selected_mode = mode
         self.accept()
 
 
 class FolderPickerDialog(QDialog):
-    """Custom folder picker (multi-select without requiring Ctrl)."""
+    """
+    Custom folder picker that allows multi-selection of folders.
+    Used for selecting scene folders when creating a project.
+    """
 
     def __init__(self, initial_dir: str = "", parent=None) -> None:
         super().__init__(parent)
@@ -79,21 +99,25 @@ class FolderPickerDialog(QDialog):
         self.tree.setModel(self.model)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
 
+        # Optimize column view (Hide size/type/date, only show name)
         self.tree.setColumnWidth(0, 400)
         for i in range(1, 4):
             self.tree.hideColumn(i)
 
+        # Set initial directory
         start_path = initial_dir if initial_dir and os.path.exists(initial_dir) else QDir.rootPath()
         self.tree.setRootIndex(self.model.index(start_path))
 
         layout.addWidget(self.tree)
 
+        # Standard OK/Cancel buttons
         bbox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         bbox.accepted.connect(self.accept)
         bbox.rejected.connect(self.reject)
         layout.addWidget(bbox)
 
     def get_selected_folders(self) -> list[str]:
-        """Return absolute paths for all selected folders."""
+        """Returns a list of absolute paths for the selected folders."""
         indexes = self.tree.selectionModel().selectedRows()
-        return [self.model.filePath(idx) for idx in indexes]
+        paths = [self.model.filePath(idx) for idx in indexes]
+        return paths

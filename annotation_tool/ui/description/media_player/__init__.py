@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 from PyQt6.QtMultimedia import QMediaPlayer
 
-from .preview import DescriptionMediaPreview
+from .player_panel import DescriptionMediaPreview
 from .controls import DescriptionNavToolbar
 
 class DescriptionMediaPlayer(QWidget):

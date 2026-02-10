@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
 # Import components from sibling files
-from .preview import MediaPreviewWidget
+from .player_panel import MediaPreviewWidget
 from .timeline import TimelineWidget
 from .controls import PlaybackControlBar
 

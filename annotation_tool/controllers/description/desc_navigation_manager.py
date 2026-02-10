@@ -1,17 +1,50 @@
 import os
-from PyQt6.QtCore import QModelIndex, QTimer, QUrl
-from PyQt6.QtWidgets import QMessageBox, QFileDialog
+from PyQt6.QtCore import QModelIndex
+from PyQt6.QtWidgets import QMessageBox, QFileDialog, QWidget
 
+# [Ref] Import Model Roles
 from models.project_tree import ProjectTreeModel
+
+# [Ref] Import the Unified MediaController
+from controllers.media_controller import MediaController
 
 class DescNavigationManager:
     """
     Handles file navigation, video playback, data addition, and filtering for Description Mode.
+    Refactored to STRICTLY follow Classification playback logic (No Looping) and pass video_widget for proper clearing.
     """
     def __init__(self, main_window):
         self.main = main_window
         self.ui = main_window.ui
         self.model = main_window.model
+
+        # [UPDATED] Initialize Media Controller with Player AND VideoWidget
+        # 1. Access the UI components
+        center_panel = self.ui.description_ui.center_panel
+        preview_panel = center_panel.preview # This is DescriptionMediaPreview
+        
+        player = center_panel.player # Exposed in DescriptionMediaPlayer
+
+        # 2. Locate the QVideoWidget for forced repainting
+        # This is critical for the MediaController.stop() to work correctly (clearing the black screen)
+        video_widget = None
+        
+        # Check standard paths based on recent refactoring
+        if hasattr(preview_panel, 'surface') and hasattr(preview_panel.surface, 'video_widget'):
+            # If using the shared VideoSurface wrapper
+            video_widget = preview_panel.surface.video_widget
+        elif hasattr(preview_panel, 'video_widget'):
+            # If directly attached
+            video_widget = preview_panel.video_widget
+        else:
+            # Fallback search by object name/type
+            video_widget = preview_panel.findChild(QWidget, "video_preview_widget")
+            
+        # 3. Instantiate the controller
+        self.media_controller = MediaController(player, video_widget)
+        
+        # [CRITICAL] Disable looping to match Classification stability
+        # self.media_controller.set_looping(True) 
 
     def setup_connections(self):
         """Called by viewer.py to wire up signals."""
@@ -21,11 +54,55 @@ class DescNavigationManager:
 
         # Center Panel Controls
         center = self.ui.description_ui.center_panel
-        center.play_btn.clicked.connect(center.toggle_play_pause)
+        
+        # Connect Play button via Controller
+        center.play_btn.clicked.connect(self.toggle_play_pause)
+        
+        # Navigation Buttons
         center.prev_action.clicked.connect(self.nav_prev_action)
         center.prev_clip.clicked.connect(self.nav_prev_clip)
         center.next_clip.clicked.connect(self.nav_next_clip)
         center.next_action.clicked.connect(self.nav_next_action)
+
+    def toggle_play_pause(self):
+        """Delegate play/pause to the controller."""
+        self.media_controller.toggle_play_pause()
+
+    def on_item_selected(self, current: QModelIndex, previous: QModelIndex):
+        """
+        Triggered when user clicks an item in the tree.
+        Uses MediaController to load video smoothly.
+        """
+        if not current.isValid(): return
+
+        path = current.data(ProjectTreeModel.FilePathRole)
+        model = self.main.tree_model
+        
+        # Handle folder selection: try to play first child
+        if model.hasChildren(current):
+            first_child_idx = model.index(0, 0, current)
+            if first_child_idx.isValid():
+                path = first_child_idx.data(ProjectTreeModel.FilePathRole)
+            else:
+                return 
+
+        # Resolve absolute path
+        cwd = self.model.current_working_directory
+        if path and cwd and not os.path.isabs(path):
+            full_path = os.path.normpath(os.path.join(cwd, path))
+        else:
+            full_path = path
+
+        if not full_path or not os.path.exists(full_path):
+            return
+
+        # [CRITICAL] EXACT Classification Logic
+        # Stop -> Clear -> Load -> Delay 150ms -> Play
+        self.media_controller.load_and_play(full_path)
+
+    # -------------------------------------------------------------------------
+    #  Data Management (Adding items, Filtering)
+    # -------------------------------------------------------------------------
 
     def add_items_via_dialog(self):
         """Allows user to add video files to the Description project."""
@@ -36,6 +113,7 @@ class DescNavigationManager:
         filters = "Media Files (*.mp4 *.avi *.mov *.mkv *.jpg *.jpeg *.png *.bmp);;All Files (*)"
         start_dir = self.model.current_working_directory or ""
         
+        # [FIXED] Call QFileDialog FIRST before accessing 'files'
         files, _ = QFileDialog.getOpenFileNames(self.main, "Select Videos to Add", start_dir, filters)
         if not files: return
         
@@ -43,11 +121,14 @@ class DescNavigationManager:
             self.model.current_working_directory = os.path.dirname(files[0])
 
         added_count = 0
+        first_new_idx = None # [NEW] Track the first new item index
+
         for file_path in files:
             if any(d.get('metadata', {}).get('path') == file_path for d in self.model.action_item_data):
                 continue
             
             name = os.path.basename(file_path)
+            
             new_item = {
                 "id": name,
                 "metadata": {"path": file_path, "questions": []},
@@ -56,80 +137,52 @@ class DescNavigationManager:
             }
             
             self.model.action_item_data.append(new_item)
+            
+            # Add entry to the tree model
             item = self.main.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
             self.model.action_item_map[file_path] = item
+            
+            # [NEW] Capture the index of the first added item
+            if added_count == 0:
+                first_new_idx = item.index()
+                
             added_count += 1
             
         if added_count > 0:
             self.model.is_data_dirty = True
             self.main.show_temp_msg("Added", f"Added {added_count} items.")
             self.main.update_save_export_button_state()
-            # Re-apply filter to include new items if applicable
             self.apply_action_filter()
-
-    def on_item_selected(self, current: QModelIndex, previous: QModelIndex):
-        """Triggered when user clicks an item in the tree."""
-        if not current.isValid(): return
-
-        path = current.data(ProjectTreeModel.FilePathRole)
-        model = self.main.tree_model
-        
-        if model.hasChildren(current):
-            first_child_idx = model.index(0, 0, current)
-            if first_child_idx.isValid():
-                path = first_child_idx.data(ProjectTreeModel.FilePathRole)
-            else:
-                return 
-
-        cwd = self.model.current_working_directory
-        if path and cwd and not os.path.isabs(path):
-            full_path = os.path.normpath(os.path.join(cwd, path))
-        else:
-            full_path = path
-
-        if not full_path or not os.path.exists(full_path):
-            return
-
-        center = self.ui.description_ui.center_panel
-        player = center.player
-        player.stop()
-        center.load_video(full_path)
-        QTimer.singleShot(150, player.play)
+            
+            # [CRITICAL FIX] Auto-select and play the first added video
+            # This triggers on_item_selected -> media_controller.load_and_play
+            if first_new_idx and first_new_idx.isValid():
+                tree = self.ui.description_ui.left_panel.tree
+                tree.setCurrentIndex(first_new_idx)
+                tree.setFocus() # Ensure keyboard shortcuts work immediately
 
     def apply_action_filter(self):
-        """
-        [NEW] Filters the tree items based on Done/Not Done status.
-        Connected to the combo box in Description View.
-        """
+        """Filters the tree items based on Done/Not Done status."""
         idx = self.ui.description_ui.left_panel.filter_combo.currentIndex()
         tree_view = self.ui.description_ui.left_panel.tree
         model = self.main.tree_model
         
-        # Access constants from main window
-        FILTER_ALL = self.main.FILTER_ALL
         FILTER_DONE = self.main.FILTER_DONE
         FILTER_NOT_DONE = self.main.FILTER_NOT_DONE
         
         root = model.invisibleRootItem()
         for i in range(root.rowCount()):
             item = root.child(i)
-            # Use the item's path/ID to find data
-            # Note: For description mode, we usually store path in item data
             path = item.data(ProjectTreeModel.FilePathRole)
             
-            # Find corresponding data to check status
-            # We assume path matches metadata['path'] or id matches text
             is_done = False
             
-            # Find data item
             data_item = None
-            # Search by path
             for d in self.model.action_item_data:
                 if d.get("metadata", {}).get("path") == path:
                     data_item = d
                     break
             
-            # Fallback search by ID (text)
             if not data_item:
                 for d in self.model.action_item_data:
                     if d.get("id") == item.text():
@@ -138,7 +191,6 @@ class DescNavigationManager:
             
             if data_item:
                 captions = data_item.get("captions", [])
-                # Consider done if there is at least one caption with text
                 if captions and captions[0].get("text", "").strip():
                     is_done = True
             
@@ -148,7 +200,9 @@ class DescNavigationManager:
             
             tree_view.setRowHidden(i, QModelIndex(), should_hide)
 
-    # --- Navigation Helpers ---
+    # -------------------------------------------------------------------------
+    #  Tree Navigation Helpers
+    # -------------------------------------------------------------------------
     def nav_prev_action(self): self._nav_tree(step=-1, level='top')
     def nav_next_action(self): self._nav_tree(step=1, level='top')
     def nav_prev_clip(self): self._nav_tree(step=-1, level='child')
@@ -165,9 +219,7 @@ class DescNavigationManager:
             if curr.parent().isValid(): curr = curr.parent()
             new_row = curr.row() + step
             
-            # Bounds check with loop to skip hidden items (filtering support)
             if 0 <= new_row < model.rowCount(QModelIndex()):
-                # Simple jump for now, ideally iterate to find visible
                 new_idx = model.index(new_row, 0, QModelIndex())
                 tree.setCurrentIndex(new_idx); tree.scrollTo(new_idx)
         
