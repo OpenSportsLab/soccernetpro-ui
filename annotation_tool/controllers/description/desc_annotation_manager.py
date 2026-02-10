@@ -2,11 +2,14 @@ import copy
 from PyQt6.QtCore import QModelIndex
 from PyQt6.QtWidgets import QMessageBox
 from models.project_tree import ProjectTreeModel
+# [NEW] Import CmdType for Undo/Redo
+from models.app_state import CmdType
 
 class DescAnnotationManager:
     """
     Manages data loading and saving for Description Mode (Right Panel).
     Handles the formatting of Q&A from JSON and flattening it upon save.
+    Supports Undo/Redo operations.
     """
     def __init__(self, main_window):
         self.main = main_window
@@ -99,6 +102,7 @@ class DescAnnotationManager:
         """
         Saves the current text content back to the JSON model.
         Flattens the structure: removes 'question' keys and saves everything as one text block.
+        Now supports UNDO/REDO.
         """
         if not self.current_action_path:
             return
@@ -113,16 +117,30 @@ class DescAnnotationManager:
                 break
         
         if target_item:
-            # [CRITICAL UPDATE]
-            # Replace the entire 'captions' list with a single entry containing the full text.
-            # This effectively removes the old 'question' fields from the JSON structure
-            # and stores the user's edited content purely as 'text'.
-            target_item["captions"] = [
+            # --- [NEW] Undo/Redo Logic Start ---
+            
+            # 1. Capture Old State (Deep copy to ensure isolation)
+            old_captions = copy.deepcopy(target_item.get("captions", []))
+            
+            # 2. Define New State
+            new_captions = [
                 {
                     "lang": "en", 
                     "text": text_content
                 }
             ]
+            
+            # 3. Push Command to History Stack
+            self.model.push_undo(
+                CmdType.DESC_EDIT, 
+                path=self.current_action_path, 
+                old_data=old_captions, 
+                new_data=new_captions
+            )
+            # --- Undo/Redo Logic End ---
+
+            # Apply the Change
+            target_item["captions"] = new_captions
             
             # Mark state as dirty so Save button becomes active
             self.model.is_data_dirty = True

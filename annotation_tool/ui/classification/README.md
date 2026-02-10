@@ -1,85 +1,41 @@
 # 🏷️ Classification UI Module
 
-This directory contains the specific user interface components designed for the **Whole-Video Classification** task.
+This directory contains the user interface components specifically designed for the **Whole-Video Classification** task.
 
-Unlike the previous monolithic structure, this module is split into two specialized sub-packages (`event_editor` and `media_player`) that plug into the application's common workspace.
-<img width="2096" height="976" alt="10dcdefb36c63c4a33002f85d0f53ae1" src="https://github.com/user-attachments/assets/7983f1a6-281a-45c4-8fff-ec4092460b60" />
+In this mode, users assign attributes (labels) to an entire video clip rather than specific timestamps. The UI is designed to dynamically adapt to the project's JSON schema.
 
+## 📂 File Descriptions
 
-## 📂 Directory Structure
+### `panels.py`
 
-```text
-ui/classification/
-├── event_editor/       # The "Right Panel" logic
-│   ├── __init__.py     # Exposes ClassificationEventEditor
-│   ├── editor.py       # Main container layout
-│   └── dynamic_widgets.py # Radio buttons & Checkboxes generators
-│
-└── media_player/       # The "Center Panel" logic
-    ├── __init__.py     # Exposes ClassificationMediaPlayer
-    ├── preview.py      # Video widget, Slider, Audio logic
-    └── controls.py     # Navigation buttons
+This file defines the structural containers for the classification interface. It arranges the screen into three distinct areas:
 
-```
+* **`LeftPanel`**:
+    * Hosts the **Project Controls** (imported from `ui/common`).
+    * Displays the **Action Clip List** (File Tree).
+    * Manages filtering options (All / Done / Not Done).
+* **`CenterPanel`**:
+    * Contains the video player (`VideoViewAndControl`).
+    * Hosts navigation buttons (Previous/Next Action, Previous/Next Clip).
+* **`RightPanel`**:
+    * **Dynamic Form Area**: Automatically generates input fields based on the project Schema.
+    * **Manual Annotation Box**: Displays the current selection state and confirmation buttons.
 
----
+### `widgets.py`
+**Task-Specific Components**
 
-## 🧩 Modules Detail
+This file contains specialized widgets that are mostly generated programmatically based on the user's label definitions:
 
-### 1. `event_editor/` (The Right Panel)
+* **`DynamicSingleLabelGroup`**: A `QGroupBox` containing **Radio Buttons**. Used when the schema defines a "single_label" type (Mutually exclusive).
+* **`DynamicMultiLabelGroup`**: A `QGroupBox` containing **Checkboxes**. Used when the schema defines a "multi_label" type (Multiple selections allowed).
+* **`VideoViewAndControl`**: A wrapper widget combining `QVideoWidget`, a custom clickable seek slider, and time labels specific to the classification workflow.
 
-**Responsible for:** Dynamic annotation forms, Schema management, and Task controls.
-
-* **`editor.py`**:
-* Defines **`ClassificationEventEditor`**: The main container for the right side of the screen.
-* Hosts the **Undo/Redo** buttons specific to classification tasks.
-* Contains the **Schema Editor** (Text input to add new Heads) and the **Manual Annotation Box** (Save/Clear buttons).
-
-
-* **`dynamic_widgets.py`**:
-* Contains the logic to programmatically generate UI elements based on the JSON schema loaded in the Model:
-* **`DynamicSingleLabelGroup`**: Generates Radio Buttons for mutually exclusive categories.
-* **`DynamicMultiLabelGroup`**: Generates Checkboxes for multi-select categories.
-
-
-
-
-* **`__init__.py`**:
-* Exposes `ClassificationEventEditor` for external use by the Main Window.
-
-
-
-### 2. `media_player/` (The Center Panel)
-
-**Responsible for:** Video rendering, playback controls, and navigation.
-
-* **`preview.py`**:
-* Defines **`MediaPreview`**: A wrapper around `QMediaPlayer`, `QAudioOutput`, and `QVideoWidget`.
-* Includes the custom **`ClickableSlider`** for instant seeking and time labels (e.g., `00:05 / 01:30`).
-
-
-* **`controls.py`**:
-* Defines **`NavigationToolbar`**: Hosts the buttons for navigating between clips (Previous/Next Clip) and actions (Previous/Next Action).
-
-
-* **`__init__.py`**:
-* Exposes **`ClassificationMediaPlayer`**: The assembled widget that combines the preview area and the navigation toolbar into a vertical layout.
-
-### 3.Left Sidebar (Clip / Sequence Explorer)
-Clip Explorer Sidebar: Displays the hierarchical list of `Clips/Sequences`, supports filtering (`Labelled/Not Labelled`) and project operations (`Save/Load/Export`). This UI is provided and driven by `ui/common/clip_explorer.py`.
+### `__init__.py`
+* Exposes the classes from `panels` and `widgets` to the rest of the application, simplifying import statements.
 
 ---
 
-## 🏗️ Architecture Integration
+## 💡 Key Concepts
 
-### Integration with `UnifiedTaskPanel`
-
-This module no longer defines the overall layout (Left/Center/Right). Instead, it provides the components that are injected into the **`UnifiedTaskPanel`** (located in `ui/common/workspace.py`).
-
-1. **Left Panel**: Uses the generic **`CommonProjectTreePanel`** (shared with Localization).
-2. **Center Panel**: Uses `ClassificationMediaPlayer` from this module.
-3. **Right Panel**: Uses `ClassificationEventEditor` from this module.
-
-### Dynamic UI Generation
-
-The **`event_editor`** module retains the core capability of adapting to the project's data model. It reads `label_definitions` from the global `AppStateModel` and instantiates `Dynamic...LabelGroup` widgets at runtime. This ensures the tool works with any classification schema (e.g., Soccer, Basketball, Surveillance) without requiring code changes.
+1.  **Dynamic UI Generation**: The **RightPanel** does not have hardcoded buttons for labels (e.g., "Goal", "Foul"). Instead, it reads the `label_definitions` from the Model and instantiates the appropriate `Dynamic...LabelGroup` widgets from `widgets.py` at runtime.
+2.  **Shared Controls**: The **LeftPanel** embeds the `UnifiedProjectControls` from the `../common/` directory to ensure the "Save/Load/Export" experience is consistent with the Localization mode.

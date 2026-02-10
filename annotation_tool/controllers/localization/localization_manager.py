@@ -7,6 +7,8 @@ from PyQt6.QtMultimedia import QMediaPlayer
 
 from utils import natural_sort_key
 from models import CmdType 
+# [NEW] Import the unified MediaController
+from controllers.media_controller import MediaController
 
 class LocalizationManager:
     """
@@ -22,6 +24,17 @@ class LocalizationManager:
         self.left_panel = self.ui_root.left_panel
         self.center_panel = self.ui_root.center_panel
         self.right_panel = self.ui_root.right_panel
+        
+        # [NEW] Initialize Media Controller
+        # We access the underlying QMediaPlayer from the UI wrapper
+        preview_widget = self.center_panel.media_preview
+        player = preview_widget.player
+        
+        # [CRITICAL FIX] Retrieve the actual QVideoWidget to allow forced repaints
+        # This fixes the "stuck frame" issue when switching modes
+        video_widget = preview_widget.video_widget
+        
+        self.media_controller = MediaController(player, video_widget)
         
         self.current_video_path = None
         self.current_head = None 
@@ -50,10 +63,13 @@ class LocalizationManager:
         media.durationChanged.connect(timeline.set_duration)
         timeline.seekRequested.connect(media.set_position)
         
-        pb.stopRequested.connect(media.stop)
+        # [CHANGED] Use MediaController for playback control
+        pb.stopRequested.connect(self.media_controller.stop)
+        pb.playPauseRequested.connect(self.media_controller.toggle_play_pause)
+        
         pb.playbackRateRequested.connect(media.set_playback_rate)
         pb.seekRelativeRequested.connect(lambda d: media.set_position(media.player.position() + d))
-        pb.playPauseRequested.connect(media.toggle_play_pause)
+        
         pb.nextPrevClipRequested.connect(self._navigate_clip)
         pb.nextPrevAnnotRequested.connect(self._navigate_annotation)
         
@@ -80,7 +96,7 @@ class LocalizationManager:
         time_str = self._fmt_ms_full(ms)
         self.right_panel.annot_mgmt.tabs.update_current_time(time_str)
 
-    # --- Video Loading Logic (Strict Classification Style) ---
+    # --- Video Loading Logic (Strict Classification Style via Controller) ---
     def on_clip_selected(self, current_idx, previous_idx):
         if not current_idx.isValid(): 
             self.current_video_path = None
@@ -94,17 +110,12 @@ class LocalizationManager:
         if path and os.path.exists(path):
             self.current_video_path = path
             
-            # [Step 1] Force Stop to reset pipeline
-            player = self.center_panel.media_preview.player
-            player.stop()
+            # [CHANGED] Use MediaController for standardized playback
+            # This handles the Stop -> Load -> Delay -> Play sequence automatically
+            self.media_controller.load_and_play(path)
             
-            # [Step 2] Load Video (No Auto-Play in Preview)
-            self.center_panel.media_preview.load_video(path)
+            # Update UI for events
             self._display_events_for_item(path)
-            
-            # [Step 3] Delayed Play via Manager
-            # before the video renderer attempts to draw, preventing the stuck frame.
-            QTimer.singleShot(200, player.play)
             
         else:
             if path: QMessageBox.warning(self.main, "Error", f"File not found: {path}")
@@ -346,9 +357,12 @@ class LocalizationManager:
         self.current_head = None 
         self.model.undo_stack.clear()
         self.model.redo_stack.clear()
-        self.center_panel.media_preview.stop()
+        
+        # [CHANGED] Use MediaController stop
+        self.media_controller.stop()
         self.center_panel.media_preview.player.setSource(QUrl())
         self.center_panel.media_preview.video_widget.update()
+        
         self.center_panel.timeline.set_markers([])
         self.tree_model.clear()
         self._refresh_schema_ui() 
@@ -373,8 +387,11 @@ class LocalizationManager:
         self.model.is_data_dirty = True
         if self.current_video_path == path:
             self.current_video_path = None
-            self.center_panel.media_preview.stop()
+            
+            # [CHANGED] Use MediaController stop
+            self.media_controller.stop()
             self.center_panel.media_preview.player.setSource(QUrl())
+            
             self.right_panel.table.set_data([])
             self.center_panel.timeline.set_markers([])
         if index.isValid(): self.tree_model.removeRow(index.row(), index.parent())

@@ -23,11 +23,18 @@ class CmdType(Enum):
     LOC_EVENT_ADD = auto()
     LOC_EVENT_DEL = auto()
     LOC_EVENT_MOD = auto()
+    
+    DESC_EDIT = auto()  # Records text changes in Description mode
+
+    # --- Dense Description commands ---
+    DENSE_EVENT_ADD = auto()
+    DENSE_EVENT_DEL = auto()
+    DENSE_EVENT_MOD = auto()
 
 
 class AppStateModel:
     """
-   Centralized application state container.
+    Centralized application state container.
     - Owns project metadata, schema, annotations/events, and undo/redo stacks.
     - Does not touch UI widgets (UI is managed elsewhere).
     """
@@ -60,9 +67,14 @@ class AppStateModel:
 
         # --- Common clip list ---
         # Each item: { "name": "...", "path": "...", "source_files": [...] }
+        # This is the shared source of truth for the Project Tree
         self.action_item_data = []
-        self.action_item_map = {}      # path -> QTreeWidgetItem (populated by UI layer)
+        self.action_item_map = {}      # path -> QStandardItem (populated by UI layer)
         self.action_path_to_name = {}  # path -> name
+
+        # --- Dense Description data ---
+        # Format: { video_path: [ { "position_ms": ..., "lang": "en", "text": "..." }, ... ] }
+        self.dense_description_events = {}
 
         # --- Undo/redo stacks ---
         self.undo_stack = []
@@ -83,6 +95,7 @@ class AppStateModel:
         self.action_item_data = []
         self.action_item_map = {}
         self.action_path_to_name = {}
+        self.dense_description_events = {}
 
         self.undo_stack = []
         self.redo_stack = []
@@ -106,6 +119,55 @@ class AppStateModel:
         Kept to match the existing codebase interface.
         """
         return True, "", ""
+
+    def validate_desc_json(self, data):
+        """
+        [NEW] Validation for Description / Video Captioning JSON.
+        Returns: (is_valid, error_msg, warning_msg)
+        """
+        errors = []
+        
+        # 1. Root Check
+        if not isinstance(data, dict):
+            return False, "Root must be a dictionary.", ""
+        
+        if "data" not in data:
+            return False, "Critical: Missing top-level key 'data'.", ""
+            
+        items = data["data"]
+        if not isinstance(items, list):
+            return False, "Critical: 'data' must be a list.", ""
+            
+        # 2. Item Check
+        err_inputs_missing = []
+        err_captions_missing = []
+        
+        for i, item in enumerate(items):
+            if not isinstance(item, dict):
+                errors.append(f"Item #{i} is not a dictionary.")
+                continue
+                
+            # Check inputs (Videos)
+            if "inputs" not in item:
+                err_inputs_missing.append(f"Item #{i}")
+            elif not isinstance(item["inputs"], list):
+                errors.append(f"Item #{i} 'inputs' must be a list.")
+                
+            # Check captions (The core of description task)
+            # Note: We allow empty captions (unannotated), but the field should exist 
+            # or at least be the intended structure.
+            if "captions" not in item and "labels" not in item:
+                # If neither captions nor labels exist, it might be ambiguous, 
+                # but for now we warn if structure looks completely wrong.
+                pass 
+
+        if err_inputs_missing:
+            errors.append(f"Items missing 'inputs': {', '.join(err_inputs_missing[:5])}...")
+            
+        if errors:
+            return False, "\n".join(errors), ""
+            
+        return True, "", f"Validated {len(items)} items for Description."
 
     def validate_loc_json(self, data):
         """

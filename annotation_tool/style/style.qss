@@ -511,3 +511,60 @@ QTableView[class="annotation_table"] {
 QTableView[class="annotation_table"] QHeaderView::section {
     background-color: #444; color: white; border: 1px solid #555; padding: 4px;
 }
+
+QStatusBar {
+    border-top: 1px solid #444;
+    padding: 4px;
+}
+
+/* ======================================================= */
+/* Description Mode Specifics                */
+/* ======================================================= */
+
+/* 1. Caption Text Editor (Right Panel) */
+QTextEdit#descCaptionEdit {
+    background-color: #1E1E1E;
+    color: #F0F0F0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 13px;
+    /* line-height is handled by Qt block format, css support is limited but kept for ref */
+    selection-background-color: #0078d4;
+}
+
+/* 2. Confirm Button (Blue Style) */
+QPushButton#descConfirmBtn {
+    background-color: #0078d4;
+    color: white;
+    border-radius: 4px;
+    font-weight: bold;
+    border: none;
+    font-size: 14px;
+}
+
+QPushButton#descConfirmBtn:hover {
+    background-color: #0063b1;
+}
+
+QPushButton#descConfirmBtn:pressed {
+    background-color: #005a9e;
+}
+
+QPushButton#descConfirmBtn:disabled {
+    background-color: #444;
+    color: #888;
+}
+
+/* 3. Clear Button (Standard Style override if needed) */
+QPushButton#descClearBtn {
+    /* Inherits standard QPushButton style, you can add specifics here */
+    font-weight: bold;
+}
+
+/* 4. Player Time Label (Center Panel) */
+QLabel#descTimeLabel {
+    color: #888;
+    font-weight: bold;
+    font-size: 12px;
+}

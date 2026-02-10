@@ -84,7 +84,9 @@ annotation_tool/
 
 The application is built on a "Composite Design" strategy. While each mode serves a different task, they share significant architectural DNA.
 
-The Dense Description modality is essentially a **specialized evolution** of the Localization mode.
+### Is Dense Description a reuse of Localization?
+
+**Yes.** The Dense Description modality is essentially a **specialized evolution** of the Localization mode.
 
 * **Shared Center Panel**: Both use the `LocCenterPanel`, which includes the zoomable `TimelineWidget` and `VideoSurface`.
 * **Shared Data Logic**: Both are "Event-based" (data is tied to a `position_ms`) rather than "Clip-based".

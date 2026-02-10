@@ -32,6 +32,7 @@ class DescriptionEventEditor(QWidget):
         for btn in [self.undo_btn, self.redo_btn]:
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setEnabled(False)
+            # Use property for styling if needed, or objectName
             btn.setProperty("class", "editor_control_btn")
             
         self.undo_btn.clicked.connect(self.undo_clicked.emit)
@@ -41,67 +42,45 @@ class DescriptionEventEditor(QWidget):
         h_undo.addWidget(self.redo_btn)
         self.layout.addLayout(h_undo)
         
-        # Separator
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-        self.layout.addWidget(line)
-
-        # --- 2. Main Editor ---
-        lbl_desc = QLabel("Descriptions / Captions:")
-        lbl_desc.setStyleSheet("font-weight: bold; font-size: 14px; color: #ddd;")
-        self.layout.addWidget(lbl_desc)
-
-        lbl_hint = QLabel("Modify the Q & A below freely.")
-        lbl_hint.setStyleSheet("color: #888; font-size: 11px; font-style: italic;")
-        self.layout.addWidget(lbl_hint)
-
+        # --- 2. Text Editor Area ---
+        lbl_instr = QLabel("Description / Caption:")
+        # You can also move this style to QSS if you want complete separation
+        lbl_instr.setStyleSheet("font-weight: bold; color: #ccc;") 
+        self.layout.addWidget(lbl_instr)
+        
         self.caption_edit = QTextEdit()
-        self.caption_edit.setPlaceholderText("Select an action to view Q&A...")
-        self.caption_edit.setStyleSheet("""
-            QTextEdit {
-                background-color: #1e1e1e;
-                color: #f0f0f0;
-                border: 1px solid #555;
-                border-radius: 4px;
-                padding: 8px;
-                font-size: 13px;
-                line-height: 1.5;
-            }
-        """)
+        self.caption_edit.setPlaceholderText("Type description here...")
+        
+        # Style via QSS
+        self.caption_edit.setObjectName("descCaptionEdit")
+        
         self.layout.addWidget(self.caption_edit, 1) 
 
-        # --- 3. Action Buttons (Swapped Positions) ---
+        # --- 3. Action Buttons ---
         h_btns = QHBoxLayout()
         h_btns.setSpacing(10)
         
-        # Confirm Button (Now on LEFT) - Blue
+        # Confirm Button (Blue)
         self.confirm_btn = QPushButton("Confirm")
         self.confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.confirm_btn.setMinimumHeight(40)
-        self.confirm_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4; 
-                color: white; 
-                border-radius: 4px; 
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #0063b1;
-            }
-            QPushButton:pressed {
-                background-color: #005a9e;
-            }
-        """)
+        
+        # Style via QSS
+        self.confirm_btn.setObjectName("descConfirmBtn")
         self.confirm_btn.clicked.connect(self.confirm_clicked.emit)
 
-        # Clear Button (Now on RIGHT) - Default
+        # Clear Button
         self.clear_btn = QPushButton("Clear")
         self.clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clear_btn.setMinimumHeight(40)
+        
+        # Style via QSS
+        self.clear_btn.setObjectName("descClearBtn")
         self.clear_btn.clicked.connect(self.clear_clicked.emit)
-
-        h_btns.addWidget(self.confirm_btn)
-        h_btns.addWidget(self.clear_btn)
+        
+        # [CHANGED] Swap Order: Clear (Left) -> Confirm (Right)
+        # Stretch factors: Clear gets 1 share, Confirm gets 2 shares (wider)
+        h_btns.addWidget(self.clear_btn, 1)   
+        h_btns.addWidget(self.confirm_btn, 2) 
+        
         self.layout.addLayout(h_btns)

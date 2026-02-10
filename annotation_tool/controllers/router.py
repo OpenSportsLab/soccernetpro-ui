@@ -1,14 +1,19 @@
 import json
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
 from controllers.classification.class_file_manager import ClassFileManager
 from controllers.localization.loc_file_manager import LocFileManager
+from controllers.description.desc_file_manager import DescFileManager
+# [NEW] Import Dense Description Manager
+from controllers.dense_description.dense_file_manager import DenseFileManager
+
 from ui.common.dialogs import ProjectTypeDialog
 
 class AppRouter:
     """
     Handles application entry points and routing:
     1. Open JSON / Create New Project
-    2. Determine Mode (Classification vs Localization)
+    2. Determine Mode (Classification vs Localization vs Description vs Dense)
     3. Delegate to specific Managers
     4. Handle Project Closure
     """
@@ -16,41 +21,53 @@ class AppRouter:
         self.main = main_window
         self.class_fm = ClassFileManager(main_window)
         self.loc_fm = LocFileManager(main_window)
+        self.desc_fm = DescFileManager(main_window)
+        # [NEW] Initialize Dense Description manager
+        self.dense_fm = DenseFileManager(main_window)
 
     def create_new_project_flow(self):
         """
         Unified entry point for creating a new project.
         """
-        # 1. Safety Check: Ensure current project is closed/saved first
         if not self.main.check_and_close_current_project():
             return
 
-        # 2. Ask user for project type
         dlg = ProjectTypeDialog(self.main)
         if dlg.exec():
             mode = dlg.selected_mode
             
-            # 3. Delegate to specific manager logic
             if mode == "classification":
                 self.class_fm.create_new_project()
-                
             elif mode == "localization":
                 self.loc_fm.create_new_project()
+            elif mode == "description":
+                self.desc_fm.create_new_project()
+            # [NEW] Handle Dense mode project creation if needed
+            # [NEW] Handle Dense Description
+            elif mode == "dense_description":
+                # Assuming DenseFileManager has a create_new_project method
+                # (You already implemented this in the previous step)
+                self.dense_fm.create_new_project()
 
     def import_annotations(self):
         """
         Global entry point for loading a JSON file.
         """
-        if not self.main.check_and_close_current_project(): return
+        if not self.main.check_and_close_current_project():
+            return
         
-        file_path, _ = QFileDialog.getOpenFileName(self.main, "Select Project JSON", "", "JSON Files (*.json)")
-        if not file_path: return
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main, "Select Project JSON", "", "JSON Files (*.json)"
+        )
+        if not file_path:
+            return
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f: 
                 data = json.load(f)
         except Exception as e:
-            QMessageBox.critical(self.main, "Error", f"Invalid JSON: {e}"); return
+            QMessageBox.critical(self.main, "Error", f"Invalid JSON: {e}")
+            return
 
         json_type = self._detect_json_type(data)
 
@@ -61,37 +78,62 @@ class AppRouter:
         elif json_type == "localization":
             if self.loc_fm.load_project(data, file_path):
                 self.main.ui.show_localization_view()
+
+        elif json_type == "description":
+            self.desc_fm.load_project(data, file_path)
+            self.main.ui.show_description_view()
+            
+        # [NEW] Handle Dense Description loading
+        elif json_type == "dense_description":
+            if self.dense_fm.load_project(data, file_path):
+                self.main.ui.show_dense_description_view()
             
         else:
-            QMessageBox.critical(self.main, "Error", "Unknown JSON format.")
+            QMessageBox.critical(self.main, "Error", "Unknown JSON format or Task Type.")
 
     def close_project(self):
         """
-        [New] Handles closing the current project and returning to the Welcome Screen.
+        Handles closing the current project and returning to the Welcome Screen.
         """
-        # 1. Check for unsaved changes
         if not self.main.check_and_close_current_project():
             return
 
-        # 2. Clear workspaces (both just in case, or check current mode)
-        # Using full_reset=True ensures models are wiped
         self.class_fm._clear_workspace(full_reset=True)
         self.loc_fm._clear_workspace(full_reset=True)
+        self.desc_fm._clear_workspace(full_reset=True)
+        # [NEW] Clear Dense Description workspace
+        self.dense_fm._clear_workspace(full_reset=True)
 
-        # 3. Return to Welcome Screen
         self.main.ui.show_welcome_view()
         self.main.show_temp_msg("Project Closed", "Returned to Home Screen", duration=1000)
 
     def _detect_json_type(self, data):
+        """
+        Heuristics to identify the project type from JSON structure.
+        """
+        task = data.get("task", "").lower()
+        
+        # 1. Explicit task string check [NEW]
+        if "dense" in task:
+            return "dense_description"
+        if "caption" in task or "description" in task:
+            return "description"
+
         items = data.get("data", [])
-        first = items[0] if items else {}
+        if not items: return "unknown"
+        first = items[0] if isinstance(items[0], dict) else {}
 
-        # 1) Classification check
-        if isinstance(first, dict) and "labels" in first:
-            return "classification"
-
-        # 2) Localization check
-        if isinstance(first, dict) and "events" in first:
+        # 2. Structural heuristics [NEW]
+        if "events" in first:
+            evts = first.get("events", [])
+            if evts and isinstance(evts, list) and "text" in evts[0]:
+                return "dense_description"
             return "localization"
+
+        if "labels" in first:
+            return "classification"
+        
+        if "captions" in first:
+            return "description"
             
         return "unknown"
