@@ -22,11 +22,13 @@ jobs:
       - id: notes
         shell: bash
         run: |
+          delim="__CHANGELOG__"
           {
-            echo "changelog<<EOF"
+            echo "changelog<<$delim"
             git log -20 --pretty=format:'* %s'
-            echo "EOF"
+            echo "$delim"
           } >> "$GITHUB_OUTPUT"
+
 
   create-release:
     needs: generate-release-notes
