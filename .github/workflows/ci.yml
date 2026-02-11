@@ -7,7 +7,6 @@ on:
       - dev-jintao
   workflow_dispatch:
 
-# Avoid wasting runners: if a new commit is pushed to the same branch, cancel the in-progress run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -30,7 +29,6 @@ jobs:
         with:
           python-version: "3.9"
 
-      # Speed up installs (PyQt6 wheels are large)
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -55,8 +53,6 @@ jobs:
           try { pip cache purge } catch { Write-Host "pip cache purge failed (ignored)" }
 
       - name: Build exe
-        # Windows add-data separator is ';'
-        # We bundle the whole folders: style/, ui/, controllers/
         shell: pwsh
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --onefile `
@@ -66,12 +62,19 @@ jobs:
             --add-data "controllers;controllers" `
             "main.py"
 
+      - name: Zip Windows binary (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          Move-Item -Force dist\SoccerNetProAnalyzer.exe dist\SoccerNetProAnalyzer-win.exe
+          Compress-Archive -Path dist\SoccerNetProAnalyzer-win.exe -DestinationPath dist\SoccerNetProAnalyzer-win.zip -Force
+
       - name: Upload artifact (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-Windows
-          path: annotation_tool/dist/SoccerNetProAnalyzer.exe
+          path: annotation_tool/dist/SoccerNetProAnalyzer-win.zip
           retention-days: 3
 
   build-macos:
@@ -87,7 +90,6 @@ jobs:
         with:
           python-version: "3.9"
 
-      # Speed up installs (PyQt6 wheels are large)
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -109,7 +111,6 @@ jobs:
           pip cache purge || true
 
       - name: Build app
-        # macOS add-data separator is ':'
         run: |
           python -m PyInstaller --noconfirm --clean --windowed \
             --name "SoccerNetProAnalyzer" \
@@ -118,18 +119,17 @@ jobs:
             --add-data "controllers:controllers" \
             "main.py"
 
-      # .app is a directory; zip it for easier download/use as an artifact
       - name: Zip macOS app (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          ditto -c -k --sequesterRsrc --keepParent "dist/SoccerNetProAnalyzer.app" "dist/SoccerNetProAnalyzer-macOS.zip"
+          ditto -c -k --sequesterRsrc --keepParent "dist/SoccerNetProAnalyzer.app" "dist/SoccerNetProAnalyzer-mac.zip"
 
       - name: Upload artifact (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-macOS
-          path: annotation_tool/dist/SoccerNetProAnalyzer-macOS.zip
+          path: annotation_tool/dist/SoccerNetProAnalyzer-mac.zip
           retention-days: 3
 
   build-linux:
@@ -150,7 +150,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgl1 libglib2.0-0 libxcb-cursor0
 
-      # Speed up installs (PyQt6 wheels are large)
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -171,7 +170,6 @@ jobs:
           pip cache purge || true
 
       - name: Build binary
-        # Linux add-data separator is ':'
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --onefile \
             --name "SoccerNetProAnalyzer" \
@@ -180,10 +178,18 @@ jobs:
             --add-data "controllers:controllers" \
             "main.py"
 
+      - name: Zip Linux binary (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          mv -f dist/SoccerNetProAnalyzer dist/SoccerNetProAnalyzer-linux
+          cd dist
+          zip -r SoccerNetProAnalyzer-linux.zip SoccerNetProAnalyzer-linux
+          cd ..
+
       - name: Upload artifact (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-Linux
-          path: annotation_tool/dist/SoccerNetProAnalyzer
+          path: annotation_tool/dist/SoccerNetProAnalyzer-linux.zip
           retention-days: 3
