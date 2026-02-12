@@ -568,3 +568,44 @@ QLabel#descTimeLabel {
     font-weight: bold;
     font-size: 12px;
 }
+
+
+
+/* =======================================================
+   Dense Description - Right Panel Widgets
+   Target: ui/dense_description/event_editor/desc_input_widget.py
+   ======================================================= */
+
+QLabel[class="dense_time_display"] {
+    font-size: 14px;
+    font-weight: bold;
+    /* Match Localization "spotting_time_lbl" */
+    color: #00BFFF;
+    font-family: Menlo, monospace;
+}
+
+QTextEdit[class="dense_desc_editor"] {
+    background-color: #222;
+    color: #EEE;
+    border: 1px solid #444;
+}
+
+/* Match Localization "spotting_add_btn" (blue) */
+QPushButton[class="dense_confirm_btn"] {
+    background-color: #0078D7;
+    color: white;
+    border: 1px solid #005A9E;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 8px;
+}
+
+QPushButton[class="dense_confirm_btn"]:hover {
+    background-color: #1084E3;
+    border-color: #2094F3;
+}
+
+QPushButton[class="dense_confirm_btn"]:pressed {
+    background-color: #005A9E;
+}
