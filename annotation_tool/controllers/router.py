@@ -4,7 +4,6 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from controllers.classification.class_file_manager import ClassFileManager
 from controllers.localization.loc_file_manager import LocFileManager
 from controllers.description.desc_file_manager import DescFileManager
-# [NEW] Import Dense Description Manager
 from controllers.dense_description.dense_file_manager import DenseFileManager
 
 from ui.common.dialogs import ProjectTypeDialog
@@ -42,11 +41,7 @@ class AppRouter:
                 self.loc_fm.create_new_project()
             elif mode == "description":
                 self.desc_fm.create_new_project()
-            # [NEW] Handle Dense mode project creation if needed
-            # [NEW] Handle Dense Description
             elif mode == "dense_description":
-                # Assuming DenseFileManager has a create_new_project method
-                # (You already implemented this in the previous step)
                 self.dense_fm.create_new_project()
 
     def import_annotations(self):
@@ -101,7 +96,6 @@ class AppRouter:
         self.class_fm._clear_workspace(full_reset=True)
         self.loc_fm._clear_workspace(full_reset=True)
         self.desc_fm._clear_workspace(full_reset=True)
-        # [NEW] Clear Dense Description workspace
         self.dense_fm._clear_workspace(full_reset=True)
 
         self.main.ui.show_welcome_view()
