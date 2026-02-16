@@ -1,20 +1,25 @@
-# User Interface (UI) Module
+# 🎨 User Interface (UI) Module
 
-This directory contains the **View layer** of the application's MVC architecture. It is responsible solely for the graphical presentation and user interaction components.
+This directory contains the **View layer** of the application's MVC architecture. It is responsible solely for graphical presentation and user interaction.
 
-**Note:** No business logic or data manipulation is performed here. All user interactions (clicks, edits) are emitted as Qt Signals to be handled by the `controllers` module.
+**Note:** No business logic or data manipulation is performed here. All user interactions (clicks, edits, playback controls) are emitted as **Qt Signals** to be handled by the `controllers` module.
 
 ## 📂 Directory Structure
 
-The UI is organized by functional domain rather than spatial position:
+The UI is organized by functional domain, with a robust **Common** library supporting four distinct annotation modes:
 
 ```text
 ui/
-├── common/             # Reusable widgets and dialogs shared across different tasks
-│   ├── dialogs.py
-│   └── project_controls.py
-├── classification/     # UI components specific to the Classification task
-└── localization/       # UI components specific to the Localization task
+├── common/               # Shared architecture (Main Window, Workspace Skeleton, Dialogs)
+│   ├── main_window.py    # Top-level Stacked Layout orchestrator
+│   ├── workspace.py      # Unified 3-column layout skeleton
+│   ├── video_surface.py  # Shared video rendering widget
+│   └── ...
+│
+├── classification/       # [Mode 1] Whole-Video Classification
+├── localization/         # [Mode 2] Action Spotting (Timestamps)
+├── description/          # [Mode 3] Global Description (Captions)
+└── dense_description/    # [Mode 4] Dense Description (Timestamped Text)
 
 ```
 
@@ -24,66 +29,70 @@ ui/
 
 ### 1. Common (`ui/common/`)
 
-Contains widgets and windows that are standardized and used across multiple modes to ensure a consistent user experience.
+The backbone of the application, ensuring a consistent user experience across all modes.
 
-* **`dialogs.py`**: Contains modal dialog windows used throughout the application lifecycle:
-* `ProjectTypeDialog`: Forces the user to choose between Classification and Localization modes.
-* `CreateProjectDialog`: A wizard for setting up new tasks and defining the initial Label Schema.
-* `FolderPickerDialog`: A custom file tree that allows selecting multiple folders without holding the Ctrl key.
-
-
-* **`project_controls.py`**:
-* Defines the **Unified 3x2 Control Grid** (New, Load, Add Data, Close, Save, Export).
-* Contains the **Unified Clip Explorer**, providing a consistent video list and filter interface for both modes.
+* **`main_window.py`**: The application entry point. It manages a `QStackedLayout` to switch between the **Welcome Screen** and the four **Workspaces** without destroying state.
+* **`workspace.py`**: Defines the `UnifiedTaskPanel`. This is the generic 3-column skeleton (Left Tree | Center Player | Right Editor) used by **every** mode to maintain layout consistency.
+* **`video_surface.py`**: A pure rendering widget wrapping `QMediaPlayer` and `QVideoWidget`. It handles video output while leaving playback logic to the controllers.
+* **`clip_explorer.py`**: The **Left Sidebar**. Refactored to use **Qt Model/View** (`QTreeView`) for high performance. It handles file navigation and filtering (e.g., "Show Labelled Only").
+* **`dialogs.py`**:
+* `ProjectTypeDialog`: Updated wizard allowing selection of **Classification**, **Localization**, **Description**, or **Dense Description**.
+* `FolderPickerDialog`: A custom file tree allowing multi-folder selection.
 
 
 
 ### 2. Classification (`ui/classification/`)
 
-Implements the interface for **Whole-Video Classification** (assigning global labels to an entire video clip).
+Implements the interface for **Whole-Video Classification** (assigning categories to an entire clip).
 
-* **`panels.py`**: Defines the high-level layout:
-* `LeftPanel`: Navigation tree and Project Controls.
-* `CenterPanel`: Video player and basic navigation controls.
-* `RightPanel`: Dynamic form generation based on the project Schema.
-
-
-* **`widgets.py`**: Contains specialized input widgets:
-* `DynamicSingleLabelGroup`: Generates Radio Buttons for single-choice categories.
-* `DynamicMultiLabelGroup`: Generates Checkboxes for multi-choice categories.
-* `VideoViewAndControl`: A wrapper for the video player and slider.
-
-
+* **`media_player/`**: Standard player with basic seek controls.
+* **`event_editor/`**: Dynamic form generation (Radio buttons/Checkboxes) based on the project Schema.
 
 ### 3. Localization (`ui/localization/`)
 
-Implements the interface for **Action Spotting** (identifying specific timestamps within a video).
+Implements the interface for **Action Spotting** (identifying specific timestamps).
 
-* **`panels.py`**: The layout container that assembles the following functional widgets.
-* **`clip_explorer.py`**:
-* Displays the list of video clips (Sequences) using the shared explorer logic.
-* Handles filtering (Done/Not Done) and visual status indicators.
+* **`media_player/`**:
+* Features the **Zoomable Timeline**, visual event markers, and frame-stepping tools.
 
 
-* **`media_player.py`**:
-* Contains the `MediaPreviewWidget`.
-* Features a custom, zoomable **Timeline** with visual event markers.
-* Includes frame-stepping and speed control playback tools.
+* **`event_editor/`**:
+* **Spotting Tabs:** Rapid-fire buttons for defining event categories.
+* **Annotation Table:** A spreadsheet view for editing timestamps and labels.
 
 
-* **`event_editor.py`**:
-* `Spotting Tabs`: A multi-tab interface for defining different event categories (Heads).
-* `Annotation Table`: A spreadsheet-like view for editing event timestamps and labels.
+
+### 4. Description (`ui/description/`) [NEW]
+
+Implements the interface for **Global Captioning** (one text description per video).
+
+* **`media_player/`**:
+* **Composite Player:** Combines the video surface with a specialized navigation toolbar.
+* **Behavior:** Defaults to **Infinite Loop** to allow repeated viewing while typing.
 
 
+* **`event_editor/`**:
+* **Text Input:** A large `QTextEdit` for free-form text.
+* **Actions:** Simple "Confirm" and "Clear" workflow.
+
+
+
+### 5. Dense Description (`ui/dense_description/`) [NEW]
+
+Implements the interface for **Dense Captioning** (text descriptions anchored to specific timestamps).
+
+* **`event_editor/`**:
+* **Input Widget:** A specialized panel showing the current video time alongside a text input area.
+* **Dense Table:** A subclass of the Localization table. It replaces the "Label" column with a "Description" column and auto-sizes to a **2:1:4 ratio** (Time : Lang : Text).
+
+
+* **Reuse:** This mode reuses the **Localization Center Panel** (Timeline + Player) to allow precise navigation between text events.
 
 ---
 
 ## 🎨 Design Principles
 
-1. **Passive View**: These classes do not modify the `model` directly. They only display data provided by the controller and emit signals when the user acts.
-2. **Dynamic Generation**: The annotation forms (buttons/checkboxes) are not hardcoded; they are generated dynamically based on the loaded JSON schema.
-3. **Functional Naming**: Files are named after what they *do* (e.g., `media_player.py`), not where they are located (e.g., `center_widgets.py`), allowing for flexible layout changes in the future.
-
-
-```
+1. **Passive View:** These classes do not modify data directly. They display data provided by the controller and emit signals (e.g., `confirm_clicked`, `request_remove_item`) when the user acts.
+2. **Unified Skeleton:** All modes inherit the same `UnifiedTaskPanel` structure. This ensures that the Sidebar and Media Player always appear in the same relative locations, reducing cognitive load for the user.
+3. **Composite Design:** Complex widgets (like the Description Player) are built by composing smaller, single-purpose widgets (VideoSurface + Controls + Slider) rather than monolithic classes.
+4. **Dynamic Generation:** Where possible, forms and tables adjust their content dynamically based on the loaded JSON schema or data model.
