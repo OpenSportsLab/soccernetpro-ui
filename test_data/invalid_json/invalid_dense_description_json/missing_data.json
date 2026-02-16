@@ -1,0 +1,5 @@
+{
+  "version": "1.0",
+  "task": "dense_video_captioning",
+  "dataset_name": "OSL-Football-DenseCap (test)"
+}
