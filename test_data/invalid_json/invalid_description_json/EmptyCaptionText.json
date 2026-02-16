@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "date": "2026-02-01",
+  "task": "video_captioning",
+  "dataset_name": "demo",
+  "data": [
+    {
+      "id": "x0",
+      "inputs": [{ "type": "video", "name": "video1", "path": "a/clip_0.mp4" }],
+      "captions": [{ "lang": "en", "text": "" }]
+    }
+  ]
+}
