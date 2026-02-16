@@ -78,26 +78,3 @@ The goal of this module is to adhere to the **DRY (Don't Repeat Yourself)** prin
 * **Actions:** Provides large, accessible entry points to "Create New Project" or "Import Project JSON".
 
 ---
-
-## 🧩 Architectural Diagram (UI Composition)
-
-The `MainWindowUI` builds the application by injecting specific widgets into the `UnifiedTaskPanel` skeleton:
-
-```mermaid
-graph TD
-    MW[MainWindowUI] --> Stack[QStackedLayout]
-    
-    Stack --> View1[Classification Mode]
-    Stack --> View2[Localization Mode]
-    Stack --> View3[Description Mode]
-    Stack --> View4[Dense Description Mode]
-    
-    subgraph "UnifiedTaskPanel (Shared Skeleton)"
-        Left[CommonProjectTreePanel]
-        Center[Media Player / Timeline]
-        Right[Task Specific Editor]
-    end
-    
-    View4 --> Left
-    View4 --> Center
-    View4 --> Right
