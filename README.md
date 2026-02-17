@@ -117,66 +117,106 @@ python test_data/download_osl_hf.py \
   --output-dir Test_Data/Localization
 ```
 ---
-
-
 ## 🧰 Build a standalone app (PyInstaller)
-### **macOS (.app)**
 
-From the repository root:
-```bash
-cd annotation_tool
-pyinstaller --noconfirm --clean --windowed \
-  --name "SoccerNetProAnalyzer" \
-  --add-data "style:style" \
-  --add-data "ui:ui" \
-  --add-data "ui2:ui2" \
-  main.py
-```
+This project can be packaged into a standalone desktop app using **PyInstaller**.
+The commands below assume you run them **from the repository root**.
 
-### **Windows / Linux** (one-file binary)
-
-From the repository root:
-
-```bash
-cd Tool
-pyinstaller --noconfirm --clean --windowed --onefile \
-  --name "SoccerNetProAnalyzer" \
-  --add-data "style:style" \
-  --add-data "ui:ui" \
-  --add-data "ui2:ui2" \
-  main.py
-```
-
-In GitHub Actions, the Windows ```bash--add-data``` separator is ```;``` instead of ```:```.
-
-
-### 🤖 How executables are built (CI / GitHub Releases)
-
-In addition to manual PyInstaller builds, standalone executables are automatically built and published using GitHub Actions.
-
-When a version tag (v* or V* such as V1.0.7) is pushed to the repository, a release workflow is triggered (`.github/workflows/release.yml`).  
-This workflow:
-
-- Builds standalone GUI executables using PyInstaller
-- Targets Windows, macOS, and Linux separately
-- Bundles required UI assets (`ui/`, `ui2/`, `style/`) into the binary
-- Packages each platform binary into a ZIP archive
-- Uploads the artifacts to the corresponding GitHub Release
-
-The build logic in the CI pipeline mirrors the manual PyInstaller commands described above, ensuring consistency between local and automated builds.
-
-CI workflows overview:
-
-- `ci.yml`: Continuous integration (linting / checks)
-- `release.yml`: Multi-platform executable build and GitHub Release publishing
-- `deploy_docs.yml`: Documentation build and deployment (MkDocs)
+> **Note:** The app bundles runtime assets from `style/`, `ui/`, and `controllers/`.
+> This matches the GitHub Actions build configuration.
 
 ---
-## 📚 Build the docs
+
+### **macOS (.app)**
+
 ```bash
-pip install mkdocs mkdocs-material mkdocstrings[python]
-mkdocs gh-deploy --force
+cd annotation_tool
+
+python -m PyInstaller --noconfirm --clean --windowed \
+  --name "SoccerNetProAnalyzer" \
+  --add-data "style:style" \
+  --add-data "ui:ui" \
+  --add-data "controllers:controllers" \
+  main.py
 ```
+
+Output:
+
+* `annotation_tool/dist/SoccerNetProAnalyzer.app`
+
+---
+
+### **Windows / Linux (one-file binary)**
+
+#### Linux
+
+```bash
+cd annotation_tool
+
+python -m PyInstaller --noconfirm --clean --windowed --onefile \
+  --name "SoccerNetProAnalyzer" \
+  --add-data "style:style" \
+  --add-data "ui:ui" \
+  --add-data "controllers:controllers" \
+  main.py
+```
+
+Output:
+
+* `annotation_tool/dist/SoccerNetProAnalyzer`
+
+
+#### Windows (PowerShell)
+
+On Windows, the `--add-data` separator is **`;`** (not `:`).
+
+```powershell
+cd annotation_tool
+
+python -m PyInstaller --noconfirm --clean --windowed --onefile `
+  --name "SoccerNetProAnalyzer" `
+  --add-data "style;style" `
+  --add-data "ui;ui" `
+  --add-data "controllers;controllers" `
+  main.py
+```
+
+Output:
+
+* `annotation_tool\dist\SoccerNetProAnalyzer.exe`
+
+---
+
+## 🤖 How executables are built (CI / GitHub Releases)
+
+In addition to manual PyInstaller builds, standalone executables are automatically built using GitHub Actions.
+
+### Release builds (GitHub Releases)
+
+When a version tag matching `v*` or `V*` (e.g., `v1.0.7`) is pushed, the release workflow runs:
+
+* Workflow: `.github/workflows/release.yml`
+* Builds for: **Windows**, **macOS**, **Linux**
+* Packages outputs into ZIP archives
+* Uploads ZIP files as **GitHub Release assets**
+* Generates release notes from recent commit messages
+
+The build commands in CI mirror the manual PyInstaller commands above (including bundling `style/`, `ui/`, and `controllers/`).
+
+### Manual build artifacts (workflow dispatch)
+
+There is also a standalone build workflow that can be triggered manually:
+
+* Workflow: `.github/workflows/CL.yml`
+* Builds for: **Windows**, **macOS**, **Linux**
+* On **manual run** (`workflow_dispatch`), it zips the binaries and uploads them as **Actions artifacts** (short retention)
+
+### CI workflows overview
+
+* `CL.yml`: Multi-platform build (manual artifacts on `workflow_dispatch`; also runs on pushes to selected branches)
+* `release.yml`: Multi-platform build + GitHub Release publishing (triggered by version tags)
+* `deploy_docs.yml`: Documentation build and deployment (MkDocs)
+
 
 ---
 
