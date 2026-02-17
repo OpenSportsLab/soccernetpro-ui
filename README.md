@@ -56,25 +56,71 @@ A window will open where you can load your data and start working.
 
 ## 📦 Download Test Datasets
 
-This project provides **test datasets** for two tasks: **Classification** and **Localization**.  
-More details are available at:[`/test_data`](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/test_data)
- 
+This project provides **test datasets** for multiple tasks, including:
 
-> ⚠️ **Important**  
-> For both tasks, the corresponding **JSON annotation file must be placed in the same directory**
-> as the data folder (`classification/` or `england efl/`), otherwise the GUI will not load the data correctly.
-> Some Hugging Face datasets (including SoccerNetPro localization and classification datasets) are restricted / gated. So you must:
+- **Classification**
+- **Localization**
+- **Description (Video Captioning)**
+- **Dense Description (Dense Video Captioning)**
 
-1.Have access to the dataset on Hugging Face
+More details are available at: [`/test_data`](https://github.com/OpenSportsLab/soccernetpro-ui/tree/main/test_data)
 
-2.Be authenticated locally using your Hugging Face account
+> ⚠️ **Important**
+> For all tasks, the corresponding **JSON annotation file must be placed in the same directory**
+> as the referenced data folders (e.g., `test/`, `germany_bundesliga/`, etc.).
+> Otherwise, the GUI may not load the data correctly due to relative path mismatches.
 
+Some Hugging Face datasets (including SoccerNetPro datasets) are **restricted / gated**. Therefore you must:
 
-### **Requirements**
+1. Have access to the dataset on Hugging Face
+2. Be authenticated locally using your Hugging Face account (`hf auth login`)
 
-* Python 3.x
-* `huggingface_hub` Python package (install with `pip install huggingface_hub`)
+---
 
+### ✅ Requirements
+
+- Python 3.x
+- `huggingface_hub` (install via `pip install huggingface_hub`)
+
+---
+
+### 🧩 Universal Downloader (recommended)
+
+We provide a single script that downloads **only the files referenced by a given JSON annotation file**:
+
+- Downloads the JSON
+- Parses `data[].inputs[].path` (and legacy `videos[].path`)
+- Downloads the referenced files while preserving the repo folder structure
+
+Script:
+
+- `test_data/download_osl_hf.py`
+
+Common usage:
+
+```bash
+python test_data/download_osl_hf.py \
+  --url <HF_JSON_URL> \
+  --output-dir <LOCAL_OUTPUT_DIR> \
+  --types video
+````
+
+`--types` controls what input types to download from `item.inputs`:
+
+* `video` (default)
+* `video,captions`
+* `video,captions,features`
+* `all` (download all inputs that contain a `path`)
+
+Use `--dry-run` to preview and estimate total size:
+
+```bash
+python test_data/download_osl_hf.py \
+  --url <HF_JSON_URL> \
+  --output-dir <LOCAL_OUTPUT_DIR> \
+  --types video,captions,features \
+  --dry-run
+```
 
 ### 🟦 Classification – Test Data
 
@@ -116,6 +162,92 @@ python test_data/download_osl_hf.py \
   --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-localization-snbas/blob/224p/annotations-test.json \
   --output-dir Test_Data/Localization
 ```
+
+
+## 🟪 Description (Video Captioning) – SoccerNet-XFoul
+
+**Dataset (Hugging Face):**
+[https://huggingface.co/datasets/OpenSportsLab/soccernetpro-description-xfoul](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-description-xfoul)
+
+This dataset provides **video captioning** samples in OSL JSON format.
+Each split JSON references clips under its corresponding folder:
+
+* `annotations_train.json` → `train/`
+* `annotations_valid.json` → `valid/`
+* `annotations_test.json` → `test/`
+
+### 📥 Download Test Split (videos only)
+
+```bash
+python test_data/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-description-xfoul/blob/main/annotations_test.json \
+  --output-dir Test_Data/Description/XFoul \
+  --types video
+```
+
+After download, you should have a structure like:
+
+```
+Test_Data/Description/XFoul/
+  annotations_test.json
+  test/
+    action_0/
+      clip_0.mp4
+      clip_1.mp4
+    ...
+```
+
+---
+
+## 🟧 Dense Description (Dense Video Captioning) – SoccerNetPro SNDVC
+
+**Dataset (Hugging Face):**
+[https://huggingface.co/datasets/OpenSportsLab/soccernetpro-densedescription-sndvc](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-densedescription-sndvc)
+
+This dataset provides **dense captions aligned with timestamps** (half-relative), in a unified multimodal JSON format.
+Each item typically references:
+
+* half video (`.../1_224p.mp4` or `.../2_224p.mp4`)
+* raw caption file (`.../Labels-caption.json`)
+* optional visual features (e.g., `features/I3D/.../*.npy`)
+
+### 📥 Download Test Split (videos only — recommended for GUI)
+
+```bash
+python test_data/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-densedescription-sndvc/blob/main/annotations-test.json \
+  --output-dir Test_Data/DenseDescription/SNDVC \
+  --types video
+```
+
+### 📥 Download Test Split (videos + raw captions + features)
+
+```bash
+python test_data/download_osl_hf.py \
+  --url https://huggingface.co/datasets/OpenSportsLab/soccernetpro-densedescription-sndvc/blob/main/annotations-test.json \
+  --output-dir Test_Data/DenseDescription/SNDVC \
+  --types video,captions,features
+```
+
+Expected structure (example):
+
+```
+Test_Data/DenseDescription/SNDVC/
+  annotations-test.json
+  germany_bundesliga/
+    2014-2015/
+      <match_folder>/
+        1_224p.mp4
+        2_224p.mp4
+        Labels-caption.json
+  features/
+    I3D/
+      germany_bundesliga/...
+        1_224p.npy
+        2_224p.npy
+```
+
+
 ---
 ## 🧰 Build a standalone app (PyInstaller)
 
