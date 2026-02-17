@@ -165,9 +165,8 @@ python test_data/download_osl_hf.py \
 
 
 ## 🟪 Description (Video Captioning) – SoccerNet-XFoul
-
 **Dataset (Hugging Face):**
-[https://huggingface.co/datasets/OpenSportsLab/soccernetpro-description-xfoul](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-description-xfoul)
+[Description Dataset](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-description-xfoul)
 
 This dataset provides **video captioning** samples in OSL JSON format.
 Each split JSON references clips under its corresponding folder:
@@ -202,7 +201,8 @@ Test_Data/Description/XFoul/
 ## 🟧 Dense Description (Dense Video Captioning) – SoccerNetPro SNDVC
 
 **Dataset (Hugging Face):**
-[https://huggingface.co/datasets/OpenSportsLab/soccernetpro-densedescription-sndvc](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-densedescription-sndvc)
+[Dense—Description Dataset](https://huggingface.co/datasets/OpenSportsLab/soccernetpro-densedescription-sndvc)
+
 
 This dataset provides **dense captions aligned with timestamps** (half-relative), in a unified multimodal JSON format.
 Each item typically references:
