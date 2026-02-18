@@ -148,7 +148,6 @@ class ActionClassifierApp(QMainWindow):
         # --- Classification - Center panel ---
         cls_center = self.ui.classification_ui.center_panel
         cls_center.play_btn.clicked.connect(self.nav_manager.play_video)
-        cls_center.multi_view_btn.clicked.connect(self.nav_manager.show_all_views)
         cls_center.prev_action.clicked.connect(self.nav_manager.nav_prev_action)
         cls_center.prev_clip.clicked.connect(self.nav_manager.nav_prev_clip)
         cls_center.next_clip.clicked.connect(self.nav_manager.nav_next_clip)
