@@ -33,10 +33,7 @@ class ClassificationMediaPlayer(QWidget):
         self.prev_clip = self.controls.prev_clip
         self.next_clip = self.controls.next_clip
         self.next_action = self.controls.next_action
-        self.multi_view_btn = self.controls.multi_view_btn
 
-    # =========================================================
-    # [新增] 补充缺失的接口方法，修复 AttributeError
     # =========================================================
 
     def show_single_view(self, path):
