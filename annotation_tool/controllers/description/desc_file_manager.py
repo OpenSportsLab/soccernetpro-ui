@@ -17,9 +17,6 @@ class DescFileManager:
 
     def create_new_project(self):
         """Create a blank Description project."""
-        if not self.main.check_and_close_current_project():
-            return
-
         self._clear_workspace(full_reset=True)
 
         # Initialize Default State
