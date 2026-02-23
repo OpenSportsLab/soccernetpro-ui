@@ -41,8 +41,6 @@ class DenseManager:
         """Link UI signals to logic handlers."""
         # --- Left Panel (Clip Tree) ---
         pc = self.left_panel.project_controls
-        pc.loadRequested.connect(self.main._safe_import_annotations)
-        pc.saveRequested.connect(self.main._dispatch_save)
         
         self.left_panel.tree.selectionModel().currentChanged.connect(self._on_clip_selected)
         self.left_panel.filter_combo.currentIndexChanged.connect(self._apply_clip_filter)
