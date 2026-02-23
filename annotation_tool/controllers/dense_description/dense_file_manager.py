@@ -19,10 +19,6 @@ class DenseFileManager:
         Create a new Dense Description project (Blank).
         Initializes default metadata and workspace.
         """
-        # 1. Safety Check
-        if not self.main.check_and_close_current_project():
-            return
-
         # 2. Clear Workspace
         self._clear_workspace(full_reset=True)
 
