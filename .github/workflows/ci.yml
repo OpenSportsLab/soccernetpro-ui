@@ -54,14 +54,7 @@ jobs:
 
       - name: Build exe
         shell: pwsh
-        run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onefile `
-            --name "SoccerNetProAnalyzer" `
-            --add-data "style;style" `
-            --add-data "ui;ui" `
-            --add-data "controllers;controllers" `
-            --add-data "image;image" `
-            "main.py"
+        run: python -m PyInstaller --noconfirm --clean --windowed --onefile --name "SoccerNetProAnalyzer" --add-data "style;style" --add-data "ui;ui" --add-data "controllers;controllers" --add-data "image;image" "main.py"
 
       - name: Zip Windows binary (manual runs only)
         if: github.event_name == 'workflow_dispatch'
@@ -112,14 +105,7 @@ jobs:
           pip cache purge || true
 
       - name: Build app
-        run: |
-          python -m PyInstaller --noconfirm --clean --windowed \
-            --name "SoccerNetProAnalyzer" \
-            --add-data "style:style" \
-            --add-data "ui:ui" \
-            --add-data "controllers:controllers" \
-            --add-data "image:image" \
-            "main.py"
+        run: python -m PyInstaller --noconfirm --clean --windowed --name "SoccerNetProAnalyzer" --add-data "style:style" --add-data "ui:ui" --add-data "controllers:controllers" --add-data "image:image" "main.py"
 
       - name: Zip macOS app (manual runs only)
         if: github.event_name == 'workflow_dispatch'
@@ -172,14 +158,7 @@ jobs:
           pip cache purge || true
 
       - name: Build binary
-        run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onefile \
-            --name "SoccerNetProAnalyzer" \
-            --add-data "style:style" \
-            --add-data "ui:ui" \
-            --add-data "controllers:controllers" \
-            --add-data "image:image" \
-            "main.py"
+        run: python -m PyInstaller --noconfirm --clean --windowed --onefile --name "SoccerNetProAnalyzer" --add-data "style:style" --add-data "ui:ui" --add-data "controllers:controllers" --add-data "image:image" "main.py"
 
       - name: Zip Linux binary (manual runs only)
         if: github.event_name == 'workflow_dispatch'
