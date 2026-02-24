@@ -60,10 +60,18 @@ class DescFileManager:
             if not is_valid:
                 if len(error_msg) > 1000:
                     error_msg = error_msg[:1000] + "\n... (truncated)"
+                error_text = (
+                    "The imported JSON contains critical errors and cannot be loaded.\n\n"
+                    f"{error_msg}\n\n"
+                    "--------------------------------------------------\n"
+                    "💡 Please download the correct Description JSON format from:\n"
+                    "https://huggingface.co/datasets/OpenSportsLab/soccernetpro-description-xfoul"
+                )
+                
                 QMessageBox.critical(
                     self.main,
                     "Validation Error (Description)",
-                    "The imported JSON contains critical errors and cannot be loaded.\n\n" + error_msg,
+                    error_text,
                 )
                 return False 
 
