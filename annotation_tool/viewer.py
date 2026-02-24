@@ -3,7 +3,7 @@ import os
 from PyQt6.QtCore import Qt, QTimer, QModelIndex, QUrl
 from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut, QStandardItem
 from PyQt6.QtMultimedia import QMediaPlayer
-from PyQt6.QtWidgets import QMainWindow, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QMessageBox,QSizePolicy
 
 from controllers.classification.class_annotation_manager import AnnotationManager
 from controllers.classification.class_navigation_manager import NavigationManager
@@ -34,7 +34,7 @@ class ActionClassifierApp(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("SoccerNet Pro Analysis Tool")
-        self.setGeometry(100, 100, 1400, 900)
+        self.setGeometry(100, 100, 600, 400)
 
         # --- MVC wiring ---
         self.ui = MainWindowUI()
@@ -80,8 +80,10 @@ class ActionClassifierApp(QMainWindow):
         self.setup_dynamic_ui()
         self._setup_shortcuts()
 
+        self.ui.stack_layout.currentChanged.connect(self._adjust_window_size)
         # Start at welcome screen
         self.ui.show_welcome_view()
+        self._adjust_window_size(0)
 
     # ---------------------------------------------------------------------
     # Global Media Control to Prevent Freezing/Ghost Frames
@@ -107,6 +109,34 @@ class ActionClassifierApp(QMainWindow):
         # 4. [NEW] Dense Description
         if hasattr(self.dense_manager, 'media_controller'):
             self.dense_manager.media_controller.stop()
+
+    def _adjust_window_size(self, index: int) -> None:
+        """
+        Dynamically exchange the size of windows
+        """
+        for i in range(self.ui.stack_layout.count()):
+            widget = self.ui.stack_layout.widget(i)
+            if not widget:
+                continue
+            
+            if i == index:
+                widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            else:
+                widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+
+        self.ui.updateGeometry()
+
+        if index == 0:
+            if self.isMaximized():
+                self.showNormal()
+                
+            self.setMinimumSize(0, 0) 
+            
+            self.resize(600, 400)     
+        else:
+            self.setMinimumSize(1000, 700) 
+            
+            self.resize(1400, 900)
 
     def _safe_import_annotations(self):
         """Wrapper to ensure players are stopped before loading a new project."""
