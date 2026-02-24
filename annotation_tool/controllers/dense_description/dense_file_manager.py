@@ -257,5 +257,17 @@ class DenseFileManager:
 
         if hasattr(self.main, "dense_manager"):
             self.main.dense_manager.media_controller.stop()
+            # ✅ [FIX] Clear media source so duration resets deterministically
+            self.main.dense_manager.center_panel.media_preview.player.setSource(QUrl())
+
+            # ✅ [FIX] Reset timeline UI
+            tl = self.main.dense_manager.center_panel.timeline
+            tl.set_markers([])
+            tl.set_duration(0)
+            tl.set_position(0)
+
+            # Clear right panel
             self.main.dense_manager.right_panel.table.set_data([])
             self.main.dense_manager.right_panel.input_widget.set_text("")
+
+            self.main.dense_manager.current_video_path = None
