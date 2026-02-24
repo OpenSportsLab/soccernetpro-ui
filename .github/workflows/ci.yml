@@ -60,6 +60,7 @@ jobs:
             --add-data "style;style" `
             --add-data "ui;ui" `
             --add-data "controllers;controllers" `
+            --add-data "image;image" `
             "main.py"
 
       - name: Zip Windows binary (manual runs only)
@@ -117,6 +118,7 @@ jobs:
             --add-data "style:style" \
             --add-data "ui:ui" \
             --add-data "controllers:controllers" \
+            --add-data "image:image" \
             "main.py"
 
       - name: Zip macOS app (manual runs only)
@@ -176,6 +178,7 @@ jobs:
             --add-data "style:style" \
             --add-data "ui:ui" \
             --add-data "controllers:controllers" \
+            --add-data "image:image" \
             "main.py"
 
       - name: Zip Linux binary (manual runs only)
