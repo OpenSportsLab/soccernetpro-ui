@@ -312,6 +312,12 @@ class LocFileManager:
             self.main.loc_manager.center_panel.media_preview.stop()
             self.main.loc_manager.center_panel.media_preview.player.setSource(QUrl())
 
+            # ✅ [FIX] Reset timeline UI (markers + label + slider)
+            tl = self.main.loc_manager.center_panel.timeline
+            tl.set_markers([])
+            tl.set_duration(0)
+            tl.set_position(0)
+
             # Right panel: clear table and schema
             self.main.loc_manager.right_panel.table.set_data([])
             self.main.loc_manager.right_panel.annot_mgmt.update_schema({})
