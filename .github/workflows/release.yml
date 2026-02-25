@@ -75,6 +75,7 @@ jobs:
             --add-data "ui;ui" `
             --add-data "controllers;controllers" `
             --add-data "image;image" `
+            --add-data "config.yaml;." `
             "main.py"
 
       - name: Rename binary
@@ -126,6 +127,7 @@ jobs:
           --add-data "ui:ui"
           --add-data "controllers:controllers"
           --add-data "image:image"
+          --add-data "config.yaml:."
           "main.py"
 
       - name: Zip macOS app
@@ -178,6 +180,7 @@ jobs:
           --add-data "ui:ui"
           --add-data "controllers:controllers"
           --add-data "image:image"
+          --add-data "config.yaml:."
           "main.py"
 
       - name: Rename binary
