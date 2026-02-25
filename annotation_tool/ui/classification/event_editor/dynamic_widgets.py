@@ -23,7 +23,6 @@ class DynamicSingleLabelGroup(QWidget):
         self.lbl_head.setProperty("class", "group_head_lbl group_head_single")
         
         self.btn_del_cat = QPushButton("×")
-        self.btn_del_cat.setFixedSize(20, 20)
         self.btn_del_cat.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_del_cat.setProperty("class", "icon_remove_btn")
         self.btn_del_cat.clicked.connect(lambda: self.remove_category_signal.emit(self.head_name))
@@ -75,7 +74,6 @@ class DynamicSingleLabelGroup(QWidget):
             self.radio_group.addButton(rb, i)
             
             del_label_btn = QPushButton("×")
-            del_label_btn.setFixedSize(20, 20)
             del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             del_label_btn.setProperty("class", "icon_remove_btn")
             del_label_btn.clicked.connect(lambda _, l=lbl_text: self.remove_label_signal.emit(l, self.head_name))
@@ -123,7 +121,6 @@ class DynamicMultiLabelGroup(QWidget):
         self.lbl_head.setProperty("class", "group_head_lbl group_head_multi")
         
         self.btn_del_cat = QPushButton("×")
-        self.btn_del_cat.setFixedSize(20, 20)
         self.btn_del_cat.setProperty("class", "icon_remove_btn")
         self.btn_del_cat.clicked.connect(lambda: self.remove_category_signal.emit(self.head_name))
         
@@ -168,7 +165,6 @@ class DynamicMultiLabelGroup(QWidget):
             self.checkboxes[type_name] = cb
             
             del_label_btn = QPushButton("×")
-            del_label_btn.setFixedSize(20, 20)
             del_label_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             del_label_btn.setProperty("class", "icon_remove_btn")
             del_label_btn.clicked.connect(lambda _, n=type_name: self.remove_label_signal.emit(n, self.head_name))
