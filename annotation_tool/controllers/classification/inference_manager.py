@@ -3,6 +3,7 @@ import json
 import glob
 import ssl
 import copy
+import uuid
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
 from PyQt6.QtWidgets import QMessageBox
 
@@ -29,7 +30,12 @@ class InferenceWorker(QThread):
 
     def run(self):
         temp_json_path = ""
+        temp_config_path = ""
         try:
+            writable_dir = os.path.join(os.path.expanduser("~"), ".soccernet_workspace")
+            os.makedirs(writable_dir, exist_ok=True)
+            writable_dir_fwd = writable_dir.replace('\\', '/')
+
             with open(self.json_path, 'r', encoding='utf-8') as f:
                 original_data = json.load(f)
 
@@ -65,20 +71,28 @@ class InferenceWorker(QThread):
                 "data": [target_item]
             }
             
-            temp_dir = os.path.join(self.base_dir, "temp_workspace")
-            os.makedirs(temp_dir, exist_ok=True)
-            temp_json_path = os.path.join(temp_dir, f"temp_infer_{self.action_id}.json")
+            unique_id = uuid.uuid4().hex[:8]
+            temp_json_path = os.path.join(writable_dir, f"temp_infer_{self.action_id}_{unique_id}.json")
             
             with open(temp_json_path, 'w', encoding='utf-8') as f:
                 json.dump(temp_data, f, indent=4)
 
-            myModel = model.classification(config=self.config_path)
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config_text = f.read()
+            
+            config_text = config_text.replace('./temp_workspace', writable_dir_fwd)
+
+            temp_config_path = os.path.join(writable_dir, f"temp_config_{unique_id}.yaml")
+            with open(temp_config_path, 'w', encoding='utf-8') as f:
+                f.write(config_text)
+
+            myModel = model.classification(config=temp_config_path)
             metrics = myModel.infer(
                 test_set=temp_json_path,
                 pretrained="jeetv/snpro-classification-mvit"
             )
 
-            checkpoint_dir = os.path.join(self.base_dir, "temp_workspace", "checkpoints")
+            checkpoint_dir = os.path.join(writable_dir, "checkpoints")
             search_pattern = os.path.join(checkpoint_dir, "**", "predictions_test_epoch_*.json")
             pred_files = glob.glob(search_pattern, recursive=True)
 
@@ -139,10 +153,11 @@ class InferenceWorker(QThread):
         
         finally:
             if os.path.exists(temp_json_path):
-                try:
-                    os.remove(temp_json_path)
-                except:
-                    pass
+                try: os.remove(temp_json_path)
+                except: pass
+            if os.path.exists(temp_config_path):
+                try: os.remove(temp_config_path)
+                except: pass
 
 
 class InferenceManager(QObject):
@@ -150,7 +165,13 @@ class InferenceManager(QObject):
         super().__init__()
         self.main = main_window
         self.ui = main_window.ui
-        self.base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        
+        import sys
+        if hasattr(sys, '_MEIPASS'):
+            self.base_dir = sys._MEIPASS
+        else:
+            self.base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            
         self.config_path = os.path.join(self.base_dir, "config.yaml")
         self.worker = None
 
