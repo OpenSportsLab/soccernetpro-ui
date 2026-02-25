@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QMainWindow, QMessageBox,QSizePolicy
 
 from controllers.classification.class_annotation_manager import AnnotationManager
 from controllers.classification.class_navigation_manager import NavigationManager
+from controllers.classification.inference_manager import InferenceManager
 from controllers.history_manager import HistoryManager
 from controllers.localization.localization_manager import LocalizationManager
 # Import Description Managers
@@ -64,6 +65,7 @@ class ActionClassifierApp(QMainWindow):
         
         # [NEW] Dense Description Controller
         self.dense_manager = DenseManager(self)
+        self.inference_manager = InferenceManager(self)
 
         # --- Local UI state (icons, etc.) ---
         bright_blue = QColor("#00BFFF")
@@ -189,6 +191,9 @@ class ActionClassifierApp(QMainWindow):
         cls_right.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
         cls_right.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
         cls_right.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
+
+        cls_right.smart_infer_requested.connect(self.inference_manager.start_inference)
+        cls_right.confirm_infer_requested.connect(lambda result_dict: self.annot_manager.save_manual_annotation())
 
         # Undo/redo for Class/Loc
         cls_right.undo_btn.clicked.connect(self.history_manager.perform_undo)
