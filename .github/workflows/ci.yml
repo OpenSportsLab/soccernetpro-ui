@@ -65,6 +65,8 @@ jobs:
           --add-data "image;image"
           --add-data "config.yaml;."
           --collect-all "soccernetpro"
+          --collect-all "wandb"
+          --collect-all "torch_geometric"
           "main.py"
 
       - name: Zip Windows binary (manual runs only)
@@ -127,6 +129,8 @@ jobs:
           --add-data "image:image"
           --add-data "config.yaml:."
           --collect-all "soccernetpro"
+          --collect-all "wandb"
+          --collect-all "torch_geometric"
           "main.py"
 
       - name: Zip macOS app (manual runs only)
@@ -194,6 +198,8 @@ jobs:
           --add-data "image:image"
           --add-data "config.yaml:."
           --collect-all "soccernetpro"
+          --collect-all "wandb"
+          --collect-all "torch_geometric"
           "main.py"
 
       - name: Zip Linux binary (manual runs only)
