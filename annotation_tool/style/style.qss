@@ -267,16 +267,16 @@ QPushButton[class="welcome_action_btn"]:pressed {
 }
 
 QPushButton[class="welcome_secondary_btn"] {
-    font-size: 14px;            /* 字体比主按钮(16px)小一号 */
+    font-size: 14px;            
     font-weight: bold;
-    background-color: transparent; /* 背景透明，让它看起来像链接而不是沉重的按钮 */
-    border: 1px solid #84ff00;     /* 使用和标题同色的边框呼应 */
+    background-color: transparent; 
+    border: 1px solid #84ff00;     
     color: #84ff00;
     border-radius: 6px;
 }
 
 QPushButton[class="welcome_secondary_btn"]:hover {
-    background-color: rgba(0, 191, 255, 0.1); /* 鼠标悬浮时呈现淡淡的青色背光 */
+    background-color: rgba(0, 191, 255, 0.1); 
     border-color: #84ff00;
     color: #84ff00;
 }
