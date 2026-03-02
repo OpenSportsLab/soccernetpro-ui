@@ -1,7 +1,7 @@
 import math
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QGroupBox, QLineEdit, QScrollArea, QFrame, QProgressBar, QToolTip
+    QGroupBox, QLineEdit, QScrollArea, QFrame, QProgressBar, QToolTip, QTextEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QPointF
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QCursor
@@ -132,11 +132,17 @@ class ClassificationEventEditor(QWidget):
     
     smart_infer_requested = pyqtSignal() 
     confirm_infer_requested = pyqtSignal(dict) 
+    
+    batch_run_requested = pyqtSignal(int, int)
+    batch_confirm_requested = pyqtSignal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(350)
         layout = QVBoxLayout(self)
+        
+        self.is_batch_mode_active = False
+        self.pending_batch_results = {}
         
         # 1. Undo/Redo Controls
         h_undo = QHBoxLayout()
@@ -188,9 +194,35 @@ class ClassificationEventEditor(QWidget):
         self.smart_box = QGroupBox("Smart Annotation")
         smart_layout = QVBoxLayout(self.smart_box)
         
-        self.btn_smart_infer = QPushButton("🚀 Run Smart Inference")
+        # Two Buttons
+        btn_h_layout = QHBoxLayout()
+        self.btn_smart_infer = QPushButton("🚀Single Inference")
         self.btn_smart_infer.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_smart_infer.clicked.connect(self.smart_infer_requested.emit)
+        
+        self.btn_batch_infer = QPushButton("🚀Batch Inference")
+        self.btn_batch_infer.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_batch_infer.clicked.connect(lambda: self.batch_input_widget.setVisible(not self.batch_input_widget.isVisible()))
+
+        btn_h_layout.addWidget(self.btn_smart_infer)
+        btn_h_layout.addWidget(self.btn_batch_infer)
+        smart_layout.addLayout(btn_h_layout)
+
+        # Input Box
+        self.batch_input_widget = QWidget()
+        h_batch = QHBoxLayout(self.batch_input_widget)
+        h_batch.setContentsMargins(0, 5, 0, 5)
+        self.spin_start = QLineEdit()
+        self.spin_start.setPlaceholderText("Start Idx")
+        self.spin_end = QLineEdit()
+        self.spin_end.setPlaceholderText("End Idx")
+        self.btn_run_batch = QPushButton("Run Batch")
+        self.btn_run_batch.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_run_batch.clicked.connect(self._on_run_batch_clicked)
+        h_batch.addWidget(self.spin_start)
+        h_batch.addWidget(self.spin_end)
+        h_batch.addWidget(self.btn_run_batch)
+        self.batch_input_widget.setVisible(False)
         
         self.infer_progress = QProgressBar()
         self.infer_progress.setRange(0, 0) 
@@ -198,9 +230,15 @@ class ClassificationEventEditor(QWidget):
         
         self.chart_widget = NativeDonutChart()
         
-        smart_layout.addWidget(self.btn_smart_infer)
+        self.batch_result_text = QTextEdit()
+        self.batch_result_text.setReadOnly(True)
+        self.batch_result_text.setVisible(False)
+        self.batch_result_text.setMinimumHeight(200)
+        
+        smart_layout.addWidget(self.batch_input_widget)
         smart_layout.addWidget(self.infer_progress)
-        smart_layout.addWidget(self.chart_widget, alignment=Qt.AlignmentFlag.AlignCenter) # 居中
+        smart_layout.addWidget(self.chart_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+        smart_layout.addWidget(self.batch_result_text)
         layout.addWidget(self.smart_box)
 
         btn_row = QHBoxLayout()
@@ -210,7 +248,7 @@ class ClassificationEventEditor(QWidget):
         self.confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clear_sel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        self.confirm_btn.clicked.connect(self.reset_smart_inference)
+        self.confirm_btn.clicked.connect(self.on_confirm_clicked)
 
         btn_row.addWidget(self.confirm_btn)
         btn_row.addWidget(self.clear_sel_btn)
@@ -218,20 +256,38 @@ class ClassificationEventEditor(QWidget):
         
         self.label_groups = {} 
 
+    def _on_run_batch_clicked(self):
+        try:
+            start_idx = int(self.spin_start.text().strip())
+            end_idx = int(self.spin_end.text().strip())
+            self.batch_run_requested.emit(start_idx, end_idx)
+        except ValueError:
+            pass 
+
+    def on_confirm_clicked(self):
+        if self.is_batch_mode_active:
+            self.batch_confirm_requested.emit(self.pending_batch_results)
+        self.reset_smart_inference()
+
     def reset_smart_inference(self):
-        """重置智能推理区域的状态（清空扇形图、恢复按钮状态）"""
+        self.is_batch_mode_active = False
         self.chart_widget.setVisible(False)
+        self.batch_result_text.setVisible(False)
         self.btn_smart_infer.setEnabled(True)
+        self.btn_batch_infer.setEnabled(True)
         self.infer_progress.setVisible(False)
 
     def show_inference_loading(self, is_loading: bool):
         self.btn_smart_infer.setEnabled(not is_loading)
+        self.btn_batch_infer.setEnabled(not is_loading)
         self.infer_progress.setVisible(is_loading)
         if is_loading:
             self.chart_widget.setVisible(False)
+            self.batch_result_text.setVisible(False)
 
     def display_inference_result(self, target_head: str, predicted_label: str, conf_dict: dict):
         self.show_inference_loading(False)
+        self.is_batch_mode_active = False
         self.chart_widget.update_chart(predicted_label, conf_dict)
         
         group = self.label_groups.get(target_head)
@@ -241,6 +297,13 @@ class ClassificationEventEditor(QWidget):
             elif hasattr(group, 'set_checked_labels'):
                 group.set_checked_labels([predicted_label])
                 
+    def display_batch_inference_result(self, result_text: str, batch_predictions: dict):
+        self.show_inference_loading(False)
+        self.is_batch_mode_active = True
+        self.pending_batch_results = batch_predictions
+        self.chart_widget.setVisible(False)
+        self.batch_result_text.setText(result_text)
+        self.batch_result_text.setVisible(True)
 
     def setup_dynamic_labels(self, label_definitions):
         while self.label_container_layout.count():
@@ -285,7 +348,6 @@ class ClassificationEventEditor(QWidget):
 
     def clear_selection(self):
         self.reset_smart_inference()
-        
         for group in self.label_groups.values():
             if hasattr(group, 'set_checked_label'):
                 group.set_checked_label(None)
