@@ -4,7 +4,12 @@ on:
   push:
     branches:
       - main
+      - dev-jintao
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -16,13 +21,24 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: Tool
+        working-directory: annotation_tool
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~\AppData\Local\pip\cache
+            ~\AppData\Roaming\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('annotation_tool/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install requirements
         run: |
@@ -37,21 +53,29 @@ jobs:
           try { pip cache purge } catch { Write-Host "pip cache purge failed (ignored)" }
 
       - name: Build exe
-        run: |
-          pyinstaller --noconfirm --clean --windowed --onefile `
-            --name "SoccerNetProAnalyzer" `
-            --add-data "style;style" `
-            --add-data "ui;ui" `
-            --add-data "ui2;ui2" `
-            "main.py"
+        shell: pwsh
+        run: >
+          python -m PyInstaller --noconfirm --clean --windowed --onefile
+          --name "SoccerNetProAnalyzer"
+          --add-data "style;style"
+          --add-data "ui;ui"
+          --add-data "controllers;controllers"
+          --add-data "image;image"
+          "main.py"
 
-      # 为了避免你再次 hit artifact quota：只在网页端手动 Run workflow 时上传
+      - name: Zip Windows binary (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          Move-Item -Force dist\SoccerNetProAnalyzer.exe dist\SoccerNetProAnalyzer-win.exe
+          Compress-Archive -Path dist\SoccerNetProAnalyzer-win.exe -DestinationPath dist\SoccerNetProAnalyzer-win.zip -Force
+
       - name: Upload artifact (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-Windows
-          path: Tool/dist/SoccerNetProAnalyzer.exe
+          path: annotation_tool/dist/SoccerNetProAnalyzer-win.zip
           retention-days: 3
 
   build-macos:
@@ -59,13 +83,23 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: Tool
+        working-directory: annotation_tool
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('annotation_tool/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install requirements
         run: |
@@ -73,25 +107,34 @@ jobs:
           pip install -r requirements.txt
 
       - name: Cleanup before PyInstaller
+        shell: bash
         run: |
           rm -rf build dist *.spec
           pip cache purge || true
 
-      - name: Build binary
+      - name: Build app
+        shell: bash
+        run: >
+          python -m PyInstaller --noconfirm --clean --windowed
+          --name "SoccerNetProAnalyzer"
+          --add-data "style:style"
+          --add-data "ui:ui"
+          --add-data "controllers:controllers"
+          --add-data "image:image"
+          "main.py"
+
+      - name: Zip macOS app (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
         run: |
-          pyinstaller --noconfirm --clean --windowed --onefile \
-            --name "SoccerNetProAnalyzer" \
-            --add-data "style:style" \
-            --add-data "ui:ui" \
-            --add-data "ui2:ui2" \
-            "main.py"
+          ditto -c -k --sequesterRsrc --keepParent "dist/SoccerNetProAnalyzer.app" "dist/SoccerNetProAnalyzer-mac.zip"
 
       - name: Upload artifact (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-macOS
-          path: Tool/dist/SoccerNetProAnalyzer
+          path: annotation_tool/dist/SoccerNetProAnalyzer-mac.zip
           retention-days: 3
 
   build-linux:
@@ -99,18 +142,28 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: Tool
+        working-directory: annotation_tool
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.11"
 
       - name: Install system deps (Qt/OpenCV runtime)
+        shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libglib2.0-0
+          sudo apt-get install -y libgl1 libglib2.0-0 libxcb-cursor0
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('annotation_tool/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install requirements
         run: |
@@ -118,23 +171,35 @@ jobs:
           pip install -r requirements.txt
 
       - name: Cleanup before PyInstaller
+        shell: bash
         run: |
           rm -rf build dist *.spec
           pip cache purge || true
 
       - name: Build binary
+        shell: bash
+        run: >
+          python -m PyInstaller --noconfirm --clean --windowed --onefile
+          --name "SoccerNetProAnalyzer"
+          --add-data "style:style"
+          --add-data "ui:ui"
+          --add-data "controllers:controllers"
+          --add-data "image:image"
+          "main.py"
+
+      - name: Zip Linux binary (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
         run: |
-          pyinstaller --noconfirm --clean --windowed --onefile \
-            --name "SoccerNetProAnalyzer" \
-            --add-data "style:style" \
-            --add-data "ui:ui" \
-            --add-data "ui2:ui2" \
-            "main.py"
+          mv -f dist/SoccerNetProAnalyzer dist/SoccerNetProAnalyzer-linux
+          cd dist
+          zip -r SoccerNetProAnalyzer-linux.zip SoccerNetProAnalyzer-linux
+          cd ..
 
       - name: Upload artifact (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SoccerNetProAnalyzer-Linux
-          path: Tool/dist/SoccerNetProAnalyzer
+          path: annotation_tool/dist/SoccerNetProAnalyzer-linux.zip
           retention-days: 3
