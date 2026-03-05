@@ -195,5 +195,5 @@ jobs:
       - name: Upload Release Asset (Linux)
         uses: softprops/action-gh-release@v2
         with:
-          files: annotation_tool/dist/SoccerNetProAnalyzer-linux.zip
+          files: annotation_tool/dist/VideoAnnotationTool-linux.zip
           tag_name: ${{ github.ref_name }}
