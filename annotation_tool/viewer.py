@@ -34,7 +34,7 @@ class ActionClassifierApp(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
-        self.setWindowTitle("SoccerNet Pro Analysis Tool")
+        self.setWindowTitle("Video Annotation Tool")
         self.setGeometry(100, 100, 600, 400)
 
         # --- MVC wiring ---
