@@ -128,7 +128,7 @@ class HistoryManager:
 
         # [NEW] Handle batch smart annotation run
         elif ctype == CmdType.BATCH_SMART_ANNOTATION_RUN:
-            batch_data = cmd['old_batch'] if is_undo else cmd['new_batch']
+            batch_data = cmd['old_data'] if is_undo else cmd['new_data']
             
             for path, data in batch_data.items():
                 if data:
