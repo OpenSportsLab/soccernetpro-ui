@@ -232,14 +232,24 @@ class ClassificationEventEditor(QWidget):
         self.batch_input_widget = QWidget()
         h_batch = QHBoxLayout(self.batch_input_widget)
         h_batch.setContentsMargins(0, 5, 0, 5)
+        # [NEW] Add descriptive labels for the Start and End comboboxes
+        self.lbl_start = QLabel("Start:")
         self.spin_start = QComboBox()
+        
+        self.lbl_end = QLabel("End:")
         self.spin_end = QComboBox()
+        
         self.btn_run_batch = QPushButton("Run")
         self.btn_run_batch.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_run_batch.clicked.connect(self._on_run_batch_clicked)
+        
+        # [MODIFIED] Add the labels and comboboxes to the horizontal layout in order
+        h_batch.addWidget(self.lbl_start)
         h_batch.addWidget(self.spin_start)
+        h_batch.addWidget(self.lbl_end)
         h_batch.addWidget(self.spin_end)
         h_batch.addWidget(self.btn_run_batch)
+        
         self.batch_input_widget.setVisible(False)
 
 
