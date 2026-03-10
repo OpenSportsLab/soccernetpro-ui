@@ -494,8 +494,8 @@ class InferenceManager(QObject):
         text = "BATCH INFERENCE PREDICTIONS:\n\n"
         batch_predictions = {}
         
-        old_batch_data = {} # [NEW]
-        new_batch_data = {} # [NEW]
+        old_batch_data = {} 
+        new_batch_data = {} 
         import copy
         
         for r in results_list:
@@ -503,25 +503,33 @@ class InferenceManager(QObject):
             
             for item in r['original_items']:
                 path = item['path']
-                batch_predictions[path] = r['pred']
                 
-                # [NEW] Record old data
+                # [NEW FIX 2] Store a rich dictionary instead of just a string!
+                # This ensures the Confidence is passed to the UI for the Donut Chart.
+                conf_dict = {r['pred']: r['conf']}
+                if r['conf'] < 1.0: 
+                    conf_dict["Other Uncertainties"] = 1.0 - r['conf']
+                    
+                batch_predictions[path] = {
+                    "label": r['pred'],
+                    "confidence": r['conf'],
+                    "conf_dict": conf_dict
+                }
+                
+                # Record old data for Undo
                 if path not in old_batch_data:
                     old_batch_data[path] = self.main.model.smart_annotations.get(path, {})
                 
-                conf_dict = {r['pred']: r['conf']}
-                if r['conf'] < 1.0: conf_dict["Other Uncertainties"] = 1.0 - r['conf']
-                
-                # [NEW] Prepare new data
+                # Prepare new data for Redo
                 new_batch_data[path] = {
                     target_head: {"label": r['pred'], "conf_dict": conf_dict}
                 }
                 
-        # [NEW] Push Batch to Undo History
+        # [NEW FIX 1] Push Batch to Undo History using CORRECT keys 'old_data' and 'new_data'
         self.main.model.push_undo(
             CmdType.BATCH_SMART_ANNOTATION_RUN,
-            old_batch=copy.deepcopy(old_batch_data),
-            new_batch=copy.deepcopy(new_batch_data)
+            old_data=copy.deepcopy(old_batch_data),
+            new_data=copy.deepcopy(new_batch_data)
         )
         
         # Apply new data to model
