@@ -493,7 +493,12 @@ class ActionClassifierApp(QMainWindow):
             # [NEW] Check dense data
             has_data = bool(self.model.dense_description_events)
         else:
-            has_data = bool(self.model.manual_annotations)
+            has_manual = bool(self.model.manual_annotations)
+            has_smart_confirmed = any(
+                data.get("_confirmed", False) 
+                for data in self.model.smart_annotations.values()
+            )
+            has_data = has_manual or has_smart_confirmed
 
         can_export = self.model.json_loaded and has_data
 
@@ -552,7 +557,13 @@ class ActionClassifierApp(QMainWindow):
             # [NEW]
             has_data = bool(self.model.dense_description_events)
         else:
-            has_data = bool(self.model.manual_annotations)
+            # [FIXED] Check the hand and smart annotation
+            has_manual = bool(self.model.manual_annotations)
+            has_smart_confirmed = any(
+                data.get("_confirmed", False) 
+                for data in self.model.smart_annotations.values()
+            )
+            has_data = has_manual or has_smart_confirmed
 
         can_export = self.model.json_loaded and has_data
         can_save = can_export and (self.model.current_json_path is not None) and self.model.is_data_dirty
