@@ -2,7 +2,7 @@
 
 [![Documentation Status](https://img.shields.io/badge/docs-online-brightgreen)](https://opensportslab.github.io/VideoAnnotationTool/)
 
-A **PyQt6-based GUI** for analyzing and annotating **OSL formart** datasets from [OpenSportsLab](https://huggingface.co/OpenSportsLab).
+A **PyQt6-based GUI** for analyzing and annotating **[OSL format](https://opensportslab.github.io/VideoAnnotationTool/OSL/)** datasets (OpenSportsLab).
 
 ---
 
