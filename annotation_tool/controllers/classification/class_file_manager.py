@@ -308,6 +308,8 @@ class ClassFileManager:
         if hasattr(self.ui.classification_ui.right_panel, 'reset_smart_inference'):
             self.ui.classification_ui.right_panel.reset_smart_inference()
             
+        if hasattr(self.ui.classification_ui.right_panel, 'reset_train_ui'):
+            self.ui.classification_ui.right_panel.reset_train_ui()
         if full_reset: 
             self.main.setup_dynamic_ui()
 

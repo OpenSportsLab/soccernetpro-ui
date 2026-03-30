@@ -1,24 +1,30 @@
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
-)
-from PyQt6.QtCore import Qt
+# __init__.py (in ui/localization/)
 
-# Import the separated components from the same package
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTabWidget
+)
+from PyQt6.QtCore import Qt, pyqtSignal
+
 from .spotting_controls import AnnotationManagementWidget
 from .annotation_table import AnnotationTableWidget
+from .smart_spotting import SmartSpottingWidget
 
-# --- [Assembled] Localization Right Panel ---
 class LocRightPanel(QWidget):
     """
     Right Panel for Localization Mode.
-    Contains: Undo/Redo Buttons, Annotation Tabs (Top), and Events Table (Bottom).
+    Contains: Undo/Redo Buttons (Global), and a TabWidget separating 
+    Hand Annotation and Smart Annotation interfaces.
     """
+    # Signal emitted when the user switches between Hand and Smart tabs
+    # The Controller should catch this to swap the Timeline markers
+    tabSwitched = pyqtSignal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(400)
         layout = QVBoxLayout(self)
         
-        # --- Undo/Redo Button Header ---
+        # --- 1. Global Undo/Redo Button Header ---
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 5)
         
@@ -28,7 +34,6 @@ class LocRightPanel(QWidget):
         self.undo_btn = QPushButton("Undo")
         self.redo_btn = QPushButton("Redo")
         
-        # Button Styling
         btn_style = """
             QPushButton {
                 background-color: #444; color: #DDD; 
@@ -49,15 +54,32 @@ class LocRightPanel(QWidget):
         header_layout.addStretch()
         header_layout.addWidget(self.undo_btn)
         header_layout.addWidget(self.redo_btn)
-        
         layout.addLayout(header_layout)
-        # -----------------------------------
         
-        # 1. Top: Multi Head Management (Tabs)
+        # --- 2. Main Tabs ---
+        self.tabs = QTabWidget()
+        self.tabs.setObjectName("localization_tabs")
+        layout.addWidget(self.tabs)
+
+        # ========== TAB 0: Hand Annotation ==========
+        self.hand_widget = QWidget()
+        hand_layout = QVBoxLayout(self.hand_widget)
+        hand_layout.setContentsMargins(0, 5, 0, 0)
+        
+        # Top: Multi Head Management (Tabs for categories)
         self.annot_mgmt = AnnotationManagementWidget()
-        
-        # 2. Bottom: Labelled Event List (Table)
+        # Bottom: Labelled Event List (Table for hand annotations)
         self.table = AnnotationTableWidget()
         
-        layout.addWidget(self.annot_mgmt, 3) 
-        layout.addWidget(self.table, 2)
+        hand_layout.addWidget(self.annot_mgmt, 2) 
+        hand_layout.addWidget(self.table, 3)
+        
+        self.tabs.addTab(self.hand_widget, "Hand Annotation")
+
+        # ========== TAB 1: Smart Annotation ==========
+        # Loads the newly created SmartSpottingWidget
+        self.smart_widget = SmartSpottingWidget()
+        self.tabs.addTab(self.smart_widget, "Smart Annotation")
+
+        # Connect tab change signal
+        self.tabs.currentChanged.connect(self.tabSwitched.emit)

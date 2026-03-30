@@ -9,6 +9,7 @@ from utils import natural_sort_key
 from models import CmdType 
 # [NEW] Import the unified MediaController
 from controllers.media_controller import MediaController
+from .loc_inference import LocalizationInferenceManager
 
 class LocalizationManager:
     """
@@ -24,6 +25,10 @@ class LocalizationManager:
         self.left_panel = self.ui_root.left_panel
         self.center_panel = self.ui_root.center_panel
         self.right_panel = self.ui_root.right_panel
+
+        self.inference_manager = LocalizationInferenceManager(self.main)
+        self.inference_manager.inference_finished.connect(self._on_inference_success)
+        self.inference_manager.inference_error.connect(self._on_inference_error)
         
         # [NEW] Initialize Media Controller
         # We access the underlying QMediaPlayer from the UI wrapper
@@ -62,7 +67,7 @@ class LocalizationManager:
         media.durationChanged.connect(timeline.set_duration)
         timeline.seekRequested.connect(media.set_position)
         
-        # [CHANGED] Use MediaController for playback control
+        # Use MediaController for playback control
         pb.stopRequested.connect(self.media_controller.stop)
         pb.playPauseRequested.connect(self.media_controller.toggle_play_pause)
         
@@ -73,6 +78,18 @@ class LocalizationManager:
         pb.nextPrevAnnotRequested.connect(self._navigate_annotation)
         
         # --- Right Panel ---
+        #Smart Annotation UI
+        if hasattr(self.right_panel, 'smart_widget'):
+            smart_ui = self.right_panel.smart_widget
+            smart_ui.setTimeRequested.connect(self._on_smart_set_time)
+            smart_ui.runInferenceRequested.connect(self._run_localization_inference)
+            smart_ui.confirmSmartRequested.connect(self._confirm_smart_events)
+            smart_ui.clearSmartRequested.connect(self._clear_smart_events)
+            
+            # Tab switch to toggle timeline markers
+            self.right_panel.tabs.currentChanged.connect(self._on_tab_switched)
+
+
         tabs = self.right_panel.annot_mgmt.tabs
         table = self.right_panel.table
         
@@ -90,10 +107,31 @@ class LocalizationManager:
         table.annotationDeleted.connect(self._on_delete_single_annotation)
         table.annotationModified.connect(self._on_annotation_modified)
 
+        table.updateTimeForSelectedRequested.connect(self._on_update_time_for_selected)
+
     def _on_media_position_changed(self, ms):
         self.center_panel.timeline.set_position(ms)
         time_str = self._fmt_ms_full(ms)
         self.right_panel.annot_mgmt.tabs.update_current_time(time_str)
+
+    def _on_update_time_for_selected(self, old_event):
+        """
+            Handles the logic when the user clicks the
+            'Set to Current Video Time' button.
+        """
+        if not self.current_video_path:
+            return
+
+        # 1. Get the current playback position in milliseconds
+        current_ms = self.center_panel.media_preview.player.position()
+
+        # 2. Copy the old event and update its timestamp
+        new_event = old_event.copy()
+        new_event['position_ms'] = current_ms
+
+        # 3. Reuse the existing modification logic
+        self._on_annotation_modified(old_event, new_event)
+
 
     # --- Video Loading Logic (Strict Classification Style via Controller) ---
     def on_clip_selected(self, current_idx, previous_idx):
@@ -291,6 +329,8 @@ class LocalizationManager:
         self.main.show_temp_msg("Event Created", f"{head}: {label}")
         self.main.update_save_export_button_state() 
 
+        self._reselect_event(new_event)
+
     # --- Table Modification ---
     def _on_annotation_modified(self, old_event, new_event):
         events = self.model.localization_events.get(self.current_video_path, [])
@@ -317,6 +357,8 @@ class LocalizationManager:
         self.refresh_tree_icons()
         self.main.show_temp_msg("Event Updated", "Modified")
         self.main.update_save_export_button_state() 
+
+        self._reselect_event(new_event)
 
     def _on_delete_single_annotation(self, item_data):
         events = self.model.localization_events.get(self.current_video_path, [])
@@ -482,8 +524,144 @@ class LocalizationManager:
                 self.right_panel.table.table.scrollTo(idx)
                 break
 
+    def _reselect_event(self, target_event):
+        model = self.right_panel.table.model
+        table_view = self.right_panel.table.table
+        
+        table_view.selectionModel().blockSignals(True)
+        
+        for row in range(model.rowCount()):
+            item = model.get_annotation_at(row)
+            if not item: continue
+            
+            if (item.get('position_ms') == target_event.get('position_ms') and 
+                item.get('head') == target_event.get('head') and 
+                item.get('label') == target_event.get('label')):
+                
+                idx = model.index(row, 0)
+                
+                table_view.selectRow(row)
+                table_view.scrollTo(idx)
+                
+                if hasattr(self.right_panel.table, 'btn_set_time'):
+                    self.right_panel.table.btn_set_time.setEnabled(True)
+                
+                break 
+                
+        table_view.selectionModel().blockSignals(False)
+
     def _fmt_ms_full(self, ms):
         s = ms // 1000
         m = s // 60
         h = m // 60
         return f"{h:02}:{m%60:02}:{s%60:02}.{ms%1000:03}"
+    
+
+    # ==========================================
+    # --- Smart Annotation Control Logic ---
+    # ==========================================
+
+    def _on_smart_set_time(self, target: str):
+        """
+        Triggered when 'Set to Current' is clicked in Smart Spotting UI.
+        Gets current player position and updates the smart UI.
+        """
+        player = self.center_panel.media_preview.player
+        current_ms = player.position()
+        time_str = self._fmt_ms_full(current_ms)
+        
+        # Update the UI display and internal state in the Smart Widget
+        self.right_panel.smart_widget.update_time_display(target, time_str, current_ms)
+
+
+    def _run_localization_inference(self, start_ms: int, end_ms: int):
+        if not self.current_video_path:
+            return
+        if start_ms >= end_ms and end_ms != 0:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self.main, "Invalid Range", "End time must be greater than Start time.")
+            return
+            
+        self.main.show_temp_msg("Smart Inference", "Running OpenSportsLib Localization Model...")
+        self.right_panel.smart_widget.btn_run_infer.setEnabled(False)
+        self.inference_manager.start_inference(self.current_video_path, start_ms, end_ms)
+
+
+    def _on_inference_success(self, predicted_events: list):
+        self.right_panel.smart_widget.btn_run_infer.setEnabled(True)
+        if not self.current_video_path:
+            return
+            
+        self.model.smart_localization_events[self.current_video_path] = predicted_events
+        self.main.show_temp_msg("Smart Inference", f"Success: Found {len(predicted_events)} events.")
+        
+        if self.right_panel.tabs.currentIndex() == 1:
+            self._display_smart_events(self.current_video_path)
+
+    def _on_inference_error(self, error_msg: str):
+        self.right_panel.smart_widget.btn_run_infer.setEnabled(True)
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.critical(self.main, "Inference Error", f"Failed to run model:\n{error_msg}")
+
+    def _confirm_smart_events(self):
+        """将智能预测合并到手工标注中"""
+        if not self.current_video_path:
+            return
+            
+        smart_events = self.model.smart_localization_events.get(self.current_video_path, [])
+        if not smart_events:
+            return
+            
+        # 初始化当前视频的手工事件列表（如果没有）
+        if self.current_video_path not in self.model.localization_events:
+            self.model.localization_events[self.current_video_path] = []
+            
+        # 合并事件 (此处暂不处理 undo/redo)
+        self.model.localization_events[self.current_video_path].extend(smart_events)
+        
+        # 按照时间排序
+        self.model.localization_events[self.current_video_path].sort(key=lambda x: x.get('position_ms', 0))
+        
+        # 清空当前的 Smart Events
+        self.model.smart_localization_events[self.current_video_path] = []
+        self._display_smart_events(self.current_video_path) # 刷新为空表
+        
+        # 提示用户
+        self.main.show_temp_msg("Smart Spotting", "Predictions confirmed and merged into Hand Annotations.")
+        self.model.is_data_dirty = True
+        self.main.update_save_export_button_state()
+
+    def _clear_smart_events(self):
+        if not self.current_video_path:
+            return
+        self.model.smart_localization_events[self.current_video_path] = []
+        self._display_smart_events(self.current_video_path)
+        self.main.show_temp_msg("Smart Spotting", "Cleared smart predictions.")
+
+    def _display_smart_events(self, video_path: str):
+        """Dedicated method to display ONLY smart events in the smart table and timeline."""
+        events = self.model.smart_localization_events.get(video_path, [])
+        # 更新 Smart Table
+        self.right_panel.smart_widget.smart_table.set_data(events)
+        # 更新 Timeline
+        markers = []
+        for evt in events:
+            # Smart events 也可以使用不同的颜色，比如蓝色，用来和手工标注（红色）区分
+            from PyQt6.QtGui import QColor
+            markers.append({
+                'start_ms': evt.get('position_ms', 0),
+                'color': QColor('deepskyblue')
+            })
+        self.center_panel.timeline.set_markers(markers)
+
+    def _on_tab_switched(self, index: int):
+        """切换 Tab 时隔离视觉状态"""
+        if not self.current_video_path:
+            return
+            
+        if index == 0:
+            # 回到手工标注，加载原始的手工事件
+            self._display_events_for_item(self.current_video_path)
+        elif index == 1:
+            # 去到智能标注，加载智能事件
+            self._display_smart_events(self.current_video_path)

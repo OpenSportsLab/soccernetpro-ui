@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QTableView, QHeaderView, QMenu,
-    QAbstractItemView
+    QAbstractItemView, QPushButton
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QAbstractTableModel
 
@@ -131,14 +131,27 @@ class AnnotationTableWidget(QWidget):
     annotationSelected = pyqtSignal(int) 
     annotationModified = pyqtSignal(dict, dict) # old_event, new_event
     annotationDeleted = pyqtSignal(dict)
+    updateTimeForSelectedRequested = pyqtSignal(dict)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
+
+        # [NEW] 1.  Edit Annotation
+        self.edit_lbl = QLabel("Edit Annotation")
+        self.edit_lbl.setProperty("class", "panel_header_lbl")
+        layout.addWidget(self.edit_lbl)
         
-        lbl = QLabel("Events List")
-        lbl.setProperty("class", "panel_header_lbl")
-        layout.addWidget(lbl)
+        self.btn_set_time = QPushButton("Set to Current Video Time")
+        self.btn_set_time.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_set_time.setEnabled(False) 
+        self.btn_set_time.clicked.connect(self._on_set_time_clicked)
+        layout.addWidget(self.btn_set_time)
+
+        # 2. Events List 
+        self.list_lbl = QLabel("Events List")
+        self.list_lbl.setProperty("class", "panel_header_lbl")
+        layout.addWidget(self.list_lbl)
         
         self.table = QTableView()
         self.table.setProperty("class", "annotation_table")
@@ -166,13 +179,25 @@ class AnnotationTableWidget(QWidget):
     def set_schema(self, schema):
         self.current_schema = schema
 
+
     def _on_selection_changed(self, selected, deselected):
         indexes = selected.indexes()
         if indexes:
+            self.btn_set_time.setEnabled(True)  
             row = indexes[0].row()
             item = self.model.get_annotation_at(row)
             if item:
                 self.annotationSelected.emit(item.get('position_ms', 0))
+        else:
+            self.btn_set_time.setEnabled(False) 
+
+    def _on_set_time_clicked(self):
+        indexes = self.table.selectionModel().selectedRows()
+        if indexes:
+            row = indexes[0].row()
+            item = self.model.get_annotation_at(row)
+            if item:
+                self.updateTimeForSelectedRequested.emit(item)
 
     def _show_context_menu(self, pos):
         index = self.table.indexAt(pos)

@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QPointF
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QCursor
+import sys
 
 from .dynamic_widgets import DynamicSingleLabelGroup, DynamicMultiLabelGroup
 
@@ -182,6 +183,31 @@ class ClassificationEventEditor(QWidget):
 
         # [NEW] Create QTabWidget to hold both annotation modes
         self.tabs = QTabWidget()
+
+        # 1. 【核心】彻底禁用省略模式，防止文字变成 "..."
+        self.tabs.setElideMode(Qt.TextElideMode.ElideNone)
+
+        # 2. 强制标签栏不自动扩展，使其仅占据文字所需的空间
+        self.tabs.tabBar().setExpanding(False)
+
+        # 3. 优化样式表：移除 min-width 限制，并设置极窄 Padding
+        self.tabs.setStyleSheet("""
+            QTabBar::tab {
+                /* 设置较小的左右边距，确保文字紧凑且可见 */
+                padding-left: 3px;
+                padding-right: 3px;
+                padding-top: 5px;
+                padding-bottom: 5px;
+                
+                /* 保持字体大小适中 */
+                font-size: 13px; 
+                
+                /* 确保没有最小宽度和最大宽度的硬性限制 */
+                min-width: 0px;
+                max-width: 1000px; 
+            }
+        """)
+
         self.tabs.setObjectName("annotation_tabs")
         layout.addWidget(self.tabs, 1) # Add tabs to main layout with stretch factor 1
 
@@ -276,6 +302,124 @@ class ClassificationEventEditor(QWidget):
         # Add the smart widget as the second tab
         self.tabs.addTab(self.smart_box, "Smart Annotation")
 
+        # --- 7. Train Tab [RE-DESIGNED] ---
+        self.train_box = QWidget()
+        train_main_layout = QVBoxLayout(self.train_box)
+        train_main_layout.setContentsMargins(5, 5, 5, 5)
+        train_main_layout.setSpacing(10)
+
+        # 使用滚动区域，防止参数过多时显示不全
+        train_scroll = QScrollArea()
+        train_scroll.setWidgetResizable(True)
+        train_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        train_scroll_content = QWidget()
+        train_layout = QVBoxLayout(train_scroll_content)
+        train_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # A. 训练超参数组 (Hyperparameters)
+        hyper_group = QGroupBox("Hyperparameters")
+        hyper_form = QVBoxLayout(hyper_group) # 使用垂直布局包装表单行
+        
+        # 封装一个简单的表单行函数
+        def add_form_row(label_text, widget):
+            row = QHBoxLayout()
+            lbl = QLabel(label_text)
+            lbl.setFixedWidth(80)
+            row.addWidget(lbl)
+            row.addWidget(widget)
+            return row
+
+        self.spin_epochs = QComboBox()
+        self.spin_epochs.addItems(["1", "5", "10", "20", "50", "100"])
+        self.spin_epochs.setEditable(True)
+        hyper_form.addLayout(add_form_row("Epochs:", self.spin_epochs))
+
+        self.edit_lr = QLineEdit("0.0001")
+        hyper_form.addLayout(add_form_row("LR:", self.edit_lr))
+
+        self.spin_batch = QComboBox()
+        self.spin_batch.addItems(["1", "2", "4", "8", "16"])
+        self.spin_batch.setEditable(True)
+        hyper_form.addLayout(add_form_row("Batch:", self.spin_batch))
+
+        train_layout.addWidget(hyper_group)
+
+        # B. 硬件设置组 (Hardware - 针对 Mac M1 优化)
+        device_group = QGroupBox("Execution")
+        device_form = QVBoxLayout(device_group)
+
+        self.combo_device = QComboBox()
+        # 针对 M1 增加 mps 选项
+        self.combo_device.addItems(["cpu", "mps (Metal)", "cuda"]) 
+        if sys.platform == "darwin": 
+            self.combo_device.setCurrentText("mps (Metal)")
+        device_form.addLayout(add_form_row("Device:", self.combo_device))
+
+        self.spin_workers = QComboBox()
+        self.spin_workers.addItems(["0", "2", "4"])
+        device_form.addLayout(add_form_row("Workers:", self.spin_workers))
+
+        train_layout.addWidget(device_group)
+
+        # C. 训练操作与监控 (Action & Monitor)
+        h_train_btns = QHBoxLayout() # 创建横向布局
+        
+        # 1. Start Training 按钮
+        self.btn_start_train = QPushButton("Start Training")
+        self.btn_start_train.setMinimumHeight(40)
+        self.btn_start_train.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_start_train.setStyleSheet("""
+            QPushButton {
+                background-color: #007bff; 
+                color: white; 
+                font-weight: bold; 
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #0069d9; }
+            QPushButton:disabled { background-color: #cccccc; color: #666666; }
+        """)
+
+        # 2. Stop Training 按钮 [NEW]
+        self.btn_stop_train = QPushButton("Stop Training")
+        self.btn_stop_train.setMinimumHeight(40)
+        self.btn_stop_train.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_stop_train.setEnabled(False) # 初始不可点击
+        # 样式与 Clear Selection 一致（标准按钮样式）
+        self.btn_stop_train.setProperty("class", "editor_control_btn") 
+
+        h_train_btns.addWidget(self.btn_start_train, 2) # Start 占更多空间
+        h_train_btns.addWidget(self.btn_stop_train, 1)
+        
+        # 后面跟着状态标签和进度条
+        self.lbl_train_status = QLabel("Ready to train")
+       
+
+        self.lbl_train_status = QLabel("Ready to train")
+        self.lbl_train_status.setStyleSheet("color: #4A90E2; font-weight: bold; margin-top: 5px;")
+        self.lbl_train_status.setVisible(False) 
+        
+
+        self.train_progress = QProgressBar()
+        self.train_progress.setRange(0, 100) 
+        self.train_progress.setValue(0)
+        self.train_progress.setVisible(False)
+        
+        self.train_console = QTextEdit()
+        self.train_console.setReadOnly(True)
+        self.train_console.setPlaceholderText("Training logs will appear here...")
+        self.train_console.setMinimumHeight(150)
+        self.train_console.setStyleSheet("background-color: #1e1e1e; color: #d4d4d4; font-family: 'Courier New'; font-size: 11px;")
+
+        train_layout.addLayout(h_train_btns) 
+        train_layout.addWidget(self.lbl_train_status)
+        train_layout.addWidget(self.train_progress)
+        train_layout.addWidget(self.train_console)
+
+        train_scroll.setWidget(train_scroll_content)
+        train_main_layout.addWidget(train_scroll)
+
+        self.tabs.addTab(self.train_box, "Train")
+
         # --- 6. Bottom Confirm Buttons (Fixed Outside Tabs) ---
         btn_row = QHBoxLayout()
         self.confirm_btn = QPushButton("Confirm Annotation")
@@ -342,6 +486,17 @@ class ClassificationEventEditor(QWidget):
         
         # Ensures Run Batch dropdowns disappear after Confirm or switching videos
         self.batch_input_widget.setVisible(False)
+
+    def reset_train_ui(self):
+        self.train_progress.setValue(0)
+        self.train_progress.setVisible(False)
+        
+        self.lbl_train_status.setText("Ready to train")
+        self.lbl_train_status.setVisible(False)
+        
+        self.train_console.clear()
+        
+        self.btn_start_train.setEnabled(True)
 
     # [MODIFIED] Save the full list and initialize the dropdowns
     def update_action_list(self, action_names: list):

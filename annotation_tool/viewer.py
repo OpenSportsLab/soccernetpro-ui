@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QMainWindow, QMessageBox,QSizePolicy
 from controllers.classification.class_annotation_manager import AnnotationManager
 from controllers.classification.class_navigation_manager import NavigationManager
 from controllers.classification.inference_manager import InferenceManager
+from controllers.classification.train_manager import TrainManager # [NEW] Import TrainManager
 from controllers.history_manager import HistoryManager
 from controllers.localization.localization_manager import LocalizationManager
 # Import Description Managers
@@ -22,6 +23,7 @@ from models import AppStateModel
 from ui.common.main_window import MainWindowUI
 from models.project_tree import ProjectTreeModel
 from utils import create_checkmark_icon, natural_sort_key, resource_path
+
 
 
 class ActionClassifierApp(QMainWindow):
@@ -66,6 +68,7 @@ class ActionClassifierApp(QMainWindow):
         # [NEW] Dense Description Controller
         self.dense_manager = DenseManager(self)
         self.inference_manager = InferenceManager(self)
+        self.train_manager = TrainManager(self)
 
         # --- Local UI state (icons, etc.) ---
         bright_blue = QColor("#00BFFF")

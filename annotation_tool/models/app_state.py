@@ -76,6 +76,10 @@ class AppStateModel:
         # Format: { video_path: [ { "head": ..., "label": ..., "position_ms": ... }, ... ] }
         self.localization_events = {}
 
+
+        # localization-smart annotation
+        self.smart_localization_events = {}
+
         # --- Common clip list ---
         # Each item: { "name": "...", "path": "...", "source_files": [...] }
         # This is the shared source of truth for the Project Tree
@@ -103,6 +107,7 @@ class AppStateModel:
         # [NEW] Clear smart annotations on reset
         self.smart_annotations = {}
         self.localization_events = {}
+        self.smart_localization_events = {}
 
         self.imported_input_metadata = {}
         self.imported_action_metadata = {}
