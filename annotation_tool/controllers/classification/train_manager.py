@@ -62,6 +62,13 @@ class TrainWorker(QThread):
             os.makedirs(checkpoint_dir, exist_ok=True)
             config['TRAIN']['save_dir'] = str(checkpoint_dir).replace('\\', '/')
 
+            log_dir = os.path.join(dataset_root, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            
+            if 'SYSTEM' not in config:
+                config['SYSTEM'] = {}
+            config['SYSTEM']['log_dir'] = str(log_dir).replace('\\', '/')
+
             # 2. Structure adjustment
             # Inject annotation paths into a custom annotations block
             config['DATA']['annotations'] = {
