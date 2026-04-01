@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal, Qt
 
 # ==================== Custom Widgets ====================
-
 class LabelButton(QPushButton):
     """
     Custom Label Button that supports Right-Click signal.
@@ -16,9 +15,10 @@ class LabelButton(QPushButton):
 
     def __init__(self, text, parent=None):
         super().__init__(text, parent)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(40)
+        self.setMinimumHeight(28)
+        self.setStyleSheet("padding: 2px 10px;")
         self.setProperty("class", "spotting_label_btn")
 
     def mousePressEvent(self, event):
@@ -50,29 +50,22 @@ class HeadSpottingPage(QWidget):
         self.labels = labels
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(10)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(5)
 
         # Time display
         self.time_label = QLabel("Current Time: 00:00.000")
         self.time_label.setProperty("class", "spotting_time_lbl")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.time_label)
-
+        
         # Scroll area for buttons
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setProperty("class", "spotting_scroll_area")
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.scroll.setProperty("class", "spotting_scroll_area")
         
-        self.grid_container = QWidget()
-        self.grid_layout = QGridLayout(self.grid_container)
-        self.grid_layout.setSpacing(8)
-        self.grid_layout.setContentsMargins(0,0,0,0)
-        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        
-        scroll.setWidget(self.grid_container)
-        layout.addWidget(scroll)
+        layout.addWidget(self.scroll)
         
         self._populate_grid()
 
@@ -84,39 +77,96 @@ class HeadSpottingPage(QWidget):
         self._populate_grid()
 
     def _populate_grid(self):
-        # Clear existing items
-        while self.grid_layout.count():
-            item = self.grid_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        cols = 2 
-        row, col = 0, 0
+        old_widget = self.scroll.takeWidget()
+        if old_widget:
+            old_widget.deleteLater()
+            
+        self.grid_container = QWidget()
+        self.grid_layout = QVBoxLayout(self.grid_container)
+        self.grid_layout.setSpacing(6)
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        # Add label buttons
+        max_width = 360 
+        
+        #(Bin Packing) 
+        
+        buttons_info = []
         for lbl in self.labels:
             display_text = lbl.replace('_', ' ')
             btn = LabelButton(display_text)
             btn.clicked.connect(lambda _, l=lbl: self.labelClicked.emit(l))
             btn.rightClicked.connect(lambda l=lbl: self._show_context_menu(l))
             btn.doubleClicked.connect(lambda l=lbl: self.renameLabelRequested.emit(l))
-            self.grid_layout.addWidget(btn, row, col)
-            col += 1
-            if col >= cols:
-                col = 0
-                row += 1
-
-        # Add "Add Label" button at the bottom
-        add_btn = QPushButton("Add new label at current time")
-        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_btn.setMinimumHeight(45) 
-        add_btn.setProperty("class", "spotting_add_btn")
-
-        add_btn.clicked.connect(self.addLabelRequested.emit)
+            
+            btn.adjustSize()
+            btn_w = btn.sizeHint().width()
+            buttons_info.append((btn, btn_w))
+            
+        buttons_info.sort(key=lambda x: x[1], reverse=True)
         
-        if col != 0: 
-            row += 1
-        self.grid_layout.addWidget(add_btn, row, 0, 1, 2) 
+        rows = [] 
+        
+        for btn, btn_w in buttons_info:
+            placed = False
+            for row in rows:
+                if row['width'] + btn_w + 6 <= max_width: 
+                    row['layout'].addWidget(btn)
+                    row['width'] += btn_w + 6
+                    placed = True
+                    break 
+            
+            if not placed:
+                new_layout = QHBoxLayout()
+                new_layout.setSpacing(6)
+                new_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                self.grid_layout.addLayout(new_layout)
+                
+                new_layout.addWidget(btn)
+                rows.append({'layout': new_layout, 'width': btn_w})
+
+        add_btn = QPushButton("+ Add Label to Current Time")
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setMinimumHeight(28) 
+        add_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+
+        add_btn.setStyleSheet("""
+            QPushButton {
+                padding: 2px 10px; 
+                color: #FFFFFF; 
+                font-weight: bold; 
+                background-color: #007BFF; 
+                border: none; 
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #0056b3; 
+            }
+            QPushButton:pressed {
+                background-color: #004085;
+            }
+        """)
+                
+        add_btn.clicked.connect(self.addLabelRequested.emit)
+        add_btn.adjustSize()
+        add_btn_w = add_btn.sizeHint().width()
+        
+        placed_add = False
+        for row in rows:
+            if row['width'] + add_btn_w + 6 <= max_width:
+                row['layout'].addWidget(add_btn)
+                row['width'] += add_btn_w + 6
+                placed_add = True
+                break
+                
+        if not placed_add:
+            new_layout = QHBoxLayout()
+            new_layout.setSpacing(6)
+            new_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            self.grid_layout.addLayout(new_layout)
+            new_layout.addWidget(add_btn)
+            
+        self.scroll.setWidget(self.grid_container)
 
     def _show_context_menu(self, label):
         display_label = label.replace('_', ' ')

@@ -1,8 +1,8 @@
-site_name: SoccerNetPro Analyzer
-site_description: A PyQt6 GUI tool for analyzing and annotating SoccerNetPro datasets (OpenSportsLab)
+site_name: Video Annotation Tool
+site_description: A PyQt6 GUI tool for analyzing and annotating OSL datasets (OpenSportsLab)
 site_author: OpenSportsLab
-repo_url: https://github.com/OpenSportsLab/soccernetpro-ui
-repo_name: OpenSportsLab/soccernetpro-ui
+repo_url: https://github.com/OpenSportsLab/VideoAnnotationTool
+repo_name: OpenSportsLab/VideoAnnotationTool
 
 theme:
   name: material

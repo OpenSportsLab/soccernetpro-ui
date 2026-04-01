@@ -8,7 +8,12 @@ class CmdType(Enum):
 
     # --- Classification commands ---
     ANNOTATION_CONFIRM = auto()  # Persist a user-confirmed annotation to the model
+    BATCH_ANNOTATION_CONFIRM = auto() # [NEW] Persist a batch of annotations as a single action
     UI_CHANGE = auto()           # Fine-grained UI toggle (radio/checkbox changes)
+
+    # [NEW] Smart Annotation commands for Undo/Redo
+    SMART_ANNOTATION_RUN = auto()
+    BATCH_SMART_ANNOTATION_RUN = auto()
 
     # --- Shared schema commands (used by both modes) ---
     SCHEMA_ADD_CAT = auto()      # Add a category/head
@@ -49,6 +54,8 @@ class AppStateModel:
         self.current_task_name = "Untitled Task"
         self.modalities = ["video"]
 
+        self.is_multi_view = False
+
         # --- Schema / labels ---
         # Format: { head_name: { "type": "single|multi", "labels": [..] } }
         self.label_definitions = {}
@@ -57,6 +64,10 @@ class AppStateModel:
         # Format: { video_path: { "Head": "Label", "Head2": ["L1", "L2"] } }
         self.manual_annotations = {}
 
+        # [NEW] Store AI inference results to persist the Donut Chart state
+        # Format: { video_path: { "action": { "label": "Dive", "conf_dict": {...} } } }
+        self.smart_annotations = {}
+
         # Classification import metadata (kept for backward compatibility)
         self.imported_input_metadata = {}   # key: (action_id, filename)
         self.imported_action_metadata = {}  # key: action_id
@@ -64,6 +75,10 @@ class AppStateModel:
         # --- Localization / action spotting data ---
         # Format: { video_path: [ { "head": ..., "label": ..., "position_ms": ... }, ... ] }
         self.localization_events = {}
+
+
+        # localization-smart annotation
+        self.smart_localization_events = {}
 
         # --- Common clip list ---
         # Each item: { "name": "...", "path": "...", "source_files": [...] }
@@ -86,8 +101,13 @@ class AppStateModel:
         self.json_loaded = False
         self.is_data_dirty = False
 
+        self.is_multi_view = False
+
         self.manual_annotations = {}
+        # [NEW] Clear smart annotations on reset
+        self.smart_annotations = {}
         self.localization_events = {}
+        self.smart_localization_events = {}
 
         self.imported_input_metadata = {}
         self.imported_action_metadata = {}

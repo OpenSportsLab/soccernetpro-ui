@@ -9,8 +9,13 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   generate-release-notes:
+    name: Generate release notes
     runs-on: ubuntu-latest
     outputs:
       changelog: ${{ steps.notes.outputs.changelog }}
@@ -31,10 +36,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   create-release:
+    name: Create GitHub Release
     needs: generate-release-notes
     runs-on: ubuntu-latest
     steps:
-      - name: Create/Update GitHub Release (body only)
+      - name: Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -42,6 +48,7 @@ jobs:
           body: ${{ needs.generate-release-notes.outputs.changelog }}
 
   build-windows:
+    name: Build on Windows
     needs: create-release
     runs-on: windows-latest
     defaults:
@@ -54,9 +61,22 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~\AppData\Local\pip\cache
+            ~\AppData\Roaming\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('annotation_tool/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install requirements
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
       - name: Cleanup before PyInstaller
@@ -68,32 +88,37 @@ jobs:
 
       - name: Build exe
         shell: pwsh
-        run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onefile `
-            --name "SoccerNetProAnalyzer" `
-            --add-data "style;style" `
-            --add-data "ui;ui" `
-            --add-data "controllers;controllers" `
-            --add-data "image;image" `
-            "main.py"
+        run: >
+          python -m PyInstaller --noconfirm --clean --windowed --onefile
+          --name "VideoAnnotationTool"
+          --add-data "style;style"
+          --add-data "ui;ui"
+          --add-data "controllers;controllers"
+          --add-data "image;image"
+          --add-data "config.yaml;."
+          --collect-all "soccernetpro"
+          --collect-all "wandb"
+          --collect-all "torch_geometric"
+          "main.py"
 
       - name: Rename binary
         shell: pwsh
         run: |
-          Move-Item -Force dist\SoccerNetProAnalyzer.exe dist\SoccerNetProAnalyzer-win.exe
+          Move-Item -Force dist\VideoAnnotationTool.exe dist\VideoAnnotationTool-win.exe
 
       - name: Zip Windows binary
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\SoccerNetProAnalyzer-win.exe -DestinationPath dist\SoccerNetProAnalyzer-win.zip -Force
+          Compress-Archive -Path dist\VideoAnnotationTool-win.exe -DestinationPath dist\VideoAnnotationTool-win.zip -Force
 
       - name: Upload Release Asset (Windows)
         uses: softprops/action-gh-release@v2
         with:
-          files: annotation_tool/dist/SoccerNetProAnalyzer-win.zip
           tag_name: ${{ github.ref_name }}
+          files: annotation_tool/dist/VideoAnnotationTool-win.zip
 
   build-macos:
+    name: Build on macOS
     needs: create-release
     runs-on: macos-latest
     defaults:
@@ -106,7 +131,18 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('annotation_tool/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install requirements
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -121,25 +157,30 @@ jobs:
         shell: bash
         run: >
           python -m PyInstaller --noconfirm --clean --windowed
-          --name "SoccerNetProAnalyzer"
+          --name "VideoAnnotationTool"
           --add-data "style:style"
           --add-data "ui:ui"
           --add-data "controllers:controllers"
           --add-data "image:image"
+          --add-data "config.yaml:."
+          --collect-all "soccernetpro"
+          --collect-all "wandb"
+          --collect-all "torch_geometric"
           "main.py"
 
       - name: Zip macOS app
         shell: bash
         run: |
-          ditto -c -k --sequesterRsrc --keepParent "dist/SoccerNetProAnalyzer.app" "dist/SoccerNetProAnalyzer-mac.zip"
+          ditto -c -k --sequesterRsrc --keepParent "dist/VideoAnnotationTool.app" "dist/VideoAnnotationTool-mac.zip"
 
       - name: Upload Release Asset (macOS)
         uses: softprops/action-gh-release@v2
         with:
-          files: annotation_tool/dist/SoccerNetProAnalyzer-mac.zip
           tag_name: ${{ github.ref_name }}
+          files: annotation_tool/dist/VideoAnnotationTool-mac.zip
 
   build-linux:
+    name: Build on Linux
     needs: create-release
     runs-on: ubuntu-latest
     defaults:
@@ -158,9 +199,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgl1 libglib2.0-0 libxcb-cursor0
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('annotation_tool/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install requirements
+        shell: bash
         run: |
           python -m pip install --upgrade pip
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
       - name: Cleanup before PyInstaller
@@ -173,27 +225,31 @@ jobs:
         shell: bash
         run: >
           python -m PyInstaller --noconfirm --clean --windowed --onefile
-          --name "SoccerNetProAnalyzer"
+          --name "VideoAnnotationTool"
           --add-data "style:style"
           --add-data "ui:ui"
           --add-data "controllers:controllers"
           --add-data "image:image"
+          --add-data "config.yaml:."
+          --collect-all "soccernetpro"
+          --collect-all "wandb"
+          --collect-all "torch_geometric"
           "main.py"
 
       - name: Rename binary
         shell: bash
         run: |
-          mv -f dist/SoccerNetProAnalyzer dist/SoccerNetProAnalyzer-linux
+          mv -f dist/VideoAnnotationTool dist/VideoAnnotationTool-linux
 
       - name: Zip Linux binary
         shell: bash
         run: |
           cd dist
-          zip -r SoccerNetProAnalyzer-linux.zip SoccerNetProAnalyzer-linux
+          zip -r VideoAnnotationTool-linux.zip VideoAnnotationTool-linux
           cd ..
 
       - name: Upload Release Asset (Linux)
         uses: softprops/action-gh-release@v2
         with:
-          files: annotation_tool/dist/SoccerNetProAnalyzer-linux.zip
           tag_name: ${{ github.ref_name }}
+          files: annotation_tool/dist/VideoAnnotationTool-linux.zip

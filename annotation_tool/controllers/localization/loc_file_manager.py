@@ -299,6 +299,30 @@ class LocFileManager:
         except Exception as e:
             QMessageBox.critical(self.main, "Error", f"Save failed: {e}")
             return False
+        
+        for video_path in sorted(self.model.localization_events.keys()):
+                # 获取该视频所属的原始 item 定义（包含 inputs 视频源信息）
+                base_item = next((item for item in self.model.action_item_data if item["path"] == video_path), None)
+                if not base_item: continue
+                
+                # 1. 获取手工（或已确认的）标注
+                manual_events = self.model.localization_events.get(video_path, [])
+                
+                # 2. 获取未确认的智能标注
+                smart_events = self.model.smart_localization_events.get(video_path, [])
+                
+                # 构建符合 OSL 标准规范的单条数据结构
+                out_item = {
+                    "id": base_item.get("id", ""),
+                    "inputs": [{"path": f, "type": "video"} for f in base_item.get("source_files", [video_path])],
+                    "events": manual_events
+                }
+                
+                # 遵循原始结构添加 smart_events 字段（如果有的话）
+                if smart_events:
+                    out_item["smart_events"] = smart_events
+                    
+                items.append(out_item)
 
     def _clear_workspace(self, full_reset=False):
         """

@@ -75,6 +75,48 @@ class ProjectTypeDialog(QDialog):
         self.selected_mode = mode
         self.accept()
 
+class ClassificationTypeDialog(QDialog):
+    """
+    [NEW] Dialog to ask the user if the new Classification project 
+    is Single-View or Multi-View.
+    """
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Classification Project Type")
+        self.resize(450, 180)
+        self.is_multi_view = False # Default to Single-View
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 30, 30, 30)
+
+        lbl = QLabel("Is this a Single-View or Multi-View project?")
+        lbl.setProperty("class", "dialog_instruction_lbl")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(20)
+
+        self.btn_sv = QPushButton("Single-View\n(Individual Videos)")
+        self.btn_sv.setMinimumSize(QSize(0, 70))
+        self.btn_sv.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.btn_mv = QPushButton("Multi-View\n(Grouped by Folder)")
+        self.btn_mv.setMinimumSize(QSize(0, 70))
+        self.btn_mv.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        btn_layout.addWidget(self.btn_sv)
+        btn_layout.addWidget(self.btn_mv)
+        layout.addLayout(btn_layout)
+
+        # Connect signals
+        self.btn_sv.clicked.connect(lambda: self.finalize_selection(False))
+        self.btn_mv.clicked.connect(lambda: self.finalize_selection(True))
+
+    def finalize_selection(self, is_multi: bool):
+        self.is_multi_view = is_multi
+        self.accept()
 
 class FolderPickerDialog(QDialog):
     """
@@ -121,3 +163,34 @@ class FolderPickerDialog(QDialog):
         indexes = self.tree.selectionModel().selectedRows()
         paths = [self.model.filePath(idx) for idx in indexes]
         return paths
+    
+class MediaErrorDialog(QMessageBox):
+    """
+    [NEW] A standardized error dialog for media playback failures.
+    Provides a concise explanation and an FFmpeg command to fix the codec issue.
+    Technical logs are hidden in the details section to keep the UI clean.
+    """
+    def __init__(self, error_string: str, parent=None) -> None:
+        super().__init__(parent)
+        
+        self.setIcon(QMessageBox.Icon.Critical)
+        
+        # Main short title
+        self.setWindowTitle("Video Decoding Error")
+        self.setText("<b>Unsupported Video Codec Detected</b>")
+        
+        # Concise explanation with the FFmpeg terminal command
+        info_text = (
+            "Your system cannot decode this video's format (e.g., AV1, DivX, or Xvid). "
+            "The audio might play, but the video hardware decoder has failed.\n\n"
+            "To fix this, please transcode your file to a standard H.264 MP4 format. "
+            "Run the following command in your terminal:\n\n"
+            "ffmpeg -i input.mp4 -vcodec libx264 -acodec aac output.mp4"
+        )
+        self.setInformativeText(info_text)
+        
+        # Hide the long, ugly technical error logs inside a collapsible "Show Details..." button
+        if error_string:
+            self.setDetailedText(f"System Diagnostic Logs:\n{error_string}")
+            
+        self.setStandardButtons(QMessageBox.StandardButton.Ok)

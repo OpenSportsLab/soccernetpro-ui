@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import QMainWindow, QMessageBox,QSizePolicy
 
 from controllers.classification.class_annotation_manager import AnnotationManager
 from controllers.classification.class_navigation_manager import NavigationManager
+from controllers.classification.inference_manager import InferenceManager
+from controllers.classification.train_manager import TrainManager # [NEW] Import TrainManager
 from controllers.history_manager import HistoryManager
 from controllers.localization.localization_manager import LocalizationManager
 # Import Description Managers
@@ -23,6 +25,7 @@ from models.project_tree import ProjectTreeModel
 from utils import create_checkmark_icon, natural_sort_key, resource_path
 
 
+
 class ActionClassifierApp(QMainWindow):
     """Main application window for annotation + localization + description + dense workflows."""
 
@@ -33,7 +36,7 @@ class ActionClassifierApp(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
-        self.setWindowTitle("SoccerNet Pro Analysis Tool")
+        self.setWindowTitle("Video Annotation Tool")
         self.setGeometry(100, 100, 600, 400)
 
         # --- MVC wiring ---
@@ -64,6 +67,8 @@ class ActionClassifierApp(QMainWindow):
         
         # [NEW] Dense Description Controller
         self.dense_manager = DenseManager(self)
+        self.inference_manager = InferenceManager(self)
+        self.train_manager = TrainManager(self)
 
         # --- Local UI state (icons, etc.) ---
         bright_blue = QColor("#00BFFF")
@@ -84,6 +89,7 @@ class ActionClassifierApp(QMainWindow):
         # Start at welcome screen
         self.ui.show_welcome_view()
         self._adjust_window_size(0)
+
 
     # ---------------------------------------------------------------------
     # Global Media Control to Prevent Freezing/Ghost Frames
@@ -134,9 +140,11 @@ class ActionClassifierApp(QMainWindow):
             
             self.resize(600, 400)     
         else:
-            self.setMinimumSize(1000, 700) 
+            #self.setMinimumSize(1000, 700) 
             
-            self.resize(1400, 900)
+            #self.resize(1400, 900)
+            self.setMinimumSize(600, 400)  
+            self.resize(1200, 800)         
 
     def _safe_import_annotations(self):
         """Wrapper to ensure players are stopped before loading a new project."""
@@ -160,6 +168,12 @@ class ActionClassifierApp(QMainWindow):
 
         # --- Classification - Left panel ---
         cls_left = self.ui.classification_ui.left_panel
+        # [NEW] Customize the filter combo box exclusively for Classification mode
+        # Blocking signals prevents triggering filter logic before UI is fully built
+        cls_left.filter_combo.blockSignals(True)
+        cls_left.filter_combo.clear()
+        cls_left.filter_combo.addItems(["Show All", "Hand Labelled", "Smart Labelled", "No Labelled"])
+        cls_left.filter_combo.blockSignals(False)
         cls_controls = cls_left.project_controls
         
         cls_controls.createRequested.connect(self._safe_create_project)
@@ -185,10 +199,23 @@ class ActionClassifierApp(QMainWindow):
 
         # --- Classification - Right panel ---
         cls_right = self.ui.classification_ui.right_panel
-        cls_right.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation)
-        cls_right.clear_sel_btn.clicked.connect(self.annot_manager.clear_current_manual_annotation)
+        
+        # [MODIFIED] Disconnect the direct button click and use our new Tab-aware signals
+        # cls_right.confirm_btn.clicked.connect(self.annot_manager.save_manual_annotation) # <-- 删除或注释掉这行旧代码
+        
+        # [NEW] Connect the tab-aware confirm signals to their respective manager functions
+        cls_right.annotation_saved.connect(lambda data: self.annot_manager.save_manual_annotation())
+        cls_right.smart_confirm_requested.connect(self.annot_manager.confirm_smart_annotation_as_manual)
+        
+        # [MODIFIED] Connect tab-aware clear signals
+        cls_right.hand_clear_requested.connect(self.annot_manager.clear_current_manual_annotation)
+        cls_right.smart_clear_requested.connect(self.annot_manager.clear_current_smart_annotation)
+
         cls_right.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
         cls_right.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
+
+        cls_right.smart_infer_requested.connect(self.inference_manager.start_inference)
+        cls_right.confirm_infer_requested.connect(lambda result_dict: self.annot_manager.save_manual_annotation())
 
         # Undo/redo for Class/Loc
         cls_right.undo_btn.clicked.connect(self.history_manager.perform_undo)
@@ -469,7 +496,12 @@ class ActionClassifierApp(QMainWindow):
             # [NEW] Check dense data
             has_data = bool(self.model.dense_description_events)
         else:
-            has_data = bool(self.model.manual_annotations)
+            has_manual = bool(self.model.manual_annotations)
+            has_smart_confirmed = any(
+                data.get("_confirmed", False) 
+                for data in self.model.smart_annotations.values()
+            )
+            has_data = has_manual or has_smart_confirmed
 
         can_export = self.model.json_loaded and has_data
 
@@ -528,7 +560,13 @@ class ActionClassifierApp(QMainWindow):
             # [NEW]
             has_data = bool(self.model.dense_description_events)
         else:
-            has_data = bool(self.model.manual_annotations)
+            # [FIXED] Check the hand and smart annotation
+            has_manual = bool(self.model.manual_annotations)
+            has_smart_confirmed = any(
+                data.get("_confirmed", False) 
+                for data in self.model.smart_annotations.values()
+            )
+            has_data = has_manual or has_smart_confirmed
 
         can_export = self.model.json_loaded and has_data
         can_save = can_export and (self.model.current_json_path is not None) and self.model.is_data_dirty
@@ -576,12 +614,31 @@ class ActionClassifierApp(QMainWindow):
             return idx.parent().data(ProjectTreeModel.FilePathRole)
         return idx.data(ProjectTreeModel.FilePathRole)
 
+
+    def sync_batch_inference_dropdowns(self) -> None:
+        """[NEW] Sync the Action List names from the model to the Batch Inference dropdowns."""
+        right_panel = self.ui.classification_ui.right_panel
+        # Ensure the UI component exists and supports updating
+        if not hasattr(right_panel, 'update_action_list'):
+            return
+            
+        # Sort the data using natural sort to exactly match the left tree
+        sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", "")))
+        action_names = [d["name"] for d in sorted_list]
+        
+        # Push the updated list to the dropdowns
+        right_panel.update_action_list(action_names)
+
     def populate_action_tree(self) -> None:
         """Rebuild the action tree from model data using the new ProjectTreeModel."""
         self.tree_model.clear()
         self.model.action_item_map.clear()
 
         sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", "")))
+
+        # [NEW] Extract sorted names and sync them to the Batch Inference dropdowns
+        action_names = [d["name"] for d in sorted_list]
+        self.ui.classification_ui.right_panel.update_action_list(action_names)
         
         for data in sorted_list:
             item = self.tree_model.add_entry(
@@ -590,9 +647,10 @@ class ActionClassifierApp(QMainWindow):
                 source_files=data.get("source_files")
             )
             self.model.action_item_map[data["path"]] = item
+            self.update_action_item_status(data["path"])
 
-        for path in self.model.action_item_map.keys():
-            self.update_action_item_status(path)
+            # [MODIFIED] Use the centralized sync method to update Smart Annotation dropdowns        
+            self.sync_batch_inference_dropdowns()
 
         # Decide which manager handles the navigation logic
         if self._is_loc_mode():
@@ -638,8 +696,11 @@ class ActionClassifierApp(QMainWindow):
         elif self._is_dense_mode():
             is_done = action_path in self.model.dense_description_events and bool(self.model.dense_description_events[action_path])
         else:
-            # Classification mode logic
-            is_done = action_path in self.model.manual_annotations and bool(self.model.manual_annotations[action_path])
+            #is_done = action_path in self.model.manual_annotations and bool(self.model.manual_annotations[action_path])
+            # [MODIFIED] Classification mode logic: Done if manually annotated OR smart confirmed
+            is_manual_done = action_path in self.model.manual_annotations and bool(self.model.manual_annotations[action_path])
+            is_smart_done = self.model.smart_annotations.get(action_path, {}).get("_confirmed", False)
+            is_done = is_manual_done or is_smart_done
             
         item.setIcon(self.done_icon if is_done else self.empty_icon)
 
@@ -665,11 +726,21 @@ class ActionClassifierApp(QMainWindow):
         Refreshes the UI after an Undo/Redo operation.
         Updates the tree icon, selection, and the active editor content.
         """
+        # [MODIFIED] Batch operations might pass action_path as None.
+        # We must still refresh the filter and button states even if path is None.
         if not action_path:
+            if not self._is_loc_mode() and not self._is_desc_mode() and not self._is_dense_mode():
+                self.nav_manager.apply_action_filter()
+            self.update_save_export_button_state()
             return
 
         # 1. Update the tree icon status
         self.update_action_item_status(action_path)
+
+        # [NEW] 1.5 Refresh the tree filter to immediately show/hide items!
+        # This fixes the bug where Undo/Redo doesn't visually update the list.
+        if not self._is_loc_mode() and not self._is_desc_mode() and not self._is_dense_mode():
+            self.nav_manager.apply_action_filter()
 
         # 2. Ensure the item is selected in the active tree
         active_tree = None
@@ -694,7 +765,6 @@ class ActionClassifierApp(QMainWindow):
         elif self._is_desc_mode():
             self.desc_nav_manager.on_item_selected(item.index(), None)
         elif self._is_dense_mode():
-            # [NEW] Refresh Dense events display
             self.dense_manager._display_events_for_item(action_path)
         else:
             self.annot_manager.display_manual_annotation(action_path)
