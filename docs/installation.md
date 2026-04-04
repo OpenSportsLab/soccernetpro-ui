@@ -2,7 +2,7 @@
 
 **Quick option:**
 
-Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Releases page](https://github.com/OpenSportsLab/soccernetpro-ui/releases). Download the latest release for your platform and run the executable—no installation required.
+Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Releases page](https://github.com/OpenSportsLab/VideoAnnotationTool/releases). Download the latest release for your platform and run the executable—no installation required.
 
 ---
 
@@ -20,14 +20,14 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/OpenSportsLab/soccernetpro-ui.git
-   cd soccernetpro-ui
+   git clone https://github.com/OpenSportsLab/VideoAnnotationTool.git
+   cd VideoAnnotationTool
    ```
 
 2. **(Recommended) Create and activate a Conda environment**
    ```bash
-   conda create -n soccernetpro-ui python=3.9 -y
-   conda activate soccernetpro-ui
+   conda create -n VideoAnnotationTool python=3.9 -y
+   conda activate VideoAnnotationTool
    ```
 
 4. **Install dependencies:**

@@ -18,7 +18,7 @@ This script automates the download of an OSL-format JSON file (annotation file) 
 
 
 #### ⚠️ Authentication Required for Gated Datasets
-Some Hugging Face datasets (including SoccerNetPro localization and classification datasets) are restricted / gated.
+Some Hugging Face datasets (including opensportslib localization and classification datasets) are restricted / gated.
 
 To download files from these datasets, you must:
 
