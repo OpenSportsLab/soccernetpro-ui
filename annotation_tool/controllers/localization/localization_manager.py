@@ -46,10 +46,8 @@ class LocalizationManager:
 
     def setup_connections(self):
         # --- Left Panel ---
-        pc = self.left_panel.project_controls
-        pc.addVideoRequested.connect(self._on_add_video_clicked)
-        pc.saveRequested.connect(self._on_save_clicked)
-        pc.exportRequested.connect(self._on_export_clicked)
+        # Note: Create/Load/Close/Save/Export are handled by the File menu bar.
+        # Add Data is wired from viewer.py -> left_panel.addVideoRequested
         
         # Tree Interactions
         self.left_panel.tree.selectionModel().currentChanged.connect(self.on_clip_selected)
@@ -453,7 +451,6 @@ class LocalizationManager:
             events = self.model.localization_events.get(path, [])
             item.setIcon(self.main.done_icon if events else self.main.empty_icon)
             if i == 0: first_idx = item.index()
-        self.left_panel.project_controls.set_project_loaded_state(True)
         self._refresh_schema_ui()
         if self.current_head: self.right_panel.annot_mgmt.tabs.set_current_head(self.current_head)
         self._apply_clip_filter(self.left_panel.filter_combo.currentIndex())
