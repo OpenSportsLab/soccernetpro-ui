@@ -18,7 +18,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 from opensportslib import model
 
 
-def _run_soccernet_inference(base_config_path: str, temp_data: dict, prefix: str):
+def _run_opensportslib_inference(base_config_path: str, temp_data: dict, prefix: str):
     """
     [REFACTORED] A shared helper function to handle the repetitive setup, 
     execution, and cleanup of the opensportslib inference process.
@@ -161,7 +161,7 @@ class InferenceWorker(QThread):
             }
             
             # Use the shared helper function to run inference
-            metrics, pred_data = _run_soccernet_inference(self.config_path, temp_data, "infer")
+            metrics, pred_data = _run_opensportslib_inference(self.config_path, temp_data, "infer")
 
             predicted_label_idx = None
             confidence = 0.0
@@ -282,7 +282,7 @@ class BatchInferenceWorker(QThread):
             }
             
             # Use the shared helper function to run inference
-            metrics, pred_data = _run_soccernet_inference(self.config_path, temp_data, "batch_infer")
+            metrics, pred_data = _run_opensportslib_inference(self.config_path, temp_data, "batch_infer")
 
             pred_items = pred_data.get("data", [])
             out_dict = {}
