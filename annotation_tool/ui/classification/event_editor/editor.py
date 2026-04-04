@@ -152,17 +152,7 @@ class ClassificationEventEditor(QWidget):
         self.is_batch_mode_active = False
         self.pending_batch_results = {}
         
-        # 1. Undo/Redo Controls
-        h_undo = QHBoxLayout()
-        self.undo_btn = QPushButton("Undo")
-        self.redo_btn = QPushButton("Redo")
-        for btn in [self.undo_btn, self.redo_btn]:
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setEnabled(False) 
-            btn.setProperty("class", "editor_control_btn")
-        h_undo.addWidget(self.undo_btn)
-        h_undo.addWidget(self.redo_btn)
-        layout.addLayout(h_undo)
+        # 1. Undo/Redo removed (moved to menu bar)
         
         # 2. Task Information
         self.task_label = QLabel("Task: N/A")

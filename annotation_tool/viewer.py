@@ -210,11 +210,8 @@ class ActionClassifierApp(QMainWindow):
         cls_right.smart_infer_requested.connect(self.inference_manager.start_inference)
         cls_right.confirm_infer_requested.connect(lambda result_dict: self.annot_manager.save_manual_annotation())
 
-        # Undo/redo for Class/Loc
-        cls_right.undo_btn.clicked.connect(self.history_manager.perform_undo)
-        cls_right.redo_btn.clicked.connect(self.history_manager.perform_redo)
-        self.ui.localization_ui.right_panel.undo_btn.clicked.connect(self.history_manager.perform_undo)
-        self.ui.localization_ui.right_panel.redo_btn.clicked.connect(self.history_manager.perform_redo)
+        # [NEW] Undo/Redo linked directly to Menu Bar actions (buttons removed from panels)
+        # self.history_manager connections are handled in _setup_menu_bar and _setup_shortcuts
 
         # --- Localization panel ---
         loc_left = self.ui.localization_ui.left_panel
@@ -232,9 +229,7 @@ class ActionClassifierApp(QMainWindow):
         self.desc_nav_manager.setup_connections()
         self.desc_annot_manager.setup_connections()
 
-        desc_right = self.ui.description_ui.right_panel
-        desc_right.undo_btn.clicked.connect(self.history_manager.perform_undo)
-        desc_right.redo_btn.clicked.connect(self.history_manager.perform_redo)
+        # desc_right.undo_btn/redo_btn removed
         
         # --- [NEW] Dense Description Panel Wiring ---
         dense_left = self.ui.dense_description_ui.left_panel
@@ -247,10 +242,7 @@ class ActionClassifierApp(QMainWindow):
         # Initialize connections for Dense logic
         self.dense_manager.setup_connections()
         
-        # Connect Undo/Redo for Dense Right Panel
-        dense_right = self.ui.dense_description_ui.right_panel
-        dense_right.undo_btn.clicked.connect(self.history_manager.perform_undo)
-        dense_right.redo_btn.clicked.connect(self.history_manager.perform_redo)
+        # dense_right.undo_btn/redo_btn removed
 
 
     def _setup_menu_bar(self) -> None:
@@ -282,6 +274,19 @@ class ActionClassifierApp(QMainWindow):
         self.action_export.triggered.connect(self._dispatch_export)
         self.action_export.setEnabled(False)
         file_menu.addAction(self.action_export)
+
+        # --- Edit Menu ---
+        edit_menu = menu_bar.addMenu("&Edit")
+        
+        self.action_undo = QAction("Undo", self)
+        self.action_undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.action_undo.triggered.connect(self.history_manager.perform_undo)
+        edit_menu.addAction(self.action_undo)
+        
+        self.action_redo = QAction("Redo", self)
+        self.action_redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.action_redo.triggered.connect(self.history_manager.perform_redo)
+        edit_menu.addAction(self.action_redo)
 
     def _setup_shortcuts(self) -> None:
         """Register common keyboard shortcuts."""
@@ -586,15 +591,11 @@ class ActionClassifierApp(QMainWindow):
         can_undo = len(self.model.undo_stack) > 0
         can_redo = len(self.model.redo_stack) > 0
 
-        self.ui.classification_ui.right_panel.undo_btn.setEnabled(can_undo)
-        self.ui.classification_ui.right_panel.redo_btn.setEnabled(can_redo)
-        self.ui.localization_ui.right_panel.undo_btn.setEnabled(can_undo)
-        self.ui.localization_ui.right_panel.redo_btn.setEnabled(can_redo)
-        self.ui.description_ui.right_panel.undo_btn.setEnabled(can_undo)
-        self.ui.description_ui.right_panel.redo_btn.setEnabled(can_redo)
-        # [NEW] Dense right panel buttons
-        self.ui.dense_description_ui.right_panel.undo_btn.setEnabled(can_undo)
-        self.ui.dense_description_ui.right_panel.redo_btn.setEnabled(can_redo)
+        # Update menu actions
+        if hasattr(self, 'action_undo'):
+            self.action_undo.setEnabled(can_undo)
+        if hasattr(self, 'action_redo'):
+            self.action_redo.setEnabled(can_redo)
 
     def show_temp_msg(self, title: str, msg: str, duration: int = 1500, **kwargs) -> None:
         one_line = " ".join(str(msg).splitlines()).strip()
