@@ -8,15 +8,15 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
 
 ## Requirements
 
-- Python **3.9** or later
+- Python **3.11** or later
 - PyQt6
-- Other dependencies (see `Tool/requirements.txt`)
+- Other dependencies (see `requirements.txt`)
 
 ---
 
 ## Steps (from source)
 
-> **Note:** The PyQt GUI project lives in the `Tool/` subdirectory of this repository. All commands below assume you are running them from the repository root unless stated otherwise.
+> **Note:** The PyQt GUI project lives in the `annotation_tool/` subdirectory of this repository. All commands below assume you are running them from the repository root unless stated otherwise.
 
 1. **Clone the repository**
    ```bash
@@ -45,12 +45,12 @@ Pre-built binaries for Windows, macOS, and Linux are available on the [GitHub Re
     pip install opencv-python
     
     # Or install all dependencies:
-    pip install -r Tool/requirements.txt
+    pip install -r requirements.txt
     ```
 
 6. **Run the tool:**
     ```bash
-    python Tool/main.py
+    python annotation_tool/main.py
     ```
 
 ## Troubleshooting

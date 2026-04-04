@@ -18,7 +18,7 @@ A **PyQt6-based GUI** for analyzing and annotating **[OSL format](https://opensp
 
 We recommend using [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) for managing your Python environment.
 
-> **Note:** The GUI project lives in the `annotation_tool/` subdirectory of this repository, and dependencies are defined in `annotation_tool/requirements.txt`.
+> **Note:** The GUI project lives in the `annotation_tool/` subdirectory of this repository.
 
 ### Step 0 – Clone the repository
 
@@ -38,7 +38,7 @@ conda activate VideoAnnotationTool
 
 ### Step 2 – Install dependencies
 ```bash
-pip install -r annotation_tool/requirements.txt
+pip install -r requirements.txt
 ```
 ---
 
