@@ -43,7 +43,7 @@ class LocalizationManager:
     def setup_connections(self):
         # --- Left Panel ---
         # Note: Create/Load/Close/Save/Export are handled by the File menu bar.
-        # Add Data is wired from viewer.py -> left_panel.addVideoRequested
+        # Add Data is wired from main_window.py -> left_panel.addVideoRequested
         
         # Tree Interactions
         self.left_panel.tree.selectionModel().currentChanged.connect(self.on_clip_selected)
