@@ -172,7 +172,15 @@ class LocalizationInferenceManager(QObject):
 
     def start_inference(self, video_path: str, start_ms: int, end_ms: int):
         if self.worker and self.worker.isRunning(): return
-        config_path = os.path.join(os.getcwd(), "loc_config.yaml")
+        
+        import sys
+        if hasattr(sys, '_MEIPASS'):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.abspath(".")
+            
+        config_path = os.path.join(base_path, "loc_config.yaml")
+        
         self.worker = LocInferenceWorker(video_path, start_ms, end_ms, config_path)
         self.worker.finished_signal.connect(self._on_finished)
         self.worker.error_signal.connect(self._on_error)
