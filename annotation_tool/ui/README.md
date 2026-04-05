@@ -34,7 +34,7 @@ The backbone of the application, ensuring a consistent user experience across al
 * **`main_window.py`**: The application entry point. It manages a `QStackedLayout` to switch between the **Welcome Screen** and the four **Workspaces** without destroying state.
 * **`workspace.py`**: Defines the `MainWorkspace`. This is a `QMainWindow` that hosts the Project Navigator (Left Dock), Media Player (Center), and the tabbed Annotation Editor (Right Dock).
 * **`video_surface.py`**: A pure rendering widget wrapping `QMediaPlayer` and `QVideoWidget`. It handles video output while leaving playback logic to the controllers.
-* **`clip_explorer.py`**: The **Left Sidebar**. Refactored to use **Qt Model/View** (`QTreeView`) for high performance. It handles file navigation and filtering (e.g., "Show Labelled Only").
+* **`project_navigator_panel.py`**: The **Left Sidebar** (Project Navigator). Refactored to use **Qt Model/View** (`QTreeView`) for high performance. It handles file navigation and filtering (e.g., "Show Labelled Only").
 * **`dialogs.py`**:
 * `ProjectTypeDialog`: Updated wizard allowing selection of **Classification**, **Localization**, **Description**, or **Dense Description**.
 * `FolderPickerDialog`: A custom file tree allowing multi-folder selection.

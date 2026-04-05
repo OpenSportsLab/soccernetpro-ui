@@ -23,7 +23,7 @@ from models import AppStateModel
 
 # [NEW] Direct UI Imports
 from ui.common.welcome_widget import WelcomeWidget
-from ui.common.clip_explorer import CommonProjectTreePanel
+from ui.common.project_navigator_panel import ProjectNavigatorPanel
 from ui.common.media_player import MediaCenterPanel
 from ui.classification.event_editor import ClassificationAnnotationPanel
 from ui.localization.event_editor import LocalizationAnnotationPanel
@@ -65,7 +65,7 @@ class VideoAnnotationWindow(QMainWindow):
         self.setCentralWidget(self.center_stack)
 
         # --- 2. Left Dock: Project Navigator ---
-        self.left_panel = CommonProjectTreePanel(
+        self.left_panel = ProjectNavigatorPanel(
             tree_title="Data",
             filter_items=["Show All", "Hand Labelled", "Smart Labelled", "No Labelled"],
             clear_text="Clear All",

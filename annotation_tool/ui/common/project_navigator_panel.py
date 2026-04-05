@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QModelIndex
 
 
 
-class CommonProjectTreePanel(QWidget):
+class ProjectNavigatorPanel(QWidget):
     """
     A unified Left Panel for both Classification and Localization.
     Refactored to follow Model/View architecture using QTreeView.
