@@ -1,11 +1,9 @@
 import os
 import copy
-from PyQt6.QtWidgets import QMessageBox, QFileDialog
-from PyQt6.QtCore import Qt, QTimer, QModelIndex
+from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
-from PyQt6.QtMultimedia import QMediaPlayer
 
-from utils import natural_sort_key
 from models import CmdType 
 from controllers.media_controller import MediaController
 
@@ -265,95 +263,6 @@ class DenseManager:
         self.main.update_save_export_button_state()
         self.right_panel.input_widget.set_text("") # Clear editor on delete
 
-    def populate_tree(self):
-        """Rebuilds the left project tree for Dense Description mode."""
-        self.left_panel.tree.blockSignals(True) 
-        self.tree_model.clear()
-        self.model.action_item_map.clear()
-        
-        sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get('name', '')))
-        
-        first_idx = None
-        for i, data in enumerate(sorted_list):
-            name = data['name']
-            path = data['path']
-            item = self.tree_model.add_entry(name, path, data.get('source_files'))
-            self.model.action_item_map[path] = item
-            
-            events = self.model.dense_description_events.get(path, [])
-            item.setIcon(self.main.done_icon if events else self.main.empty_icon)
-            
-            if i == 0:
-                first_idx = item.index()
-        
-        self._apply_clip_filter(self.left_panel.filter_combo.currentIndex())
-        
-        if first_idx and first_idx.isValid():
-            self.left_panel.tree.setCurrentIndex(first_idx)
-            self._on_clip_selected(first_idx, None)
-            
-        self.left_panel.tree.blockSignals(False)
-
-    def _apply_clip_filter(self, index):
-        """Filter the tree based on 'Show Annotated' vs 'Not Annotated'."""
-        root = self.tree_model.invisibleRootItem()
-        for i in range(root.rowCount()):
-            item = root.child(i)
-            path = item.data(Qt.ItemDataRole.UserRole)
-            has_anno = len(self.model.dense_description_events.get(path, [])) > 0
-            hide = (index == 1 and not has_anno) or (index == 2 and has_anno)
-            self.left_panel.tree.setRowHidden(i, QModelIndex(), hide)
-
-
-    def remove_single_item(self, index: QModelIndex):
-        """
-        [NEW] Handles the removal of a single video clip from the project.
-        """
-        if not index.isValid():
-            return
-
-        # 1. Get the file path
-        path = index.data(Qt.ItemDataRole.UserRole)
-        
-        # 2. Confirm deletion
-        reply = QMessageBox.question(
-            self.main, "Remove Video", 
-            f"Are you sure you want to remove this video and its annotations?\n\n{os.path.basename(path)}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-
-        # 3. If removing the currently playing video, stop and clear
-        if path == self.current_video_path:
-            self.media_controller.stop()
-            self.current_video_path = None
-            self.right_panel.table.set_data([])
-            self.center_panel.timeline.set_markers([])
-            self.right_panel.input_widget.set_text("")
-
-        # 4. Remove from Data Model (AppState)
-        # Remove from action_item_data list
-        self.model.action_item_data = [
-            item for item in self.model.action_item_data 
-            if item['path'] != path
-        ]
-        
-        # Remove from path mapping
-        if path in self.model.action_item_map:
-            del self.model.action_item_map[path]
-            
-        # Remove associated dense events
-        if path in self.model.dense_description_events:
-            del self.model.dense_description_events[path]
-
-        # 5. Remove from Tree View Model
-        self.tree_model.removeRow(index.row())
-        
-        # 6. Mark project as dirty
-        self.model.is_data_dirty = True
-        self.main.show_temp_msg("Removed", "Video removed from project.")
-
     def _navigate_clip(self, step):
         tree = self.left_panel.tree
         curr = tree.currentIndex()
@@ -388,60 +297,6 @@ class DenseManager:
             if item and abs(item.get('position_ms', 0) - time_ms) < 20:
                 self.right_panel.table.table.selectRow(row)
                 break
-
-    def _on_add_video_clicked(self):
-        """Handles adding videos to the current project."""
-        start_dir = self.model.current_working_directory or ""
-        files, _ = QFileDialog.getOpenFileNames(self.main, "Select Video(s)", start_dir, "Video (*.mp4 *.avi *.mov *.mkv)")
-        if not files: return
-        
-        if not self.model.current_working_directory:
-            self.model.current_working_directory = os.path.dirname(files[0])
-        
-        added_count = 0
-        first_new_item_idx = None 
-
-        for file_path in files:
-            if any(d['path'] == file_path for d in self.model.action_item_data):
-                continue
-            
-            name = os.path.basename(file_path)
-            self.model.action_item_data.append({'name': name, 'path': file_path, 'source_files': [file_path]})
-            self.model.action_path_to_name[file_path] = name
-            
-            item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
-            self.model.action_item_map[file_path] = item
-            
-            if added_count == 0:
-                first_new_item_idx = item.index()
-            added_count += 1
-
-        if added_count > 0:
-            self.model.is_data_dirty = True
-            self.main.show_temp_msg("Videos Added", f"Added {added_count} clips.")
-            
-            if first_new_item_idx and first_new_item_idx.isValid():
-                self.left_panel.tree.setCurrentIndex(first_new_item_idx)
-                self._on_clip_selected(first_new_item_idx, None)
-
-    def _on_clear_all_clicked(self):
-        """Resets the workspace."""
-        if not self.model.action_item_data: return
-        res = QMessageBox.question(self.main, "Clear All", "Are you sure you want to clear the workspace? Unsaved changes will be lost.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if res != QMessageBox.StandardButton.Yes: return
-        
-        self.media_controller.stop()
-        self.model.reset(full_reset=True)
-        
-        self.current_video_path = None
-        self.tree_model.clear()
-        self.right_panel.table.set_data([])
-        self.center_panel.timeline.set_markers([])
-        self.right_panel.input_widget.set_text("")
-        
-        self.main.show_welcome_view()
-        self.main.show_temp_msg("Cleared", "Workspace reset.")
-        self.main.update_save_export_button_state()
 
     def _fmt_ms_full(self, ms):
         s = ms // 1000
