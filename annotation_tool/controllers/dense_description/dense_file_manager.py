@@ -49,7 +49,7 @@ class DenseFileManager:
 
         # 4. Refresh UI
         self.main.dense_manager.populate_tree()
-        self.main.ui.show_dense_description_view()
+        self.main.show_dense_description_view()
         self.main.update_save_export_button_state()
         
         if hasattr(self.main, "prepare_new_dense_ui"):

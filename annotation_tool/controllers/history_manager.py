@@ -12,7 +12,6 @@ class HistoryManager:
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
-        self.ui = main_window.ui
         self._is_undoing_redoing = False
 
     def perform_undo(self):
@@ -40,7 +39,7 @@ class HistoryManager:
         self._is_undoing_redoing = False
 
         # Use the right_tabs index to determine the mode
-        tab_idx = self.main.ui.workspace.right_tabs.currentIndex()
+        tab_idx = self.main.right_tabs.currentIndex()
         
         # 0: Classification Mode
         if tab_idx == 0:
@@ -61,7 +60,7 @@ class HistoryManager:
         # 2: Description Mode
         elif tab_idx == 2:
             # Refresh the editor text by re-triggering selection logic
-            tree = self.main.ui.workspace.left_panel.tree
+            tree = self.main.left_panel.tree
             current_idx = tree.selectionModel().currentIndex()
             if current_idx.isValid():
                 # Force reload of data from model to UI (pass None as previous index)
@@ -141,7 +140,7 @@ class HistoryManager:
             path = cmd['path']
             if self.main.get_current_action_path() == path:
                 val = cmd['old_val'] if is_undo else cmd['new_val']
-                grp = self.main.ui.workspace.classification_editor.label_groups.get(cmd['head'])
+                grp = self.main.classification_editor.label_groups.get(cmd['head'])
                 if grp:
                     if isinstance(grp, DynamicSingleLabelGroup): grp.set_checked_label(val)
                     else: grp.set_checked_labels(val)

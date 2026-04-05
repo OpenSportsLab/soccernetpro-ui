@@ -15,7 +15,6 @@ class NavigationManager:
     def __init__(self, main_window, media_controller: MediaController):
         self.main = main_window
         self.model = main_window.model
-        self.ui = main_window.ui
         self.media_controller = media_controller
 
     def add_items_via_dialog(self):
@@ -126,14 +125,14 @@ class NavigationManager:
 
         # Update Right Panel (Annotations)
         self.main.annot_manager.display_manual_annotation(path)
-        self.ui.workspace.classification_editor.manual_box.setEnabled(True)
+        self.main.classification_editor.manual_box.setEnabled(True)
         
         # [CHANGED] Use MediaController for robust loading logic
         # This replaces the manual stop/load/timer sequence.
         self.media_controller.load_and_play(path)
         
         # [UI FIX] Ensure we are in Single View mode (in case we were in Multi-View)
-        center_panel = self.ui.workspace.center_panel
+        center_panel = self.main.center_panel
         if hasattr(center_panel, 'view_layout'):
              center_panel.view_layout.setCurrentWidget(center_panel.single_view_widget)
 
@@ -144,7 +143,7 @@ class NavigationManager:
 
     def show_all_views(self):
         # [MV] Handle Multi-View
-        tree_view = self.ui.workspace.left_panel.tree
+        tree_view = self.main.left_panel.tree
         curr_idx = tree_view.currentIndex()
         if not curr_idx.isValid(): return
         
@@ -157,7 +156,7 @@ class NavigationManager:
             child_idx = model.index(i, 0, curr_idx)
             paths.append(child_idx.data(ProjectTreeModel.FilePathRole))
             
-        self.ui.workspace.center_panel.media_preview.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
+        self.main.center_panel.media_preview.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
 
     def apply_action_filter(self, index=None):
         """
@@ -167,8 +166,8 @@ class NavigationManager:
         2: Smart Labelled (Has confirmed smart annotation)
         3: No Labelled (Neither hand nor smart confirmed)
         """
-        tree = self.ui.workspace.left_panel.tree
-        combo = self.ui.workspace.left_panel.filter_combo
+        tree = self.main.left_panel.tree
+        combo = self.main.left_panel.filter_combo
         
         # Use the passed index from the signal, or the current combo box index
         filter_idx = combo.currentIndex() if index is None else index
@@ -215,7 +214,7 @@ class NavigationManager:
     def nav_next_clip(self): self._nav_tree(step=1, level='child')
     
     def _nav_tree(self, step, level):
-        tree = self.ui.workspace.left_panel.tree
+        tree = self.main.left_panel.tree
         curr = tree.currentIndex()
         if not curr.isValid(): return
         

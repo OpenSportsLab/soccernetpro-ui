@@ -7,12 +7,11 @@ class AnnotationManager:
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
-        self.ui = main_window.ui
 
     def reset_ui(self):
         """Reset the classification editor UI for a new project."""
-        self.ui.workspace.classification_editor.clear_dynamic_labels()
-        self.ui.workspace.classification_editor.manual_box.setEnabled(False)
+        self.main.classification_editor.clear_dynamic_labels()
+        self.main.classification_editor.manual_box.setEnabled(False)
 
     def confirm_smart_annotation_as_manual(self):
         """
@@ -21,7 +20,7 @@ class AnnotationManager:
         """
         import copy
         from models.app_state import CmdType # Ensure CmdType is available
-        right_panel = self.ui.workspace.classification_editor
+        right_panel = self.main.classification_editor
         
         # Check if we are confirming a batch or a single inference
         if right_panel.is_batch_mode_active:
@@ -115,7 +114,7 @@ class AnnotationManager:
         self.main.nav_manager.apply_action_filter()
         
         # Auto-advance to the next video clip
-        tree = self.ui.workspace.left_panel.tree
+        tree = self.main.left_panel.tree
         curr_idx = tree.currentIndex()
         if curr_idx.isValid():
             nxt_idx = tree.indexBelow(curr_idx)
@@ -136,7 +135,7 @@ class AnnotationManager:
         if override_data is not None:
             raw = override_data
         else:
-            raw = self.ui.workspace.classification_editor.get_annotation()
+            raw = self.main.classification_editor.get_annotation()
             
         cleaned = {k: v for k, v in raw.items() if v}
         if not cleaned: cleaned = None
@@ -156,7 +155,7 @@ class AnnotationManager:
         self.main.nav_manager.apply_action_filter()
         
         # [MV Fix] Auto-advance using QTreeView API
-        tree = self.ui.workspace.left_panel.tree
+        tree = self.main.left_panel.tree
         curr_idx = tree.currentIndex()
         if curr_idx.isValid():
             # Try to get index below
@@ -175,7 +174,7 @@ class AnnotationManager:
             self.main.update_action_item_status(path)
             self.main.update_save_export_button_state()
             self.main.show_temp_msg("Cleared", "Selection cleared.")
-        self.ui.workspace.classification_editor.clear_selection()
+        self.main.classification_editor.clear_selection()
 
     def clear_current_smart_annotation(self):
         """[NEW] Clear the smart annotation for the current video, with Undo support."""
@@ -201,24 +200,24 @@ class AnnotationManager:
             self.main.update_save_export_button_state()
             
         # Visually hide the donut chart and text without affecting the Hand Annotation UI
-        self.ui.workspace.classification_editor.chart_widget.setVisible(False)
-        self.ui.workspace.classification_editor.batch_result_text.setVisible(False)
+        self.main.classification_editor.chart_widget.setVisible(False)
+        self.main.classification_editor.batch_result_text.setVisible(False)
 
     def display_manual_annotation(self, path):
         # 1. Restore manual annotation (This will reset the UI and hide the chart by default)
         data = self.model.manual_annotations.get(path, {})
-        self.ui.workspace.classification_editor.set_annotation(data)
+        self.main.classification_editor.set_annotation(data)
 
         # 2. [NEW] Re-display the Smart Annotation Donut Chart if data exists
         smart_data = self.model.smart_annotations.get(path, {})
         if smart_data:
             # We display the chart for the first available head (typically 'action')
             for head, s_data in smart_data.items():
-                self.ui.workspace.classification_editor.chart_widget.update_chart(
+                self.main.classification_editor.chart_widget.update_chart(
                     s_data["label"], 
                     s_data.get("conf_dict", {})
                 )
-                self.ui.workspace.classification_editor.chart_widget.setVisible(True)
+                self.main.classification_editor.chart_widget.setVisible(True)
                 break
 
     def handle_ui_selection_change(self, head, new_val):
@@ -255,7 +254,7 @@ class AnnotationManager:
         defn = {"type": type_str, "labels": []}
         self.model.push_undo(CmdType.SCHEMA_ADD_CAT, head=clean, definition=defn)
         self.model.label_definitions[clean] = defn
-        self.ui.workspace.classification_editor.new_head_edit.clear()
+        self.main.classification_editor.new_head_edit.clear()
         self.main.setup_dynamic_ui()
 
     def handle_remove_label_head(self, head):
@@ -278,7 +277,7 @@ class AnnotationManager:
         self.display_manual_annotation(self.main.get_current_action_path())
 
     def add_custom_type(self, head):
-        group = self.main.ui.workspace.classification_editor.label_groups.get(head)
+        group = self.main.classification_editor.label_groups.get(head)
         txt = group.input_field.text().strip()
         if not txt: return
         
@@ -314,7 +313,7 @@ class AnnotationManager:
             elif defn['type'] == 'multi_label' and lbl in val.get(head, []): val[head].remove(lbl)
             
         from ui.classification.event_editor import DynamicSingleLabelGroup
-        group = self.ui.workspace.classification_editor.label_groups.get(head)
+        group = self.main.classification_editor.label_groups.get(head)
         if isinstance(group, DynamicSingleLabelGroup): group.update_radios(defn['labels'])
         else: group.update_checkboxes(defn['labels'])
         self.display_manual_annotation(self.main.get_current_action_path())

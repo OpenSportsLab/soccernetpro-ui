@@ -15,7 +15,6 @@ class DescNavigationManager:
     """
     def __init__(self, main_window, media_controller: MediaController):
         self.main = main_window
-        self.ui = main_window.ui
         self.model = main_window.model
         self.media_controller = media_controller
         
@@ -24,13 +23,13 @@ class DescNavigationManager:
 
     def reset_ui(self):
         """Reset the description editor UI for a new project."""
-        self.ui.workspace.description_editor.caption_edit.setPlainText("")
-        self.ui.workspace.description_editor.setEnabled(False)
+        self.main.description_editor.caption_edit.setPlainText("")
+        self.main.description_editor.setEnabled(False)
 
     def setup_connections(self):
         """Called by viewer.py to wire up signals."""
         # Tree Selection
-        tree = self.ui.workspace.left_panel.tree
+        tree = self.main.left_panel.tree
         tree.selectionModel().currentChanged.connect(self.on_item_selected)
 
         # [UPDATED] Unified Center Panel Controls are now handled centrally in viewer.py
@@ -129,14 +128,14 @@ class DescNavigationManager:
             # [CRITICAL FIX] Auto-select and play the first added video
             # This triggers on_item_selected -> media_controller.load_and_play
             if first_new_idx and first_new_idx.isValid():
-                tree = self.ui.workspace.left_panel.tree
+                tree = self.main.left_panel.tree
                 tree.setCurrentIndex(first_new_idx)
                 tree.setFocus() # Ensure keyboard shortcuts work immediately
 
     def apply_action_filter(self):
         """Filters the tree items based on Done/Not Done status."""
-        idx = self.ui.workspace.left_panel.filter_combo.currentIndex()
-        tree_view = self.ui.workspace.left_panel.tree
+        idx = self.main.left_panel.filter_combo.currentIndex()
+        tree_view = self.main.left_panel.tree
         model = self.main.tree_model
         
         FILTER_DONE = self.main.FILTER_DONE
@@ -181,7 +180,7 @@ class DescNavigationManager:
     def nav_next_clip(self): self._nav_tree(step=1, level='child')
 
     def _nav_tree(self, step, level):
-        tree = self.ui.workspace.left_panel.tree
+        tree = self.main.left_panel.tree
         curr = tree.currentIndex()
         if not curr.isValid(): return
         

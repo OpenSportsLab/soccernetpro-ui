@@ -21,15 +21,13 @@ class LocalizationManager:
         self.model = main_window.model
         self.tree_model = main_window.tree_model 
         
-        self.ui_root = main_window.ui.workspace
-        self.left_panel = self.ui_root.left_panel
-        self.center_panel = self.ui_root.center_panel
-        self.right_panel = self.ui_root.localization_editor
+        self.left_panel = main_window.left_panel
+        self.center_panel = main_window.center_panel
+        self.right_panel = main_window.localization_editor
 
         self.inference_manager = LocalizationInferenceManager(self.main)
         self.inference_manager.inference_finished.connect(self._on_inference_success)
         self.inference_manager.inference_error.connect(self._on_inference_error)
-        self.ui = main_window.ui
         self.media_controller = media_controller
 
     def reset_ui(self):

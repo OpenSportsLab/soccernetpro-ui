@@ -13,7 +13,6 @@ class DescFileManager:
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
-        self.ui = main_window.ui
 
     def create_new_project(self):
         """Create a blank Description project."""
@@ -40,7 +39,7 @@ class DescFileManager:
         self.model.current_working_directory = None
 
         self.main.setup_dynamic_ui() 
-        self.main.ui.show_description_view()
+        self.main.show_description_view()
         self.main.update_save_export_button_state()
         
         if hasattr(self.main, "prepare_new_desc_ui"):
@@ -269,6 +268,6 @@ class DescFileManager:
             self.model.desc_global_metadata = {}
         
         # Clear Description UI elements
-        if hasattr(self.main.ui.workspace, "description_editor"):
-             self.main.ui.workspace.description_editor.caption_edit.clear()
-             self.main.ui.workspace.description_editor.caption_edit.setEnabled(False)
+        if hasattr(self.main, "description_editor"):
+             self.main.description_editor.caption_edit.clear()
+             self.main.description_editor.caption_edit.setEnabled(False)

@@ -3,7 +3,9 @@ import os
 from PyQt6.QtCore import Qt, QTimer, QModelIndex, QUrl
 from PyQt6.QtGui import QColor, QIcon, QKeySequence, QShortcut, QStandardItem
 from PyQt6.QtMultimedia import QMediaPlayer
-from PyQt6.QtWidgets import QMainWindow, QMessageBox, QSizePolicy
+from PyQt6.QtWidgets import (
+    QMainWindow, QMessageBox, QSizePolicy, QStackedWidget, QDockWidget, QTabWidget, QWidget, QVBoxLayout
+)
 
 from controllers.classification.class_annotation_manager import AnnotationManager
 from controllers.classification.class_navigation_manager import NavigationManager
@@ -19,12 +21,23 @@ from controllers.media_controller import MediaController
 from controllers.router import AppRouter
 from models import AppStateModel
 
-from ui.common.main_window import MainWindowUI
+# [NEW] Direct UI Imports
+from ui.common.welcome_widget import WelcomeWidget
+from ui.common.clip_explorer import CommonProjectTreePanel
+from ui.localization.media_player import LocCenterPanel
+from ui.classification.event_editor import ClassificationEventEditor
+from ui.localization.event_editor import LocRightPanel
+from ui.description.event_editor import DescriptionEventEditor
+from ui.dense_description.event_editor import DenseRightPanel
+
 from models.project_tree import ProjectTreeModel
 from utils import create_checkmark_icon, natural_sort_key, resource_path
 
 class VideoAnnotationWindow(QMainWindow):
-    """Main application window for annotation + localization + description + dense workflows."""
+    """
+    Main application window for annotation + localization + description + dense workflows.
+    Now directly implements the UI setup to avoid overcomplicated nesting.
+    """
 
     FILTER_ALL = 0
     FILTER_DONE = 1
@@ -34,25 +47,65 @@ class VideoAnnotationWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("Video Annotation Tool")
-        # self.setGeometry(100, 100, 600, 400)
+        self.resize(1200, 800)
 
-        # --- MVC wiring ---
-        self.ui = MainWindowUI()
-        self.setCentralWidget(self.ui)
+        # --- Model wiring ---
         self.model = AppStateModel()
-
-        # Instantiate the Project Tree Model
         self.tree_model = ProjectTreeModel(self)
+
+        # --- 1. Center Area: Stacked Widget (Welcome vs Media Player) ---
+        self.center_stack = QStackedWidget()
         
-        # Bind the model to the single Unified Tree
-        self.ui.workspace.left_panel.tree.setModel(self.tree_model)
+        self.welcome_widget = WelcomeWidget()
+        self.center_stack.addWidget(self.welcome_widget)
+        
+        self.center_panel = LocCenterPanel()
+        self.center_stack.addWidget(self.center_panel)
+        
+        self.setCentralWidget(self.center_stack)
+
+        # --- 2. Left Dock: Project Navigator ---
+        self.left_panel = CommonProjectTreePanel(
+            tree_title="Data",
+            filter_items=["Show All", "Hand Labelled", "Smart Labelled", "No Labelled"],
+            clear_text="Clear All",
+            enable_context_menu=True
+        )
+        self.left_panel.tree.setModel(self.tree_model)
+        
+        self.data_dock = QDockWidget("Project Navigator", self)
+        self.data_dock.setObjectName("DataNavigatorDock")
+        self.data_dock.setWidget(self.left_panel)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.data_dock)
+
+        # --- 3. Right Dock: Annotation Editors ---
+        self.right_tabs = QTabWidget()
+        self.right_tabs.setDocumentMode(True)
+        
+        self.classification_editor = ClassificationEventEditor()
+        self.localization_editor = LocRightPanel()
+        self.description_editor = DescriptionEventEditor()
+        self.dense_editor = DenseRightPanel()
+        
+        self.right_tabs.addTab(self.classification_editor, "CLS")
+        self.right_tabs.addTab(self.localization_editor, "LOC")
+        self.right_tabs.addTab(self.description_editor, "DESC")
+        self.right_tabs.addTab(self.dense_editor, "DENSE")
+        
+        self.editor_dock = QDockWidget("Annotation Editor", self)
+        self.editor_dock.setObjectName("AnnotationEditorDock")
+        self.editor_dock.setWidget(self.right_tabs)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.editor_dock)
+
+        # Allow nested docking and tabbed docks
+        self.setDockOptions(QMainWindow.DockOption.AllowNestedDocks | QMainWindow.DockOption.AnimatedDocks)
 
         # --- Controllers ---
         self.router = AppRouter(self)
         self.history_manager = HistoryManager(self)
         
         # [CENTRALIZED] Create the ONE and ONLY Media Controller here
-        preview_panel = self.ui.workspace.center_panel.media_preview
+        preview_panel = self.center_panel.media_preview
         self.media_controller = MediaController(preview_panel.player, preview_panel.video_widget)
         
         self.annot_manager = AnnotationManager(self)
@@ -77,20 +130,41 @@ class VideoAnnotationWindow(QMainWindow):
         self.connect_signals()
         self.load_stylesheet()
         
-        # Default state: editors are disabled until project loads
-        self.ui.workspace.classification_editor.manual_box.setEnabled(False)
-        self.ui.workspace.localization_editor.setEnabled(False)
-        self.ui.workspace.description_editor.setEnabled(False)
-        self.ui.workspace.dense_editor.setEnabled(False)
-        
         self.setup_dynamic_ui()
         self._setup_menu_bar()
         self._setup_shortcuts()
 
-        self.ui.stack_layout.currentChanged.connect(self._adjust_window_size)
         # Start at welcome screen
-        self.ui.show_welcome_view()
-        self._adjust_window_size(0)
+        self.show_welcome_view()
+
+    # ---------------------------------------------------------------------
+    # View Switching Helpers (merged from MainWindowUI)
+    # ---------------------------------------------------------------------
+    def show_welcome_view(self):
+        """Switch to the Welcome Screen (Index 0 in central stack)."""
+        self.center_stack.setCurrentIndex(0)
+        self.set_project_ui_enabled(False)
+
+    def show_workspace(self):
+        """Switch to the Media Player (Index 1 in central stack)."""
+        self.center_stack.setCurrentIndex(1)
+        self.set_project_ui_enabled(True)
+
+    def show_classification_view(self):
+        self.show_workspace()
+        self.right_tabs.setCurrentIndex(0)
+
+    def show_localization_view(self):
+        self.show_workspace()
+        self.right_tabs.setCurrentIndex(1)
+
+    def show_description_view(self):
+        self.show_workspace()
+        self.right_tabs.setCurrentIndex(2)
+
+    def show_dense_description_view(self):
+        self.show_workspace()
+        self.right_tabs.setCurrentIndex(3)
 
     # ---------------------------------------------------------------------
     # Global Media Control
@@ -100,7 +174,7 @@ class VideoAnnotationWindow(QMainWindow):
         self.media_controller.stop()
 
     def reset_all_managers(self):
-        """ Clears all mode-specific UIs to prevent 'ghost' data when switching projects. """
+        """ Clears all mode-specific UIs and returns to Welcome screen. """
         self.annot_manager.reset_ui()
         self.loc_manager.reset_ui()
         self.desc_nav_manager.reset_ui()
@@ -112,49 +186,34 @@ class VideoAnnotationWindow(QMainWindow):
         self.main_window_title = "Action Classifier"
         self.setWindowTitle("Action Classifier")
 
-    def _adjust_window_size(self, index: int) -> None:
-        """ Dynamically exchange the size of windows """
-        for i in range(self.ui.stack_layout.count()):
-            widget = self.ui.stack_layout.widget(i)
-            if not widget: continue
-            
-            if i == index:
-                widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            else:
-                widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        # Return to Welcome
+        self.show_welcome_view()
 
-        self.ui.updateGeometry()
+    def set_project_ui_enabled(self, enabled: bool):
+        """Enables/Disables all project-related docks and editors."""
+        self.data_dock.setEnabled(enabled)
+        self.editor_dock.setEnabled(enabled)
+        
+        # Also explicitly disable the sub-editors to be safe
+        self.classification_editor.manual_box.setEnabled(enabled)
+        self.localization_editor.setEnabled(enabled)
+        self.description_editor.setEnabled(enabled)
+        self.dense_editor.setEnabled(enabled)
 
-        if index == 0:
-            if self.isMaximized(): self.showNormal()
-            self.setMinimumSize(0, 0) 
-            self.resize(600, 400)     
-        else:
-            self.setMinimumSize(600, 400)  
-            self.resize(1200, 800)         
+    # Welcome screen
+    def _safe_import_annotations(self): self.router.import_annotations()
+    def _safe_create_project(self): self.router.create_new_project_flow()
 
-    def _safe_import_annotations(self):
-        self.stop_all_players()
-        self.router.import_annotations()
-
-    def _safe_create_project(self):
-        self.stop_all_players()
-        self.router.create_new_project_flow()
-
-    # ---------------------------------------------------------------------
-    # Wiring
-    # ---------------------------------------------------------------------
     def connect_signals(self) -> None:
         """Connect UI signals to controller actions."""
 
         # Welcome screen
-        self.ui.welcome_widget.import_btn.clicked.connect(self._safe_import_annotations)
-        self.ui.welcome_widget.create_btn.clicked.connect(self._safe_create_project)
+        self.welcome_widget.import_btn.clicked.connect(self._safe_import_annotations)
+        self.welcome_widget.create_btn.clicked.connect(self._safe_create_project)
 
         # --- COMPONENT REFS ---
-        workspace = self.ui.workspace
-        left_panel = workspace.left_panel
-        center_panel = workspace.center_panel
+        left_panel = self.left_panel
+        center_panel = self.center_panel
         
         # --- Left panel (Unified) ---
         left_panel.addVideoRequested.connect(self._dispatch_add_video)
@@ -173,26 +232,22 @@ class VideoAnnotationWindow(QMainWindow):
         center_panel.playback.nextPrevClipRequested.connect(self._dispatch_next_prev_clip)
         center_panel.playback.nextPrevAnnotRequested.connect(self._dispatch_next_prev_annot)
         
-        # Use LocManager/MediaController etc. via dispatchers
         # --- Timeline ---
         center_panel.media_preview.durationChanged.connect(center_panel.timeline.set_duration)
         center_panel.media_preview.positionChanged.connect(center_panel.timeline.set_position)
         center_panel.timeline.seekRequested.connect(center_panel.media_preview.set_position)
         
         # --- Classification Editor ---
-        workspace.classification_editor.annotation_saved.connect(lambda data: self.annot_manager.save_manual_annotation())
-        workspace.classification_editor.smart_confirm_requested.connect(self.annot_manager.confirm_smart_annotation_as_manual)
-        workspace.classification_editor.hand_clear_requested.connect(self.annot_manager.clear_current_manual_annotation)
-        workspace.classification_editor.smart_clear_requested.connect(self.annot_manager.clear_current_smart_annotation)
-        workspace.classification_editor.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
-        workspace.classification_editor.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
-        workspace.classification_editor.smart_infer_requested.connect(self.inference_manager.start_inference)
-        workspace.classification_editor.confirm_infer_requested.connect(lambda res: self.annot_manager.save_manual_annotation())
+        self.classification_editor.annotation_saved.connect(lambda data: self.annot_manager.save_manual_annotation())
+        self.classification_editor.smart_confirm_requested.connect(self.annot_manager.confirm_smart_annotation_as_manual)
+        self.classification_editor.hand_clear_requested.connect(self.annot_manager.clear_current_manual_annotation)
+        self.classification_editor.smart_clear_requested.connect(self.annot_manager.clear_current_smart_annotation)
+        self.classification_editor.add_head_clicked.connect(self.annot_manager.handle_add_label_head)
+        self.classification_editor.remove_head_clicked.connect(self.annot_manager.handle_remove_label_head)
+        self.classification_editor.smart_infer_requested.connect(self.inference_manager.start_inference)
+        self.classification_editor.confirm_infer_requested.connect(lambda res: self.annot_manager.save_manual_annotation())
 
         # --- Localization Editor ---
-        # Localization manager sets up its own internal connections to self.ui...
-        # We need to make sure he uses the correct paths now. 
-        # (I will check loc_manager.setup_connections later)
         self.loc_manager.setup_connections()
 
         # --- Description Editor ---
@@ -276,7 +331,7 @@ class VideoAnnotationWindow(QMainWindow):
     # Mode-aware dispatchers
     # ---------------------------------------------------------------------
     def _get_active_mode_index(self) -> int:
-        return self.ui.workspace.right_tabs.currentIndex()
+        return self.right_tabs.currentIndex()
 
     def _is_cls_mode(self) -> bool: return self._get_active_mode_index() == 0
     def _is_loc_mode(self) -> bool: return self._get_active_mode_index() == 1
@@ -303,10 +358,10 @@ class VideoAnnotationWindow(QMainWindow):
     def _on_tree_selection_changed(self, current: QModelIndex, previous: QModelIndex):
         if current.isValid():
             # [CENTRALIZED] Enable all editors now that a clip is selected
-            self.ui.workspace.classification_editor.manual_box.setEnabled(True)
-            self.ui.workspace.localization_editor.setEnabled(True)
-            self.ui.workspace.description_editor.setEnabled(True)
-            self.ui.workspace.dense_editor.setEnabled(True)
+            self.classification_editor.manual_box.setEnabled(True)
+            self.localization_editor.setEnabled(True)
+            self.description_editor.setEnabled(True)
+            self.dense_editor.setEnabled(True)
             
             # 1. Handle Branch (Parent) vs Leaf (Video)
             # If the user clicks a parent (e.g. Action Name), auto-select its first child (the video)
@@ -314,7 +369,7 @@ class VideoAnnotationWindow(QMainWindow):
                 first_child = self.tree_model.index(0, 0, current)
                 if first_child.isValid():
                     # This will trigger selectionChanged again for the child
-                    self.ui.workspace.left_panel.tree.setCurrentIndex(first_child)
+                    self.left_panel.tree.setCurrentIndex(first_child)
                     return
 
             # 2. Mode-aware Dispatching (Avoid duplicate loading)
@@ -328,10 +383,10 @@ class VideoAnnotationWindow(QMainWindow):
                 self.nav_manager.on_item_selected(current, previous)
         else:
             # Disable editors if no clip is selected
-            self.ui.workspace.classification_editor.manual_box.setEnabled(False)
-            self.ui.workspace.localization_editor.setEnabled(False)
-            self.ui.workspace.description_editor.setEnabled(False)
-            self.ui.workspace.dense_editor.setEnabled(False)
+            self.classification_editor.manual_box.setEnabled(False)
+            self.localization_editor.setEnabled(False)
+            self.description_editor.setEnabled(False)
+            self.dense_editor.setEnabled(False)
 
     def _on_remove_item_requested(self, index: QModelIndex):
         if self._is_dense_mode(): self.dense_manager.remove_single_item(index)
@@ -356,9 +411,8 @@ class VideoAnnotationWindow(QMainWindow):
         self.nav_manager.media_controller.toggle_play_pause()
 
     def _dispatch_seek(self, delta_ms: int) -> None:
-        player = self.ui.workspace.center_panel.media_preview.player
-        if player:
-            player.setPosition(max(0, player.position() + delta_ms))
+        # Use our unified media_controller for seeking if available
+        self.nav_manager.media_controller.seek_relative(delta_ms)
 
     def _dispatch_next_prev_clip(self, step: int):
         if self._is_loc_mode(): self.loc_manager._navigate_clip(step)
@@ -407,20 +461,20 @@ class VideoAnnotationWindow(QMainWindow):
             self.router.desc_fm._clear_workspace(full_reset=True)
 
     def prepare_new_project_ui(self) -> None:
-        self.ui.workspace.classification_editor.manual_box.setEnabled(True)
-        self.ui.workspace.classification_editor.task_label.setText(f"Task: {self.model.current_task_name}")
+        self.set_project_ui_enabled(True)
+        self.classification_editor.task_label.setText(f"Task: {self.model.current_task_name}")
         self.show_temp_msg("New Project Created", "Classification ready.")
 
     def prepare_new_localization_ui(self) -> None:
-        self.ui.workspace.localization_editor.setEnabled(True)
+        self.set_project_ui_enabled(True)
         self.show_temp_msg("New Project Created", "Localization ready.")
 
     def prepare_new_description_ui(self) -> None:
-        self.ui.workspace.description_editor.setEnabled(True)
+        self.set_project_ui_enabled(True)
         self.show_temp_msg("New Project Created", "Description ready.")
     
     def prepare_new_dense_ui(self) -> None:
-        self.ui.workspace.dense_editor.setEnabled(True)
+        self.set_project_ui_enabled(True)
         self.show_temp_msg("New Project Created", "Dense Description ready.")
 
     def load_stylesheet(self) -> None:
@@ -477,14 +531,14 @@ class VideoAnnotationWindow(QMainWindow):
         self.statusBar().showMessage(f"{title} — {one_line}" if title else one_line, duration)
 
     def get_current_action_path(self):
-        tree_view = self.ui.workspace.left_panel.tree
+        tree_view = self.left_panel.tree
         idx = tree_view.selectionModel().currentIndex()
         if not idx.isValid(): return None
         if idx.parent().isValid(): return idx.parent().data(ProjectTreeModel.FilePathRole)
         return idx.data(ProjectTreeModel.FilePathRole)
 
     def sync_batch_inference_dropdowns(self) -> None:
-        ed = self.ui.workspace.classification_editor
+        ed = self.classification_editor
         if not hasattr(ed, 'update_action_list'): return
         sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", "")))
         action_names = [d["name"] for d in sorted_list]
@@ -499,8 +553,8 @@ class VideoAnnotationWindow(QMainWindow):
             item = self.tree_model.add_entry(name=data["name"], path=data["path"], source_files=data.get("source_files"))
             self.model.action_item_map[data["path"]] = item
             self.update_action_item_status(data["path"])
-        self._dispatch_filter_change(self.ui.workspace.left_panel.filter_combo.currentIndex())
-        tree = self.ui.workspace.left_panel.tree
+        self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
+        tree = self.left_panel.tree
         if self.tree_model.rowCount() > 0:
             first_index = self.tree_model.index(0, 0)
             if first_index.isValid(): tree.setCurrentIndex(first_index)
@@ -521,13 +575,13 @@ class VideoAnnotationWindow(QMainWindow):
         item.setIcon(self.done_icon if is_done else self.empty_icon)
 
     def setup_dynamic_ui(self) -> None:
-        ed = self.ui.workspace.classification_editor
+        ed = self.classification_editor
         ed.setup_dynamic_labels(self.model.label_definitions)
         ed.task_label.setText(f"Task: {self.model.current_task_name}")
         self._connect_dynamic_type_buttons()
 
     def _connect_dynamic_type_buttons(self) -> None:
-        ed = self.ui.workspace.classification_editor
+        ed = self.classification_editor
         for head, group in ed.label_groups.items():
             try: group.add_btn.clicked.disconnect()
             except: pass
@@ -537,15 +591,15 @@ class VideoAnnotationWindow(QMainWindow):
 
     def refresh_ui_after_undo_redo(self, action_path: str) -> None:
         if not action_path:
-            self._dispatch_filter_change(self.ui.workspace.left_panel.filter_combo.currentIndex())
+            self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
             self.update_save_export_button_state()
             return
         self.update_action_item_status(action_path)
-        self._dispatch_filter_change(self.ui.workspace.left_panel.filter_combo.currentIndex())
+        self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
         item = self.model.action_item_map.get(action_path)
         if item:
             idx = item.index()
-            self.ui.workspace.left_panel.tree.setCurrentIndex(idx)
+            self.left_panel.tree.setCurrentIndex(idx)
         if self._is_loc_mode(): self.loc_manager._display_events_for_item(action_path)
         elif self._is_desc_mode(): self.desc_nav_manager.on_item_selected(item.index(), None)
         elif self._is_dense_mode(): self.dense_manager._display_events_for_item(action_path)

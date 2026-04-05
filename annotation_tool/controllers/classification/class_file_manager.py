@@ -8,7 +8,6 @@ class ClassFileManager:
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
-        self.ui = main_window.ui
 
     def load_project(self, data, file_path):
         """
@@ -288,7 +287,7 @@ class ClassFileManager:
         # 4. Refresh UI and switch view
         self.main.setup_dynamic_ui()
         self.main.update_save_export_button_state()
-        self.ui.show_classification_view()
+        self.main.show_classification_view()
         
         # 5. [IMPORTANT] Explicitly unlock the UI for editing
         self.main.prepare_new_project_ui()
@@ -301,15 +300,15 @@ class ClassFileManager:
         self.main.update_save_export_button_state()
         
         # --- UI Resets ---
-        self.ui.workspace.classification_editor.manual_box.setEnabled(False)
-        self.ui.workspace.center_panel.media_preview.load_video(None)
+        self.main.classification_editor.manual_box.setEnabled(False)
+        self.main.center_panel.media_preview.load_video(None)
         
         # [NEW] Explicitly reset the Smart Annotation UI (hide donut chart & batch results)
-        if hasattr(self.ui.workspace.classification_editor, 'reset_smart_inference'):
-            self.ui.workspace.classification_editor.reset_smart_inference()
+        if hasattr(self.main.classification_editor, 'reset_smart_inference'):
+            self.main.classification_editor.reset_smart_inference()
             
-        if hasattr(self.ui.workspace.classification_editor, 'reset_train_ui'):
-            self.ui.workspace.classification_editor.reset_train_ui()
+        if hasattr(self.main.classification_editor, 'reset_train_ui'):
+            self.main.classification_editor.reset_train_ui()
         if full_reset: 
             self.main.setup_dynamic_ui()
 

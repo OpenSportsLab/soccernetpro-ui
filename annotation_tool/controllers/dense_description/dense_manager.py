@@ -20,10 +20,9 @@ class DenseManager:
         self.tree_model = main_window.tree_model 
         
         # Access UI components from the Dense Description view
-        self.ui_root = main_window.ui.workspace
-        self.left_panel = self.ui_root.left_panel
-        self.center_panel = self.ui_root.center_panel
-        self.right_panel = self.ui_root.dense_editor
+        self.left_panel = main_window.left_panel
+        self.center_panel = main_window.center_panel
+        self.right_panel = main_window.dense_editor
         
         # Media Controller setup
         self.media_controller = media_controller
@@ -443,7 +442,7 @@ class DenseManager:
         self.center_panel.timeline.set_markers([])
         self.right_panel.input_widget.set_text("")
         
-        self.main.ui.show_welcome_view()
+        self.main.show_welcome_view()
         self.main.show_temp_msg("Cleared", "Workspace reset.")
         self.main.update_save_export_button_state()
 
