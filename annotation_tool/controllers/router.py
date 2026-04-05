@@ -27,6 +27,8 @@ class AppRouter:
         """Unified entry point for creating a new project."""
         if not self.main.check_and_close_current_project():
             return
+        
+        self.main.reset_all_managers()
 
         dlg = ProjectTypeDialog(self.main)
         if dlg.exec():
@@ -46,6 +48,9 @@ class AppRouter:
         if not self.main.check_and_close_current_project():
             return
         
+        # [NEW] Reset all mode UIs before loading new data to prevent "Ghost UI" bugs
+        self.main.reset_all_managers()
+        
         file_path, _ = QFileDialog.getOpenFileName(
             self.main, "Select Project JSON", "", "JSON Files (*.json)"
         )
@@ -64,20 +69,20 @@ class AppRouter:
 
         if json_type == "classification":
             if self.class_fm.load_project(data, file_path):
-                self.main.ui.show_classification_view()
+                self.main.show_classification_view()
             
         elif json_type == "localization":
             if self.loc_fm.load_project(data, file_path):
-                self.main.ui.show_localization_view()
+                self.main.show_localization_view()
 
         elif json_type == "description":
             # [FIXED] Check return value to ensure validation passed before switching view
             if self.desc_fm.load_project(data, file_path):
-                self.main.ui.show_description_view()
+                self.main.show_description_view()
             
         elif json_type == "dense_description":
             if self.dense_fm.load_project(data, file_path):
-                self.main.ui.show_dense_description_view()
+                self.main.show_dense_description_view()
             
         else:
             QMessageBox.critical(self.main, "Error", "Unknown JSON format or Task Type.")
@@ -87,12 +92,14 @@ class AppRouter:
         if not self.main.check_and_close_current_project():
             return
 
+        self.main.reset_all_managers()
+
         self.class_fm._clear_workspace(full_reset=True)
         self.loc_fm._clear_workspace(full_reset=True)
         self.desc_fm._clear_workspace(full_reset=True)
         self.dense_fm._clear_workspace(full_reset=True)
 
-        self.main.ui.show_welcome_view()
+        self.main.show_welcome_view()
         self.main.show_temp_msg("Project Closed", "Returned to Home Screen", duration=1000)
 
     def _detect_json_type(self, data):

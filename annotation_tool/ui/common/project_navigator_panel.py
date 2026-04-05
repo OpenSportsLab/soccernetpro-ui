@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QModelIndex
 
 
 
-class CommonProjectTreePanel(QWidget):
+class ProjectNavigatorPanel(QWidget):
     """
     A unified Left Panel for both Classification and Localization.
     Refactored to follow Model/View architecture using QTreeView.
@@ -25,7 +25,7 @@ class CommonProjectTreePanel(QWidget):
                  enable_context_menu=True,
                  parent=None):
         super().__init__(parent)
-        self.setFixedWidth(250)
+        # self.setFixedWidth(250) # REMOVED: Let it fit the dock
         
         # Main Layout
         layout = QVBoxLayout(self)

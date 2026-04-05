@@ -11,7 +11,6 @@ class LocFileManager:
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
-        self.ui = main_window.ui
 
     def create_new_project(self):
         """
@@ -46,7 +45,7 @@ class LocFileManager:
         self.main.loc_manager.populate_tree()
 
         # 5) Switch view to Localization
-        self.main.ui.show_localization_view()
+        self.main.show_localization_view()
         self.main.update_save_export_button_state()
 
         # 6) [CRITICAL] Explicitly unlock the Localization UI
@@ -351,4 +350,4 @@ class LocFileManager:
 
         # Optionally show welcome screen
         if full_reset:
-            self.main.ui.show_welcome_view()
+            self.main.show_welcome_view()

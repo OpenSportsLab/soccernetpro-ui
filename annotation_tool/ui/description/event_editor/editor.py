@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-class DescriptionEventEditor(QWidget):
+class DescriptionAnnotationPanel(QWidget):
     """
     Right Panel for Description Mode.
     Single text area for Q&A style descriptions.
@@ -16,11 +16,11 @@ class DescriptionEventEditor(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(350) 
+        # self.setFixedWidth(350) # REMOVED: Let it fit the dock
         
         self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(10)
-        self.layout.setContentsMargins(15, 15, 15, 15)
+        self.layout.setSpacing(5)
+        self.layout.setContentsMargins(5, 5, 5, 5)
         
         # 1. Undo/Redo removed (moved to menu bar)
         

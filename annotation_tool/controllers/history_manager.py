@@ -1,8 +1,6 @@
 import copy
 from models import CmdType
 from ui.classification.event_editor import DynamicSingleLabelGroup, DynamicMultiLabelGroup
-import copy
-from models.app_state import CmdType
 
 class HistoryManager:
     """
@@ -12,7 +10,6 @@ class HistoryManager:
     def __init__(self, main_window):
         self.main = main_window
         self.model = main_window.model
-        self.ui = main_window.ui
         self._is_undoing_redoing = False
 
     def perform_undo(self):
@@ -41,13 +38,21 @@ class HistoryManager:
 
     def _refresh_active_view(self):
         """
-        Refresh: Depending on whether the current interface is Classification, Localization, 
-        Description, or Dense Description, invoke the corresponding refresh logic.
+        Refreshes the currently active UI tab after a state change.
+        Uses the tab index logic to call the appropriate manager's refresh method.
         """
-        current_widget = self.main.ui.stack_layout.currentWidget()
+        # Use the right_tabs index to determine the mode
+        tab_idx = self.main.right_tabs.currentIndex()
         
-        # 1. Localization Mode
-        if current_widget == self.main.ui.localization_ui:
+        # 0: Classification Mode
+        if tab_idx == 0:
+            # Rebuild the right-side dynamic control
+            self.main.setup_dynamic_ui()
+            # Refresh the left and annotation status
+            self.main.refresh_ui_after_undo_redo(self.main.get_current_action_path())
+
+        # 1: Localization Mode
+        elif tab_idx == 1:
             # Refresh Schema (Tabs)
             self.main.loc_manager._refresh_schema_ui()
             # Refresh Events (Table & Timeline)
@@ -55,29 +60,22 @@ class HistoryManager:
             # Refresh left side
             self.main.loc_manager.populate_tree()
 
-        # 2. Description Mode
-        elif current_widget == self.main.ui.description_ui:
+        # 2: Description Mode
+        elif tab_idx == 2:
             # Refresh the editor text by re-triggering selection logic
-            tree = self.main.ui.description_ui.left_panel.tree
+            tree = self.main.left_panel.tree
             current_idx = tree.selectionModel().currentIndex()
             if current_idx.isValid():
                 # Force reload of data from model to UI (pass None as previous index)
                 self.main.desc_nav_manager.on_item_selected(current_idx, None)
         
-        # 3. [NEW] Dense Description Mode
-        elif current_widget == self.main.ui.dense_description_ui:
+        # 3: Dense Description Mode
+        elif tab_idx == 3:
             # Refresh the table and timeline markers
             # Using the path stored in dense_manager
             path = self.main.dense_manager.current_video_path
             if path:
                 self.main.dense_manager._display_events_for_item(path)
-            
-        # 4. Classification Mode (Default)
-        else:
-            # Rebuild the right-side dynamic control
-            self.main.setup_dynamic_ui()
-            # Refresh the left and annotation status
-            self.main.refresh_ui_after_undo_redo(self.main.get_current_action_path())
 
     def _apply_state_change(self, cmd, is_undo):
         ctype = cmd['type']
@@ -145,7 +143,7 @@ class HistoryManager:
             path = cmd['path']
             if self.main.get_current_action_path() == path:
                 val = cmd['old_val'] if is_undo else cmd['new_val']
-                grp = self.ui.classification_ui.right_panel.label_groups.get(cmd['head'])
+                grp = self.main.classification_panel.label_groups.get(cmd['head'])
                 if grp:
                     if isinstance(grp, DynamicSingleLabelGroup): grp.set_checked_label(val)
                     else: grp.set_checked_labels(val)
