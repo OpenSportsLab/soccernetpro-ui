@@ -40,7 +40,7 @@ class LocInferenceWorker(QThread):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 os.chdir(tmp_dir)
                 
-                try: 
+                try:
                     # Use FFmpeg to cut clips
                     clip_video_path = os.path.join(tmp_dir, "clipped_segment.mp4")
                     
@@ -86,6 +86,8 @@ class LocInferenceWorker(QThread):
                     if "dataloader" not in config_dict["DATA"]["test"]:
                         config_dict["DATA"]["test"]["dataloader"] = {}
                     config_dict["DATA"]["test"]["dataloader"]["pin_memory"] = False
+                    
+                    config_dict["DATA"]["test"]["dataloader"]["num_workers"] = 0
 
                     with open(tmp_config_yaml, 'w', encoding='utf-8') as f:
                         yaml.dump(config_dict, f)
@@ -107,15 +109,67 @@ class LocInferenceWorker(QThread):
                     # --- 3. Execute model inference ---
                     loc_model = model.localization(config=tmp_config_yaml)
                     
+                    model_internal_error = None
                     try:
                         loc_model.infer(
                             test_set=tmp_input_json, 
                             pretrained="jeetv/snpro-snbas-2024"
                         )
-
                     except Exception as eval_err:
+                        model_internal_error = str(eval_err)
                         print(f"Ignored evaluation error: {eval_err}")
                         pass
+                    
+                    # --- 4. Parse result JSON and compensate timestamps ---
+                    search_pattern = os.path.join(tmp_dir, "**", "*.json")
+                    all_jsons = glob.glob(search_pattern, recursive=True)
+                    
+                    valid_preds = []
+                    for f in all_jsons:
+                        filename = os.path.basename(f)
+                        if "temp_test" not in filename and "temp_config" not in filename:
+                            valid_preds.append(f)
+                    
+                    if valid_preds:
+                        actual_output_json = max(valid_preds, key=os.path.getctime)
+                    else:
+                        if model_internal_error:
+                            raise RuntimeError(f"PyTorch/Model Internal Error:\n{model_internal_error}")
+                        else:
+                            raise FileNotFoundError(f"Could not find any generated prediction JSON in {tmp_dir}")
+
+                    predicted_events = []
+                    if os.path.exists(actual_output_json):
+                        with open(actual_output_json, 'r', encoding='utf-8') as f:
+                            output_data = json.load(f)
+                        
+                        raw_evts = output_data.get("data", [{}])[0].get("events", [])
+                        for evt in raw_evts:
+                            p_ms_relative = int(evt.get("position_ms", 0))
+                            
+                            if p_ms_relative == 0 and evt.get("label") == (classes[0] if classes else "Unknown"):
+                                continue
+                            p_ms_absolute = p_ms_relative + self.start_ms
+                                
+                            if self.end_ms == 0 or p_ms_absolute <= self.end_ms:
+                                # Get confidence 
+                                conf = evt.get("confidence", evt.get("score", 0.99))
+                                predicted_events.append({
+                                    "head": "ball_action",
+                                    "label": evt.get("label", "Unknown"),
+                                    "position_ms": p_ms_absolute,
+                                    "confidence": conf 
+                                })
+                    
+                    self.finished_signal.emit(predicted_events)
+                
+                finally:
+                    os.chdir(orig_cwd)
+                
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.error_signal.emit(str(e))
                     
                     # --- 4. Parse result JSON and compensate timestamps ---
                     search_pattern = os.path.join(tmp_dir, "**", "*.json")
