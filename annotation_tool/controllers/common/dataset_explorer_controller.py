@@ -105,19 +105,7 @@ class DatasetExplorerController(QObject):
         if not item:
             return
 
-        is_done = False
-        if action_path in self.app_state.localization_events:
-            is_done = len(self.app_state.localization_events[action_path]) > 0
-        elif action_path in self.app_state.manual_annotations:
-            is_done = len(self.app_state.manual_annotations[action_path]) > 0
-        elif action_path in self.app_state.dense_description_events:
-            is_done = len(self.app_state.dense_description_events[action_path]) > 0
-
-        for data in self.app_state.action_item_data:
-            if data.get("path") == action_path:
-                if any(c.get("text", "").strip() for c in data.get("captions", [])):
-                    is_done = True
-                break
+        is_done = self.app_state.is_action_done(action_path)
 
         done_icon = getattr(self.main, "done_icon", None)
         empty_icon = getattr(self.main, "empty_icon", None)
@@ -168,18 +156,6 @@ class DatasetExplorerController(QObject):
         if action_idx.isValid():
             self.tree_model.removeRow(action_idx.row(), action_idx.parent())
 
-    def _clear_annotations_for_path(self, path: str):
-        for store_name in (
-            "manual_annotations",
-            "smart_annotations",
-            "localization_events",
-            "smart_localization_events",
-            "dense_description_events",
-        ):
-            store = getattr(self.app_state, store_name, None)
-            if isinstance(store, dict) and path in store:
-                del store[path]
-
     def _mark_dirty_and_refresh(self):
         self.app_state.is_data_dirty = True
         self.main.update_save_export_button_state()
@@ -212,28 +188,22 @@ class DatasetExplorerController(QObject):
             for dir_path, paths in grouped.items():
                 paths.sort()
                 name = os.path.basename(dir_path) if len(paths) > 1 else os.path.basename(paths[0])
-                if any(d.get("name") == name for d in self.app_state.action_item_data):
+                if self.app_state.has_action_name(name):
                     continue
 
                 main_path = paths[0]
-                self.app_state.action_item_data.append(
-                    {"name": name, "path": main_path, "source_files": paths}
-                )
-                self.app_state.action_path_to_name[main_path] = name
+                self.app_state.add_action_item(name=name, path=main_path, source_files=paths)
                 item = self.tree_model.add_entry(name=name, path=main_path, source_files=paths)
                 self.app_state.action_item_map[main_path] = item
                 self.update_item_status(main_path)
                 added_count += 1
         else:
             for file_path in files:
-                if any(d.get("path") == file_path for d in self.app_state.action_item_data):
+                if self.app_state.has_action_path(file_path):
                     continue
 
                 name = os.path.basename(file_path)
-                self.app_state.action_item_data.append(
-                    {"name": name, "path": file_path, "source_files": [file_path]}
-                )
-                self.app_state.action_path_to_name[file_path] = name
+                self.app_state.add_action_item(name=name, path=file_path, source_files=[file_path])
                 item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
                 self.app_state.action_item_map[file_path] = item
                 self.update_item_status(file_path)
@@ -260,14 +230,11 @@ class DatasetExplorerController(QObject):
         added_count = 0
         first_idx = None
         for file_path in files:
-            if any(d.get("path") == file_path for d in self.app_state.action_item_data):
+            if self.app_state.has_action_path(file_path):
                 continue
 
             name = os.path.basename(file_path)
-            self.app_state.action_item_data.append(
-                {"name": name, "path": file_path, "source_files": [file_path]}
-            )
-            self.app_state.action_path_to_name[file_path] = name
+            self.app_state.add_action_item(name=name, path=file_path, source_files=[file_path])
             item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
             self.app_state.action_item_map[file_path] = item
             self.update_item_status(file_path)
@@ -299,24 +266,19 @@ class DatasetExplorerController(QObject):
         added_count = 0
         first_idx = None
         for file_path in files:
-            if any(
-                d.get("path") == file_path or d.get("metadata", {}).get("path") == file_path
-                for d in self.app_state.action_item_data
-            ):
+            if self.app_state.has_description_path(file_path):
                 continue
 
             name = os.path.basename(file_path)
-            new_item = {
-                "name": name,
-                "path": file_path,
-                "id": name,
-                "metadata": {"path": file_path, "questions": []},
-                "inputs": [{"type": "video", "name": name, "path": file_path}],
-                "source_files": [file_path],
-                "captions": [],
-            }
-            self.app_state.action_item_data.append(new_item)
-            self.app_state.action_path_to_name[file_path] = name
+            self.app_state.add_action_item(
+                name=name,
+                path=file_path,
+                source_files=[file_path],
+                id=name,
+                metadata={"path": file_path, "questions": []},
+                inputs=[{"type": "video", "name": name, "path": file_path}],
+                captions=[],
+            )
             item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
             self.app_state.action_item_map[file_path] = item
             self.update_item_status(file_path)
@@ -346,14 +308,11 @@ class DatasetExplorerController(QObject):
         added_count = 0
         first_idx = None
         for file_path in files:
-            if any(d.get("path") == file_path for d in self.app_state.action_item_data):
+            if self.app_state.has_action_path(file_path):
                 continue
 
             name = os.path.basename(file_path)
-            self.app_state.action_item_data.append(
-                {"name": name, "path": file_path, "source_files": [file_path]}
-            )
-            self.app_state.action_path_to_name[file_path] = name
+            self.app_state.add_action_item(name=name, path=file_path, source_files=[file_path])
             item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
             self.app_state.action_item_map[file_path] = item
             self.update_item_status(file_path)
@@ -459,10 +418,9 @@ class DatasetExplorerController(QObject):
         if not path:
             return
 
-        self.app_state.action_item_data = [d for d in self.app_state.action_item_data if d.get("path") != path]
-        self.app_state.action_path_to_name.pop(path, None)
-        self.app_state.action_item_map.pop(path, None)
-        self._clear_annotations_for_path(path)
+        removed = self.app_state.remove_action_item_by_path(path)
+        if not removed:
+            return
         self._remove_tree_row(action_idx)
         self._mark_dirty_and_refresh()
         self.main.show_temp_msg("Removed", "Item removed.")
@@ -474,10 +432,9 @@ class DatasetExplorerController(QObject):
         if not path:
             return
 
-        self.app_state.action_item_data = [d for d in self.app_state.action_item_data if d.get("path") != path]
-        self.app_state.action_path_to_name.pop(path, None)
-        self.app_state.action_item_map.pop(path, None)
-        self._clear_annotations_for_path(path)
+        removed = self.app_state.remove_action_item_by_path(path)
+        if not removed:
+            return
 
         if self.main.loc_manager.current_video_path == path:
             self.main.loc_manager.current_video_path = None
@@ -495,20 +452,9 @@ class DatasetExplorerController(QObject):
         if not path:
             return
 
-        filtered = []
-        for item in self.app_state.action_item_data:
-            item_path = item.get("path") or item.get("metadata", {}).get("path")
-            if item_path == path:
-                item_id = item.get("id") or item.get("name")
-                if item_id in self.app_state.imported_action_metadata:
-                    del self.app_state.imported_action_metadata[item_id]
-                continue
-            filtered.append(item)
-        self.app_state.action_item_data = filtered
-
-        self.app_state.action_path_to_name.pop(path, None)
-        self.app_state.action_item_map.pop(path, None)
-        self._clear_annotations_for_path(path)
+        removed_items = self.app_state.remove_description_action_by_path(path)
+        if not removed_items:
+            return
         self._remove_tree_row(action_idx)
         self._mark_dirty_and_refresh()
 
@@ -540,10 +486,9 @@ class DatasetExplorerController(QObject):
             self.main.center_panel.timeline.set_markers([])
             self.main.dense_manager.right_panel.input_widget.set_text("")
 
-        self.app_state.action_item_data = [d for d in self.app_state.action_item_data if d.get("path") != path]
-        self.app_state.action_path_to_name.pop(path, None)
-        self.app_state.action_item_map.pop(path, None)
-        self._clear_annotations_for_path(path)
+        removed = self.app_state.remove_action_item_by_path(path)
+        if not removed:
+            return
         self._remove_tree_row(action_idx)
         self._mark_dirty_and_refresh()
         self.main.show_temp_msg("Removed", "Video removed from project.")
@@ -633,7 +578,7 @@ class DatasetExplorerController(QObject):
     # ---------------------------------------------------------------------
     def load_project(self, data, file_path):
         """Load project from JSON data/path. Detects mode internally."""
-        json_type = self._detect_json_type(data)
+        json_type = self.app_state.detect_json_type(data)
 
         if json_type == "classification":
             self.main.show_classification_view()
@@ -784,51 +729,6 @@ class DatasetExplorerController(QObject):
         self.main.show_temp_msg("Project Closed", "Returned to Home Screen", duration=1000)
 
     # ---------------------------------------------------------------------
-    # Internal: JSON Type Detection
-    # ---------------------------------------------------------------------
-    def _detect_json_type(self, data):
-        task = str(data.get("task", "")).lower()
-
-        if "dense" in task:
-            return "dense_description"
-
-        if "caption" in task or "description" in task:
-            return "description"
-
-        if "spotting" in task or "localization" in task:
-            return "localization"
-
-        if "classification" in task:
-            return "classification"
-
-        if "labels" in data and isinstance(data["labels"], dict):
-            return "localization"
-
-        items = data.get("data", [])
-        if not items:
-            return "unknown"
-
-        first = items[0] if isinstance(items[0], dict) else {}
-
-        if "dense_captions" in first:
-            return "dense_description"
-
-        if "events" in first:
-            evts = first.get("events", [])
-            if evts and isinstance(evts, list) and len(evts) > 0 and "text" in evts[0]:
-                return "dense_description"
-            if evts and isinstance(evts, list) and len(evts) > 0 and "label" in evts[0]:
-                return "localization"
-
-        if "captions" in first:
-            return "description"
-
-        if "labels" in first:
-            return "classification"
-
-        return "unknown"
-
-    # ---------------------------------------------------------------------
     # Internal: Validation Helpers
     # ---------------------------------------------------------------------
     def _show_validation_error(self, title, error_text):
@@ -913,10 +813,7 @@ class DatasetExplorerController(QObject):
                 )
 
             path_key = src_files[0] if src_files else aid
-            self.app_state.action_item_data.append(
-                {"name": aid, "path": path_key, "source_files": src_files}
-            )
-            self.app_state.action_path_to_name[path_key] = aid
+            self.app_state.add_action_item(name=aid, path=path_key, source_files=src_files)
             self.app_state.imported_action_metadata[path_key] = item.get("metadata", {})
 
             lbls = item.get("labels", {})
@@ -1050,10 +947,7 @@ class DatasetExplorerController(QObject):
                         final_path = abs_path_strict
                         missing_files.append(f"{aid}: {filename}")
 
-            self.app_state.action_item_data.append(
-                {"name": aid, "path": final_path, "source_files": [final_path]}
-            )
-            self.app_state.action_path_to_name[final_path] = aid
+            self.app_state.add_action_item(name=aid, path=final_path, source_files=[final_path])
 
             raw_events = item.get("events", [])
             processed_events = []
@@ -1174,18 +1068,15 @@ class DatasetExplorerController(QObject):
             meta = item.get("metadata", {})
             action_path = meta.get("path") or aid
 
-            entry = {
-                "name": aid,
-                "path": action_path,
-                "source_files": source_files,
-                "inputs": inputs,
-                "captions": item.get("captions", []),
-                "metadata": meta,
-                "id": aid,
-            }
-
-            self.app_state.action_item_data.append(entry)
-            self.app_state.action_path_to_name[action_path] = aid
+            self.app_state.add_action_item(
+                name=aid,
+                path=action_path,
+                source_files=source_files,
+                inputs=inputs,
+                captions=item.get("captions", []),
+                metadata=meta,
+                id=aid,
+            )
 
             if meta:
                 self.app_state.imported_action_metadata[aid] = meta
@@ -1268,10 +1159,7 @@ class DatasetExplorerController(QObject):
             if "metadata" in item:
                 self.app_state.imported_action_metadata[aid] = item["metadata"]
 
-            self.app_state.action_item_data.append(
-                {"name": aid, "path": final_path, "source_files": [final_path]}
-            )
-            self.app_state.action_path_to_name[final_path] = aid
+            self.app_state.add_action_item(name=aid, path=final_path, source_files=[final_path])
 
             events = item.get("dense_captions", item.get("events", []))
             if events:
