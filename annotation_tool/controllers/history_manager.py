@@ -58,7 +58,7 @@ class HistoryManager:
             # Refresh Events (Table & Timeline)
             self.main.loc_manager._refresh_current_clip_events()
             # Refresh left side
-            self.main.loc_manager.populate_tree()
+            self.main.project_nav_controller.populate_tree()
 
         # 2: Description Mode
         elif tab_idx == 2:

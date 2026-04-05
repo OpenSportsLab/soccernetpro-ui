@@ -350,22 +350,13 @@ class VideoAnnotationWindow(QMainWindow):
     def _is_dense_mode(self) -> bool: return self._get_active_mode_index() == 3
 
     def _dispatch_add_video(self):
-        if self._is_loc_mode(): self.loc_manager._on_add_video_clicked()
-        elif self._is_desc_mode(): self.desc_nav_manager.add_items_via_dialog()
-        elif self._is_dense_mode(): self.dense_manager._on_add_video_clicked()
-        else: self.nav_manager.add_items_via_dialog()
+        self.project_nav_controller.handle_add_video()
 
     def _dispatch_clear_workspace(self):
-        if self._is_loc_mode(): self.loc_manager._on_clear_all_clicked()
-        elif self._is_desc_mode(): self._on_desc_clear_clicked()
-        elif self._is_dense_mode(): self.dense_manager._on_clear_all_clicked()
-        else: self._on_class_clear_clicked()
+        self.project_nav_controller.handle_clear_workspace()
 
     def _dispatch_filter_change(self, index):
-        if self._is_loc_mode(): self.loc_manager._apply_clip_filter(index)
-        elif self._is_desc_mode(): self.desc_nav_manager.apply_action_filter()
-        elif self._is_dense_mode(): self.dense_manager._apply_clip_filter(index)
-        else: self.nav_manager.apply_action_filter()
+        self.project_nav_controller.handle_filter_change(index)
 
     def _on_tree_selection_changed(self, current: QModelIndex, previous: QModelIndex):
         if current.isValid():
@@ -403,8 +394,7 @@ class VideoAnnotationWindow(QMainWindow):
             self.dense_panel.setEnabled(False)
 
     def _on_remove_item_requested(self, index: QModelIndex):
-        if self._is_dense_mode(): self.dense_manager.remove_single_item(index)
-        else: self.nav_manager.remove_single_action_item(index)
+        self.project_nav_controller.handle_remove_item(index)
 
     def _dispatch_save(self) -> None:
         self.project_nav_controller.save_project()
@@ -575,11 +565,11 @@ class VideoAnnotationWindow(QMainWindow):
 
     def refresh_ui_after_undo_redo(self, action_path: str) -> None:
         if not action_path:
-            self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
+            self.project_nav_controller.handle_filter_change(self.left_panel.filter_combo.currentIndex())
             self.update_save_export_button_state()
             return
         self.update_action_item_status(action_path)
-        self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
+        self.project_nav_controller.handle_filter_change(self.left_panel.filter_combo.currentIndex())
         item = self.model.action_item_map.get(action_path)
         if item:
             idx = item.index()

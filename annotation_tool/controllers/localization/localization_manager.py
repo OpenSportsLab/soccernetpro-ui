@@ -45,9 +45,7 @@ class LocalizationManager:
         # Note: Create/Load/Close/Save/Export are handled by the File menu bar.
         # Add Data is wired from main_window.py -> left_panel.addVideoRequested
         
-        # Tree Interactions
-        self.left_panel.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.left_panel.tree.customContextMenuRequested.connect(self._on_tree_context_menu)
+        # Tree context menu remove is owned by ProjectNavigatorPanel/Controller.
         
         # --- Right Panel ---
         #Smart Annotation UI

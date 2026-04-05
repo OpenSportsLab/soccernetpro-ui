@@ -1,8 +1,9 @@
 import os
 import datetime
 import json
+from collections import defaultdict
 
-from PyQt6.QtCore import QModelIndex, QObject
+from PyQt6.QtCore import QModelIndex, QObject, QUrl
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from utils import natural_sort_key
@@ -23,6 +24,36 @@ class ProjectNavigatorController(QObject):
         self.media_controller = media_controller
 
         self._setup_connections()
+        self._setup_navigator_mode_ops()
+
+    def _setup_navigator_mode_ops(self):
+        """Mode registry for navigator actions keyed by right-tab index."""
+        self._mode_nav_ops = {
+            0: {
+                "add": self._add_classification_items,
+                "clear": self._clear_classification_items,
+                "remove": self._remove_classification_item,
+                "filter": self._filter_classification_items,
+            },
+            1: {
+                "add": self._add_localization_items,
+                "clear": self._clear_localization_items,
+                "remove": self._remove_localization_item,
+                "filter": self._filter_localization_items,
+            },
+            2: {
+                "add": self._add_description_items,
+                "clear": self._clear_description_items,
+                "remove": self._remove_description_item,
+                "filter": self._filter_description_items,
+            },
+            3: {
+                "add": self._add_dense_items,
+                "clear": self._clear_dense_items,
+                "remove": self._remove_dense_item,
+                "filter": self._filter_dense_items,
+            },
+        }
 
     def _setup_connections(self):
         """Connect Panel signals to Controller slots."""
@@ -95,22 +126,507 @@ class ProjectNavigatorController(QObject):
             item.setIcon(done_icon if is_done else empty_icon)
 
     # ---------------------------------------------------------------------
-    # Panel Dispatchers
+    # Panel Dispatchers (Controller-owned)
     # ---------------------------------------------------------------------
+    def _active_mode_idx(self) -> int:
+        return self.main.right_tabs.currentIndex()
+
+    def _active_mode_ops(self):
+        return self._mode_nav_ops.get(self._active_mode_idx(), self._mode_nav_ops[0])
+
     def handle_add_video(self):
-        self.main._dispatch_add_video()
+        self._active_mode_ops()["add"]()
 
     def handle_clear_workspace(self):
-        self.main._dispatch_clear_workspace()
+        self._active_mode_ops()["clear"]()
 
     def handle_remove_item(self, index: QModelIndex):
-        self.main._on_remove_item_requested(index)
+        self._active_mode_ops()["remove"](index)
 
     def handle_filter_change(self, index):
-        self.main._dispatch_filter_change(index)
+        self._active_mode_ops()["filter"](index)
 
     def _on_selection_changed(self, current, previous):
         self.main._on_tree_selection_changed(current, previous)
+
+    def _get_action_index(self, index: QModelIndex) -> QModelIndex:
+        """Normalize child selection to its top-level action index."""
+        if not index.isValid():
+            return QModelIndex()
+        if index.parent().isValid():
+            return index.parent()
+        return index
+
+    def _path_from_index(self, index: QModelIndex):
+        action_idx = self._get_action_index(index)
+        if not action_idx.isValid():
+            return None, QModelIndex()
+        path = action_idx.data(getattr(self.tree_model, "FilePathRole", 0x0100))
+        return path, action_idx
+
+    def _remove_tree_row(self, action_idx: QModelIndex):
+        if action_idx.isValid():
+            self.tree_model.removeRow(action_idx.row(), action_idx.parent())
+
+    def _clear_annotations_for_path(self, path: str):
+        for store_name in (
+            "manual_annotations",
+            "smart_annotations",
+            "localization_events",
+            "smart_localization_events",
+            "dense_description_events",
+        ):
+            store = getattr(self.app_state, store_name, None)
+            if isinstance(store, dict) and path in store:
+                del store[path]
+
+    def _mark_dirty_and_refresh(self):
+        self.app_state.is_data_dirty = True
+        self.main.update_save_export_button_state()
+
+    # ------------------------------------------------------------------
+    # Add Actions
+    # ------------------------------------------------------------------
+    def _add_classification_items(self):
+        if not self.app_state.json_loaded:
+            QMessageBox.warning(self.main, "Warning", "Please create or load a project first.")
+            return
+
+        filters = "Media Files (*.mp4 *.avi *.mov *.mkv *.jpg *.jpeg *.png *.bmp);;All Files (*)"
+        start_dir = self.app_state.current_working_directory or ""
+        files, _ = QFileDialog.getOpenFileNames(self.main, "Select Data to Add", start_dir, filters)
+        if not files:
+            return
+
+        if not self.app_state.current_working_directory:
+            self.app_state.current_working_directory = os.path.dirname(files[0])
+
+        added_count = 0
+        is_mv = getattr(self.app_state, "is_multi_view", False)
+
+        if is_mv:
+            grouped = defaultdict(list)
+            for file_path in files:
+                grouped[os.path.dirname(file_path)].append(file_path)
+
+            for dir_path, paths in grouped.items():
+                paths.sort()
+                name = os.path.basename(dir_path) if len(paths) > 1 else os.path.basename(paths[0])
+                if any(d.get("name") == name for d in self.app_state.action_item_data):
+                    continue
+
+                main_path = paths[0]
+                self.app_state.action_item_data.append(
+                    {"name": name, "path": main_path, "source_files": paths}
+                )
+                self.app_state.action_path_to_name[main_path] = name
+                item = self.tree_model.add_entry(name=name, path=main_path, source_files=paths)
+                self.app_state.action_item_map[main_path] = item
+                self.update_item_status(main_path)
+                added_count += 1
+        else:
+            for file_path in files:
+                if any(d.get("path") == file_path for d in self.app_state.action_item_data):
+                    continue
+
+                name = os.path.basename(file_path)
+                self.app_state.action_item_data.append(
+                    {"name": name, "path": file_path, "source_files": [file_path]}
+                )
+                self.app_state.action_path_to_name[file_path] = name
+                item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
+                self.app_state.action_item_map[file_path] = item
+                self.update_item_status(file_path)
+                added_count += 1
+
+        if added_count > 0:
+            self._mark_dirty_and_refresh()
+            self.handle_filter_change(self.panel.filter_combo.currentIndex())
+            self.main.show_temp_msg("Added", f"Added {added_count} items.")
+            if hasattr(self.main, "sync_batch_inference_dropdowns"):
+                self.main.sync_batch_inference_dropdowns()
+
+    def _add_localization_items(self):
+        start_dir = self.app_state.current_working_directory or ""
+        files, _ = QFileDialog.getOpenFileNames(
+            self.main, "Select Video(s)", start_dir, "Video (*.mp4 *.avi *.mov *.mkv)"
+        )
+        if not files:
+            return
+
+        if not self.app_state.current_working_directory:
+            self.app_state.current_working_directory = os.path.dirname(files[0])
+
+        added_count = 0
+        first_idx = None
+        for file_path in files:
+            if any(d.get("path") == file_path for d in self.app_state.action_item_data):
+                continue
+
+            name = os.path.basename(file_path)
+            self.app_state.action_item_data.append(
+                {"name": name, "path": file_path, "source_files": [file_path]}
+            )
+            self.app_state.action_path_to_name[file_path] = name
+            item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
+            self.app_state.action_item_map[file_path] = item
+            self.update_item_status(file_path)
+            if first_idx is None:
+                first_idx = item.index()
+            added_count += 1
+
+        if added_count > 0:
+            self._mark_dirty_and_refresh()
+            self.main.show_temp_msg("Videos Added", f"Added {added_count} clips.")
+            if first_idx and first_idx.isValid():
+                self.panel.tree.setCurrentIndex(first_idx)
+                self.main.loc_manager.on_clip_selected(first_idx, None)
+
+    def _add_description_items(self):
+        if not self.app_state.json_loaded:
+            QMessageBox.warning(self.main, "Warning", "Please create or load a project first.")
+            return
+
+        filters = "Media Files (*.mp4 *.avi *.mov *.mkv *.jpg *.jpeg *.png *.bmp);;All Files (*)"
+        start_dir = self.app_state.current_working_directory or ""
+        files, _ = QFileDialog.getOpenFileNames(self.main, "Select Videos to Add", start_dir, filters)
+        if not files:
+            return
+
+        if not self.app_state.current_working_directory:
+            self.app_state.current_working_directory = os.path.dirname(files[0])
+
+        added_count = 0
+        first_idx = None
+        for file_path in files:
+            if any(
+                d.get("path") == file_path or d.get("metadata", {}).get("path") == file_path
+                for d in self.app_state.action_item_data
+            ):
+                continue
+
+            name = os.path.basename(file_path)
+            new_item = {
+                "name": name,
+                "path": file_path,
+                "id": name,
+                "metadata": {"path": file_path, "questions": []},
+                "inputs": [{"type": "video", "name": name, "path": file_path}],
+                "source_files": [file_path],
+                "captions": [],
+            }
+            self.app_state.action_item_data.append(new_item)
+            self.app_state.action_path_to_name[file_path] = name
+            item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
+            self.app_state.action_item_map[file_path] = item
+            self.update_item_status(file_path)
+            if first_idx is None:
+                first_idx = item.index()
+            added_count += 1
+
+        if added_count > 0:
+            self._mark_dirty_and_refresh()
+            self.handle_filter_change(self.panel.filter_combo.currentIndex())
+            self.main.show_temp_msg("Added", f"Added {added_count} items.")
+            if first_idx and first_idx.isValid():
+                self.panel.tree.setCurrentIndex(first_idx)
+                self.panel.tree.setFocus()
+
+    def _add_dense_items(self):
+        start_dir = self.app_state.current_working_directory or ""
+        files, _ = QFileDialog.getOpenFileNames(
+            self.main, "Select Video(s)", start_dir, "Video (*.mp4 *.avi *.mov *.mkv)"
+        )
+        if not files:
+            return
+
+        if not self.app_state.current_working_directory:
+            self.app_state.current_working_directory = os.path.dirname(files[0])
+
+        added_count = 0
+        first_idx = None
+        for file_path in files:
+            if any(d.get("path") == file_path for d in self.app_state.action_item_data):
+                continue
+
+            name = os.path.basename(file_path)
+            self.app_state.action_item_data.append(
+                {"name": name, "path": file_path, "source_files": [file_path]}
+            )
+            self.app_state.action_path_to_name[file_path] = name
+            item = self.tree_model.add_entry(name=name, path=file_path, source_files=[file_path])
+            self.app_state.action_item_map[file_path] = item
+            self.update_item_status(file_path)
+            if first_idx is None:
+                first_idx = item.index()
+            added_count += 1
+
+        if added_count > 0:
+            self._mark_dirty_and_refresh()
+            self.main.show_temp_msg("Videos Added", f"Added {added_count} clips.")
+            if first_idx and first_idx.isValid():
+                self.panel.tree.setCurrentIndex(first_idx)
+                self.main.dense_manager._on_clip_selected(first_idx, None)
+
+    # ------------------------------------------------------------------
+    # Clear Actions
+    # ------------------------------------------------------------------
+    def _clear_classification_items(self):
+        if not self.app_state.json_loaded:
+            return
+        msg = QMessageBox(self.main)
+        msg.setWindowTitle("Clear Workspace")
+        msg.setText("Clear workspace? Unsaved changes will be lost.")
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        if msg.exec() == QMessageBox.StandardButton.Yes:
+            self.main.stop_all_players()
+            self.clear_classification_workspace()
+
+    def _clear_description_items(self):
+        if not self.app_state.json_loaded:
+            return
+        msg = QMessageBox(self.main)
+        msg.setWindowTitle("Clear Workspace")
+        msg.setText("Clear description workspace? Unsaved changes will be lost.")
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        if msg.exec() == QMessageBox.StandardButton.Yes:
+            self.main.stop_all_players()
+            self.clear_description_workspace()
+
+    def _clear_localization_items(self):
+        if not self.app_state.action_item_data:
+            return
+        res = QMessageBox.question(
+            self.main,
+            "Clear All",
+            "Are you sure?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if res != QMessageBox.StandardButton.Yes:
+            return
+
+        self.app_state.action_item_data = []
+        self.app_state.action_path_to_name = {}
+        self.app_state.action_item_map.clear()
+        self.app_state.localization_events = {}
+        self.app_state.smart_localization_events = {}
+        self.app_state.label_definitions = {}
+        self.app_state.is_data_dirty = False
+        self.main.loc_manager.current_video_path = None
+        self.main.loc_manager.current_head = None
+        self.app_state.undo_stack.clear()
+        self.app_state.redo_stack.clear()
+
+        self.media_controller.stop()
+        self.main.center_panel.media_preview.player.setSource(QUrl())
+        self.main.center_panel.media_preview.video_widget.update()
+        self.main.center_panel.timeline.set_markers([])
+
+        self.tree_model.clear()
+        self.main.loc_manager._refresh_schema_ui()
+        self.main.loc_manager.right_panel.table.set_data([])
+        self.main.show_temp_msg("Cleared", "Workspace reset.")
+        self.main.update_save_export_button_state()
+
+    def _clear_dense_items(self):
+        if not self.app_state.action_item_data:
+            return
+        res = QMessageBox.question(
+            self.main,
+            "Clear All",
+            "Are you sure you want to clear the workspace? Unsaved changes will be lost.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if res != QMessageBox.StandardButton.Yes:
+            return
+
+        self.media_controller.stop()
+        self.app_state.reset(full_reset=True)
+        self.main.dense_manager.current_video_path = None
+        self.tree_model.clear()
+        self.main.dense_manager.right_panel.table.set_data([])
+        self.main.center_panel.timeline.set_markers([])
+        self.main.dense_manager.right_panel.input_widget.set_text("")
+        self.main.show_welcome_view()
+        self.main.show_temp_msg("Cleared", "Workspace reset.")
+        self.main.update_save_export_button_state()
+
+    # ------------------------------------------------------------------
+    # Remove Actions
+    # ------------------------------------------------------------------
+    def _remove_classification_item(self, index: QModelIndex):
+        path, action_idx = self._path_from_index(index)
+        if not path:
+            return
+
+        self.app_state.action_item_data = [d for d in self.app_state.action_item_data if d.get("path") != path]
+        self.app_state.action_path_to_name.pop(path, None)
+        self.app_state.action_item_map.pop(path, None)
+        self._clear_annotations_for_path(path)
+        self._remove_tree_row(action_idx)
+        self._mark_dirty_and_refresh()
+        self.main.show_temp_msg("Removed", "Item removed.")
+        if hasattr(self.main, "sync_batch_inference_dropdowns"):
+            self.main.sync_batch_inference_dropdowns()
+
+    def _remove_localization_item(self, index: QModelIndex):
+        path, action_idx = self._path_from_index(index)
+        if not path:
+            return
+
+        self.app_state.action_item_data = [d for d in self.app_state.action_item_data if d.get("path") != path]
+        self.app_state.action_path_to_name.pop(path, None)
+        self.app_state.action_item_map.pop(path, None)
+        self._clear_annotations_for_path(path)
+
+        if self.main.loc_manager.current_video_path == path:
+            self.main.loc_manager.current_video_path = None
+            self.media_controller.stop()
+            self.main.center_panel.media_preview.player.setSource(QUrl())
+            self.main.loc_manager.right_panel.table.set_data([])
+            self.main.center_panel.timeline.set_markers([])
+
+        self._remove_tree_row(action_idx)
+        self._mark_dirty_and_refresh()
+        self.main.show_temp_msg("Removed", "Video removed from list.")
+
+    def _remove_description_item(self, index: QModelIndex):
+        path, action_idx = self._path_from_index(index)
+        if not path:
+            return
+
+        filtered = []
+        for item in self.app_state.action_item_data:
+            item_path = item.get("path") or item.get("metadata", {}).get("path")
+            if item_path == path:
+                item_id = item.get("id") or item.get("name")
+                if item_id in self.app_state.imported_action_metadata:
+                    del self.app_state.imported_action_metadata[item_id]
+                continue
+            filtered.append(item)
+        self.app_state.action_item_data = filtered
+
+        self.app_state.action_path_to_name.pop(path, None)
+        self.app_state.action_item_map.pop(path, None)
+        self._clear_annotations_for_path(path)
+        self._remove_tree_row(action_idx)
+        self._mark_dirty_and_refresh()
+
+        if getattr(self.main.desc_annot_manager, "current_action_path", None) == path:
+            self.main.desc_annot_manager.current_action_path = None
+            self.main.description_panel.caption_edit.clear()
+            self.main.description_panel.caption_edit.setEnabled(False)
+
+        self.main.show_temp_msg("Removed", "Item removed.")
+
+    def _remove_dense_item(self, index: QModelIndex):
+        path, action_idx = self._path_from_index(index)
+        if not path:
+            return
+
+        reply = QMessageBox.question(
+            self.main,
+            "Remove Video",
+            f"Are you sure you want to remove this video and its annotations?\n\n{os.path.basename(path)}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        if path == self.main.dense_manager.current_video_path:
+            self.media_controller.stop()
+            self.main.dense_manager.current_video_path = None
+            self.main.dense_manager.right_panel.table.set_data([])
+            self.main.center_panel.timeline.set_markers([])
+            self.main.dense_manager.right_panel.input_widget.set_text("")
+
+        self.app_state.action_item_data = [d for d in self.app_state.action_item_data if d.get("path") != path]
+        self.app_state.action_path_to_name.pop(path, None)
+        self.app_state.action_item_map.pop(path, None)
+        self._clear_annotations_for_path(path)
+        self._remove_tree_row(action_idx)
+        self._mark_dirty_and_refresh()
+        self.main.show_temp_msg("Removed", "Video removed from project.")
+
+    # ------------------------------------------------------------------
+    # Filter Actions
+    # ------------------------------------------------------------------
+    def _filter_classification_items(self, index):
+        filter_idx = self.panel.filter_combo.currentIndex() if index is None else index
+        if filter_idx < 0:
+            return
+
+        for row in range(self.tree_model.rowCount()):
+            idx = self.tree_model.index(row, 0)
+            item = self.tree_model.itemFromIndex(idx)
+            if not item:
+                continue
+
+            path = item.data(getattr(self.tree_model, "FilePathRole", 0x0100))
+            is_hand = path in self.app_state.manual_annotations and bool(self.app_state.manual_annotations[path])
+            is_smart = self.app_state.smart_annotations.get(path, {}).get("_confirmed", False)
+            is_none = not is_hand and not is_smart
+
+            hidden = False
+            if filter_idx == 1 and not is_hand:
+                hidden = True
+            elif filter_idx == 2 and not is_smart:
+                hidden = True
+            elif filter_idx == 3 and not is_none:
+                hidden = True
+
+            self.panel.tree.setRowHidden(row, QModelIndex(), hidden)
+
+    def _filter_localization_items(self, index):
+        root = self.tree_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            item = root.child(row)
+            path = item.data(getattr(self.tree_model, "FilePathRole", 0x0100))
+            has_anno = len(self.app_state.localization_events.get(path, [])) > 0
+            hide = False
+            if index == 1 and not has_anno:
+                hide = True
+            elif index == 2 and has_anno:
+                hide = True
+            self.panel.tree.setRowHidden(row, QModelIndex(), hide)
+
+    def _filter_description_items(self, index):
+        root = self.tree_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            item = root.child(row)
+            path = item.data(getattr(self.tree_model, "FilePathRole", 0x0100))
+            data_item = next(
+                (
+                    d for d in self.app_state.action_item_data
+                    if d.get("path") == path or d.get("metadata", {}).get("path") == path or d.get("id") == item.text()
+                ),
+                None,
+            )
+
+            has_text = False
+            if data_item:
+                captions = data_item.get("captions", [])
+                has_text = any(c.get("text", "").strip() for c in captions if isinstance(c, dict))
+
+            hide = False
+            if index == self.main.FILTER_DONE and not has_text:
+                hide = True
+            elif index == self.main.FILTER_NOT_DONE and has_text:
+                hide = True
+            self.panel.tree.setRowHidden(row, QModelIndex(), hide)
+
+    def _filter_dense_items(self, index):
+        root = self.tree_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            item = root.child(row)
+            path = item.data(getattr(self.tree_model, "FilePathRole", 0x0100))
+            has_anno = len(self.app_state.dense_description_events.get(path, [])) > 0
+            hide = False
+            if index == 1 and not has_anno:
+                hide = True
+            elif index == 2 and has_anno:
+                hide = True
+            self.panel.tree.setRowHidden(row, QModelIndex(), hide)
 
     # ---------------------------------------------------------------------
     # Project Lifecycle

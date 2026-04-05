@@ -111,7 +111,9 @@ class AnnotationManager:
         self.main.update_save_export_button_state()
         
         # Apply filter immediately to reflect the new Smart Labelled status
-        self.main.nav_manager.apply_action_filter()
+        self.main.project_nav_controller.handle_filter_change(
+            self.main.left_panel.filter_combo.currentIndex()
+        )
         
         # Auto-advance to the next video clip
         tree = self.main.left_panel.tree
@@ -152,7 +154,9 @@ class AnnotationManager:
             
         self.main.update_action_item_status(path)
         self.main.update_save_export_button_state()
-        self.main.nav_manager.apply_action_filter()
+        self.main.project_nav_controller.handle_filter_change(
+            self.main.left_panel.filter_combo.currentIndex()
+        )
         
         # [MV Fix] Auto-advance using QTreeView API
         tree = self.main.left_panel.tree
