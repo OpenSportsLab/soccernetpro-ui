@@ -1,24 +1,27 @@
-# Event Editor Widget
+# 📍 Event Editor Widget
 
 ## Overview
 
-This module is responsible for the **Right Panel** of the Localization (Action Spotting) interface. It provides the primary mechanisms for users to:
-1.  **Create Events**: "Spot" actions at specific timestamps using dynamic category buttons.
-2.  **Manage Schema**: Add, rename, or delete annotation categories (Heads) and labels.
-3.  **Edit Events**: View, sort, and modify existing events in a detailed table view.
-4.  **Control History**: Access Undo/Redo functionality for the localization task.
+This module is responsible for the **Right Panel** of the Localization (Action Spotting) interface. With the latest updates, it has evolved from a purely manual tool into a **Tabbed Command Center** supporting both manual spotting and AI-powered batch inference. 
 
-## Directory Structure
+It provides the primary mechanisms for users to:
+1.  **Hand Annotation**: "Spot" actions at specific timestamps using dynamic category buttons.
+2.  **Smart Annotation**: Select a time range, run AI inference, and review predicted events before confirming them.
+3.  **Manage Schema**: Add, rename, or delete annotation categories (Heads) and labels dynamically.
+4.  **Edit & Sync Events**: View, sort, and modify existing events in a detailed table view, including a new feature to instantly snap an existing event to the player's current timestamp.
+5.  **Control History**: Access global Undo/Redo functionality for the localization task.
+
+## 📂 Directory Structure
 
 ```text
 ui/localization/event_editor/
-├── __init__.py             # Package entry point; assembles components into LocRightPanel.
-├── spotting_controls.py    # Top section: Tabbed interface for action spotting buttons.
-└── annotation_table.py     # Bottom section: Data grid showing the list of events.
-
+├── __init__.py             # Package entry point; assembles the tabbed LocRightPanel.
+├── smart_spotting.py       # [NEW] Interface for AI inference & prediction review.
+├── spotting_controls.py    # Tabbed interface for dynamic action spotting buttons.
+└── annotation_table.py     # Data grid showing the list of events (with cell editing).
 ```
 
-## Components Breakdown
+## 🧩 Components Breakdown
 
 ### 1. `__init__.py`
 
@@ -26,88 +29,70 @@ ui/localization/event_editor/
 
 * **Role**: The main container widget that acts as the "Right Panel" in the Localization layout.
 * **Composition**:
-* **Header**: Contains the "Annotation Controls" label and the **Undo/Redo** buttons.
-* **Top Widget**: `AnnotationManagementWidget` (imported from `spotting_controls.py`).
-* **Bottom Widget**: `AnnotationTableWidget` (imported from `annotation_table.py`).
+    * **Header**: Contains the "Annotation Controls" label and the global **Undo/Redo** buttons.
+    * **Main Tabs**: A `QTabWidget` that strictly separates workflows:
+        * **Tab 0 (Hand Annotation)**: Stacks `AnnotationManagementWidget` (Top) and `AnnotationTableWidget` (Bottom).
+        * **Tab 1 (Smart Annotation)**: Hosts the `SmartSpottingWidget`.
 
+### 2. `smart_spotting.py` (⭐ NEW)
 
-* **Usage**: This class is instantiated by the `UnifiedTaskPanel` (or `MainWindowUI`) to construct the UI.
+**Role**: Handles the UI for the AI-powered Action Spotting workflow.
 
-### 2. `spotting_controls.py`
+**Key Classes:**
 
-**Role**: Handles the dynamic creation of buttons based on the JSON schema. It allows users to click a button to record an event at the current video timestamp.
+* **`SmartSpottingWidget`**:
+    * **Inference Range**: Provides custom inputs to set the start and end boundaries for the AI model using the player's current time.
+    * **Execution**: Hosts the "Run Smart Inference" button and progress bar.
+    * **Dual Tables**: Displays unconfirmed AI predictions in a top table (allowing users to clear or confirm them) and confirmed/manual events in a bottom table.
+* **`TimeLineEdit`**:
+    * A highly customized `QLineEdit` tailored for `MM:SS.mmm` formatting. Supports free typing and keyboard arrow integration (Up/Down) to smoothly increment or decrement milliseconds/seconds.
+
+### 3. `spotting_controls.py`
+
+**Role**: Handles the dynamic creation of buttons based on the JSON schema for manual spotting. 
 
 **Key Classes:**
 
 * **`SpottingTabWidget`**:
-* A `QTabWidget` where each tab represents a **Head** (Category, e.g., "Pass", "Shot").
-* Supports context menus on tabs to **Rename** or **Delete** heads.
-* Contains a special `+` tab to add new heads dynamically.
-
-
+    * A `QTabWidget` where each tab represents a **Head** (Category, e.g., "Pass", "Shot").
+    * Supports context menus on tabs to **Rename** or **Delete** heads.
+    * Contains a special `+` tab to add new heads dynamically.
 * **`HeadSpottingPage`**:
-* The widget inside each tab.
-* Displays a grid of `LabelButton`s for each label defined in the schema.
-* Includes an "Add new label" button to extend the schema on the fly.
-
-
+    * The widget inside each tab.
+    * Displays a grid of `LabelButton`s using an optimized **Bin Packing** layout to maximize horizontal space.
+    * Includes a live-updating "Current Time" label and an "Add new label" button.
 * **`LabelButton`**:
-* A custom `QPushButton` that emits signals for Right-Click (Context Menu) and Double-Click events.
+    * A custom `QPushButton` that emits signals for Right-Click (Context Menu) and Double-Click (Rename) events.
 
+### 4. `annotation_table.py`
 
-
-**Signals:**
-
-* `spottingTriggered(head, label)`: Emitted when a user spots an action.
-* `headAdded`, `headRenamed`, `headDeleted`: Emitted when schema structure changes.
-
-### 3. `annotation_table.py`
-
-**Role**: Displays the list of recorded events for the currently selected video. It supports direct cell editing.
+**Role**: Displays the list of recorded events. It supports direct cell editing and timeline synchronization.
 
 **Key Classes:**
 
 * **`AnnotationTableModel` (`QAbstractTableModel`)**:
-* The underlying data model connecting the UI to the list of events.
-* Columns: **Time** (formatted `MM:SS.mmm`), **Head**, **Label**.
-* Implements `setData` to allow users to double-click a cell and modify the time or label directly.
-
-
+    * The underlying data model connecting the UI to the list of events.
+    * Columns: **Time** (formatted `MM:SS.mmm`), **Head**, **Label**.
+    * Implements `setData` to allow users to double-click a cell and modify the time or label directly.
 * **`AnnotationTableWidget`**:
-* Wraps the `QTableView`.
-* Handles row selection (syncs with the video player seek).
-* Provides a context menu to **Delete** events.
+    * Wraps the `QTableView`.
+    * **[NEW] Time Sync Tool**: Includes a "Set to Current Video Time" button that allows users to select an existing event and instantly update its timestamp to the current player position.
+    * Handles row selection (syncs with the video player seek) and provides a context menu to **Delete** events.
 
+## 🔄 Interaction Flows
 
+### Hand Spotting Flow
+1.  **Initialization**: The `LocalizationManager` builds the tabs in `spotting_controls` based on the JSON schema.
+2.  **Spotting**: User clicks a category button; a signal bubbles up to the Manager to grab the player time and add an event.
+3.  **Editing**: User selects a row in the `AnnotationTableWidget` and clicks "Set to Current Video Time", instantly snapping the event's timestamp to the current video frame.
 
-**Signals:**
+### Smart Spotting Flow
+1.  **Range Selection**: User navigates to the "Smart Annotation" tab and sets the Start/End boundaries using the `TimeLineEdit` widgets.
+2.  **Inference**: User clicks "Run Smart Inference". A background thread clips the video and runs the AI model.
+3.  **Review**: Predictions populate the "Predicted Events List". The user can click rows to seek to those timestamps and verify the action.
+4.  **Confirmation**: Clicking "Confirm Predictions" merges the AI events into the core application memory (pushing an Undo command) and moves them to the "Confirmed Events List".
 
-* `annotationSelected(position_ms)`: Emitted when a row is clicked (tells the player to seek).
-* `annotationModified(old_data, new_data)`: Emitted after a cell edit (tells the Controller to push an Undo command).
-* `annotationDeleted(event_item)`: Emitted via context menu.
-
-## Interaction Flow
-
-1. **Initialization**: The `LocalizationManager` calls `update_schema()` on the `spotting_controls` to build the tabs.
-2. **Spotting**:
-* User clicks a button in `HeadSpottingPage`.
-* Signal bubbles up to `LocRightPanel` -> `LocalizationManager`.
-* Manager grabs current player time and adds an event to the Model.
-
-
-3. **Data Refresh**:
-* The Model updates the `AnnotationTableModel`.
-* The table refreshes to show the new row.
-
-
-4. **Editing**:
-* User edits a timestamp in the table.
-* `AnnotationTableModel` validates the input.
-* If valid, it updates the internal data and signals the Manager to record the change for Undo/Redo.
-
-
-
-## Dependencies
+## 🛠️ Dependencies
 
 * **PyQt6**: `QtWidgets`, `QtCore`, `QtGui`.
 * **Project Utils**: Standard signal/slot mechanisms defined in the Controller layer.
