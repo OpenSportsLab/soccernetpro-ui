@@ -167,7 +167,8 @@ class LocFileManager:
 
             # Process events
             raw_events = item.get("events", [])
-            processed_events = []
+            processed_events = []       
+            processed_smart_events = [] 
 
             if isinstance(raw_events, list):
                 for evt in raw_events:
@@ -178,16 +179,25 @@ class LocFileManager:
                     except ValueError:
                         pos_ms = 0
 
-                    processed_events.append(
-                        {
+                    if "confidence" in evt or "score" in evt:
+                        conf = evt.get("confidence", evt.get("score", 1.0))
+                        processed_smart_events.append({
                             "head": evt.get("head", "action"),
                             "label": evt.get("label", "?"),
                             "position_ms": pos_ms,
-                        }
-                    )
+                            "confidence": conf
+                        })
+                    else:
+                        processed_events.append({
+                            "head": evt.get("head", "action"),
+                            "label": evt.get("label", "?"),
+                            "position_ms": pos_ms,
+                        })
 
             if processed_events:
                 self.model.localization_events[final_path] = processed_events
+            if processed_smart_events:
+                self.model.smart_localization_events[final_path] = processed_smart_events
 
             loaded_count += 1
 
@@ -258,26 +268,36 @@ class LocFileManager:
 
         for data in sorted_items:
             abs_path = data["path"]
+            
             events = self.model.localization_events.get(abs_path, [])
+            smart_events = self.model.smart_localization_events.get(abs_path, [])
 
-            # Store path as relative if possible
             try:
                 rel_path = os.path.relpath(abs_path, base_dir).replace(os.sep, "/")
             except Exception:
                 rel_path = abs_path
 
-            # Convert events to export format
             export_events = []
+            
             for e in events:
-                export_events.append(
-                    {
-                        "head": e.get("head"),
-                        "label": e.get("label"),
-                        "position_ms": str(e.get("position_ms")),
-                    }
-                )
+                export_events.append({
+                    "head": e.get("head"),
+                    "label": e.get("label"),
+                    "position_ms": int(e.get("position_ms", 0)), 
+                })
+                
+            for e in smart_events:
+                export_events.append({
+                    "head": e.get("head"),
+                    "label": e.get("label"),
+                    "position_ms": int(e.get("position_ms", 0)),
+                    "confidence": float(e.get("confidence", 0.99)) 
+                })
+
+            export_events.sort(key=lambda x: x["position_ms"])
 
             entry = {
+                "id": data.get("name", ""),
                 "inputs": [
                     {
                         "type": "video",
@@ -285,8 +305,9 @@ class LocFileManager:
                         "fps": 25.0,
                     }
                 ],
-                "events": export_events,
+                "events": export_events 
             }
+
             output["data"].append(entry)
 
         try:
@@ -297,32 +318,10 @@ class LocFileManager:
             self.main.statusBar().showMessage(f"Saved — {os.path.basename(path)}", 1500)
             return True
         except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self.main, "Error", f"Save failed: {e}")
             return False
-        
-        for video_path in sorted(self.model.localization_events.keys()):
-                # 获取该视频所属的原始 item 定义（包含 inputs 视频源信息）
-                base_item = next((item for item in self.model.action_item_data if item["path"] == video_path), None)
-                if not base_item: continue
-                
-                # 1. 获取手工（或已确认的）标注
-                manual_events = self.model.localization_events.get(video_path, [])
-                
-                # 2. 获取未确认的智能标注
-                smart_events = self.model.smart_localization_events.get(video_path, [])
-                
-                # 构建符合 OSL 标准规范的单条数据结构
-                out_item = {
-                    "id": base_item.get("id", ""),
-                    "inputs": [{"path": f, "type": "video"} for f in base_item.get("source_files", [video_path])],
-                    "events": manual_events
-                }
-                
-                # 遵循原始结构添加 smart_events 字段（如果有的话）
-                if smart_events:
-                    out_item["smart_events"] = smart_events
-                    
-                items.append(out_item)
+            
 
     def _clear_workspace(self, full_reset=False):
         """
@@ -336,7 +335,7 @@ class LocFileManager:
             self.main.loc_manager.center_panel.media_preview.stop()
             self.main.loc_manager.center_panel.media_preview.player.setSource(QUrl())
 
-            # ✅ [FIX] Reset timeline UI (markers + label + slider)
+            # [FIX] Reset timeline UI (markers + label + slider)
             tl = self.main.loc_manager.center_panel.timeline
             tl.set_markers([])
             tl.set_duration(0)
@@ -345,6 +344,13 @@ class LocFileManager:
             # Right panel: clear table and schema
             self.main.loc_manager.right_panel.table.set_data([])
             self.main.loc_manager.right_panel.annot_mgmt.update_schema({})
+            if hasattr(self.main.loc_manager.right_panel, "smart_widget"):
+                smart_ui = self.main.loc_manager.right_panel.smart_widget
+                
+                smart_ui.reset_ui()
+                
+                smart_ui.predicted_table.set_data([])
+                smart_ui.confirmed_table.set_data([])
 
         # Reset model data
         self.model.reset(full_reset)

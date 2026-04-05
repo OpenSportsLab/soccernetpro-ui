@@ -29,6 +29,10 @@ class CmdType(Enum):
     LOC_EVENT_DEL = auto()
     LOC_EVENT_MOD = auto()
 
+    LOC_SMART_CONFIRM = auto()     
+    LOC_SMART_EVENT_DEL = auto()   
+    LOC_SMART_RUN = auto()
+
     DESC_EDIT = auto()  # Records text changes in Description mode
 
     # --- Dense Description commands ---
@@ -80,6 +84,8 @@ class AppStateModel:
         # localization-smart annotation
         self.smart_localization_events = {}
 
+        self.temp_smart_events = {}
+
         # --- Common clip list ---
         # Each item: { "name": "...", "path": "...", "source_files": [...] }
         # This is the shared source of truth for the Project Tree
@@ -108,6 +114,7 @@ class AppStateModel:
         self.smart_annotations = {}
         self.localization_events = {}
         self.smart_localization_events = {}
+        self.temp_smart_events = {}
 
         self.imported_input_metadata = {}
         self.imported_action_metadata = {}
@@ -486,8 +493,6 @@ class AppStateModel:
             warnings.append(_fmt("Duplicate events found", warn_duplicates))
 
         return True, "", "\n\n".join(warnings)
-
-
 
 
     # ------------------------------------------------------------

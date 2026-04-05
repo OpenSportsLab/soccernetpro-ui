@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QGroupBox, QLineEdit
+    QGroupBox, QLineEdit, QProgressBar
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 
@@ -157,17 +157,31 @@ class SmartSpottingWidget(QWidget):
         self.btn_run_infer.clicked.connect(self._on_run_clicked)
         
         time_layout.addWidget(self.btn_run_infer)
-        layout.addWidget(self.time_box, 0) # 0 stretch means it stays at top
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0) 
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(10) 
+        self.progress_bar.hide() 
+        time_layout.addWidget(self.progress_bar)
 
-        # --- 2. Smart Events List (Separated from Hand Annotations) ---
-        self.smart_table = AnnotationTableWidget()
-        self.smart_table.edit_lbl.hide()
-        self.smart_table.btn_set_time.hide()
-        self.smart_table.list_lbl.setText("Predicted Events List")
+        layout.addWidget(self.time_box, 0)
+
+        # ==========================================
+        # Predicted  + Confirmed table
+        # ==========================================
+
+        # --- 2. Predicted Events List (Top) ---
+        self.predicted_container = QWidget()
+        pred_layout = QVBoxLayout(self.predicted_container)
+        pred_layout.setContentsMargins(0, 0, 0, 0)
         
-        layout.addWidget(self.smart_table, 1) # 1 stretch means it fills remaining space
+        self.predicted_table = AnnotationTableWidget()
+        self.predicted_table.edit_lbl.hide()
+        self.predicted_table.btn_set_time.hide()
+        self.predicted_table.list_lbl.setText("Predicted Events List")
+        pred_layout.addWidget(self.predicted_table)
 
-        # --- 3. Bottom Controls ---
+        # Bottom Controls for Predicted
         bottom_row = QHBoxLayout()
         self.btn_confirm = QPushButton("Confirm Predictions")
         self.btn_confirm.setProperty("class", "editor_save_btn")
@@ -180,7 +194,41 @@ class SmartSpottingWidget(QWidget):
         
         bottom_row.addWidget(self.btn_confirm)
         bottom_row.addWidget(self.btn_clear)
-        layout.addLayout(bottom_row)
+        pred_layout.addLayout(bottom_row)
+        
+        layout.addWidget(self.predicted_container, 1)
+
+        # --- 3. Confirmed Events List (Bottom) ---
+        self.confirmed_table = AnnotationTableWidget()
+        self.confirmed_table.edit_lbl.hide()
+        self.confirmed_table.btn_set_time.hide()
+        self.confirmed_table.list_lbl.setText("Confirmed Events List")
+        
+        layout.addWidget(self.confirmed_table, 1)
+        
+        self.toggle_predicted_ui(False)
+
+    def toggle_predicted_ui(self, show: bool):
+        self.predicted_container.setVisible(show)
+
+    def set_inference_progress_visible(self, visible: bool):
+        self.progress_bar.setVisible(visible)
+    def reset_ui(self):
+        self.start_ms = 0
+        self.end_ms = 0
+        
+        self.val_start.blockSignals(True)
+        self.val_end.blockSignals(True)
+        
+        self.val_start.set_time_ms(0)
+        self.val_end.set_time_ms(0)
+        
+        self.val_start.blockSignals(False)
+        self.val_end.blockSignals(False)
+        
+        self.toggle_predicted_ui(False)
+        self.set_inference_progress_visible(False)
+
 
     # ==================== Logic & Validation ====================
 

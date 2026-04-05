@@ -86,6 +86,13 @@ class LocalizationManager:
             smart_ui.confirmSmartRequested.connect(self._confirm_smart_events)
             smart_ui.clearSmartRequested.connect(self._clear_smart_events)
             
+            smart_ui.predicted_table.annotationDeleted.connect(self._on_delete_smart_annotation)
+            smart_ui.confirmed_table.annotationDeleted.connect(self._on_delete_smart_annotation)
+            
+            media = self.center_panel.media_preview
+            smart_ui.predicted_table.annotationSelected.connect(lambda ms: media.set_position(ms))
+            smart_ui.confirmed_table.annotationSelected.connect(lambda ms: media.set_position(ms))
+            
             # Tab switch to toggle timeline markers
             self.right_panel.tabs.currentChanged.connect(self._on_tab_switched)
 
@@ -147,15 +154,24 @@ class LocalizationManager:
         if path and os.path.exists(path):
             self.current_video_path = path
             
-            # [CHANGED] Use MediaController for standardized playback
-            # This handles the Stop -> Load -> Delay -> Play sequence automatically
+            # Use MediaController for standardized playback
             self.media_controller.load_and_play(path)
             
-            # Update UI for events
-            self._display_events_for_item(path)
+            if self.right_panel.tabs.currentIndex() == 1:
+                self._display_smart_events(path)
+            else:
+                self._display_events_for_item(path)
             
         else:
             if path: QMessageBox.warning(self.main, "Error", f"File not found: {path}")
+
+
+    def _refresh_current_clip_events(self):
+        if self.current_video_path: 
+            if self.right_panel.tabs.currentIndex() == 1:
+                self._display_smart_events(self.current_video_path)
+            else:
+                self._display_events_for_item(self.current_video_path)
 
     def _on_add_video_clicked(self):
         start_dir = self.model.current_working_directory or ""
@@ -450,8 +466,12 @@ class LocalizationManager:
             path = data['path']
             item = self.tree_model.add_entry(name, path, data.get('source_files'))
             self.model.action_item_map[path] = item
+            # [FIXED] 初始化也同时检查手标和智标
             events = self.model.localization_events.get(path, [])
-            item.setIcon(self.main.done_icon if events else self.main.empty_icon)
+            smart_events = self.model.smart_localization_events.get(path, [])
+            has_data = (len(events) > 0) or (len(smart_events) > 0)
+            
+            item.setIcon(self.main.done_icon if has_data else self.main.empty_icon)
             if i == 0: first_idx = item.index()
         self.left_panel.project_controls.set_project_loaded_state(True)
         self._refresh_schema_ui()
@@ -465,7 +485,10 @@ class LocalizationManager:
     def refresh_tree_icons(self):
         for path, item in self.model.action_item_map.items():
             events = self.model.localization_events.get(path, [])
-            item.setIcon(self.main.done_icon if events else self.main.empty_icon)
+            smart_events = self.model.smart_localization_events.get(path, [])
+            
+            has_data = (len(events) > 0) or (len(smart_events) > 0)
+            item.setIcon(self.main.done_icon if has_data else self.main.empty_icon)
 
     def _apply_clip_filter(self, combo_index):
         root = self.tree_model.invisibleRootItem()
@@ -473,7 +496,9 @@ class LocalizationManager:
             item = root.child(i)
             path = item.data(Qt.ItemDataRole.UserRole)
             events = self.model.localization_events.get(path, [])
-            has_anno = len(events) > 0
+            smart_events = self.model.smart_localization_events.get(path, [])
+            has_anno = (len(events) > 0) or (len(smart_events) > 0)
+            
             should_hide = False
             if combo_index == 1 and not has_anno: should_hide = True 
             elif combo_index == 2 and has_anno: should_hide = True   
@@ -499,30 +524,75 @@ class LocalizationManager:
 
     def _navigate_annotation(self, step):
         if not self.current_video_path: return
-        events = self.model.localization_events.get(self.current_video_path, [])
+        
+        is_smart_tab = (self.right_panel.tabs.currentIndex() == 1)
+        
+        if is_smart_tab:
+            confirmed = self.model.smart_localization_events.get(self.current_video_path, [])
+            unconfirmed = self.model.temp_smart_events.get(self.current_video_path, [])
+            events = confirmed + unconfirmed
+        else:
+            events = self.model.localization_events.get(self.current_video_path, [])
+            
         if not events: return
+        
         sorted_events = sorted(events, key=lambda x: x.get('position_ms', 0))
         current_pos = self.center_panel.media_preview.player.position()
         target_time = None
+        
         if step > 0:
             for e in sorted_events:
-                if e.get('position_ms', 0) > current_pos + 100: target_time = e.get('position_ms'); break
+                if e.get('position_ms', 0) > current_pos + 100: 
+                    target_time = e.get('position_ms')
+                    break
         else:
             for e in reversed(sorted_events):
-                if e.get('position_ms', 0) < current_pos - 100: target_time = e.get('position_ms'); break
+                if e.get('position_ms', 0) < current_pos - 100: 
+                    target_time = e.get('position_ms')
+                    break
+                    
         if target_time is not None:
             self.center_panel.media_preview.set_position(target_time)
-            self._select_row_by_time(target_time)
+            self._select_row_by_time(target_time, is_smart_tab)
 
-    def _select_row_by_time(self, time_ms):
-        model = self.right_panel.table.model
-        for row in range(model.rowCount()):
-            item = model.get_annotation_at(row)
-            if item and abs(item.get('position_ms', 0) - time_ms) < 10:
-                idx = model.index(row, 0)
-                self.right_panel.table.table.selectRow(row)
-                self.right_panel.table.table.scrollTo(idx)
-                break
+    def _select_row_by_time(self, time_ms, is_smart_tab=False):
+        if is_smart_tab:
+            pred_table = self.right_panel.smart_widget.predicted_table
+            conf_table = self.right_panel.smart_widget.confirmed_table
+            
+            found_in_pred = False
+            
+            pred_model = pred_table.model
+            for row in range(pred_model.rowCount()):
+                item = pred_model.get_annotation_at(row)
+                if item and abs(item.get('position_ms', 0) - time_ms) < 10:
+                    idx = pred_model.index(row, 0)
+                    pred_table.table.selectRow(row)
+                    pred_table.table.scrollTo(idx)
+                    conf_table.table.clearSelection() 
+                    found_in_pred = True
+                    break
+                    
+            if not found_in_pred:
+                conf_model = conf_table.model
+                for row in range(conf_model.rowCount()):
+                    item = conf_model.get_annotation_at(row)
+                    if item and abs(item.get('position_ms', 0) - time_ms) < 10:
+                        idx = conf_model.index(row, 0)
+                        conf_table.table.selectRow(row)
+                        conf_table.table.scrollTo(idx)
+                        pred_table.table.clearSelection() 
+                        break
+        else:
+            target_table = self.right_panel.table
+            model = target_table.model
+            for row in range(model.rowCount()):
+                item = model.get_annotation_at(row)
+                if item and abs(item.get('position_ms', 0) - time_ms) < 10:
+                    idx = model.index(row, 0)
+                    target_table.table.selectRow(row)
+                    target_table.table.scrollTo(idx)
+                    break
 
     def _reselect_event(self, target_event):
         model = self.right_panel.table.model
@@ -556,23 +626,15 @@ class LocalizationManager:
         h = m // 60
         return f"{h:02}:{m%60:02}:{s%60:02}.{ms%1000:03}"
     
-
     # ==========================================
     # --- Smart Annotation Control Logic ---
     # ==========================================
 
     def _on_smart_set_time(self, target: str):
-        """
-        Triggered when 'Set to Current' is clicked in Smart Spotting UI.
-        Gets current player position and updates the smart UI.
-        """
         player = self.center_panel.media_preview.player
         current_ms = player.position()
         time_str = self._fmt_ms_full(current_ms)
-        
-        # Update the UI display and internal state in the Smart Widget
         self.right_panel.smart_widget.update_time_display(target, time_str, current_ms)
-
 
     def _run_localization_inference(self, start_ms: int, end_ms: int):
         if not self.current_video_path:
@@ -584,84 +646,152 @@ class LocalizationManager:
             
         self.main.show_temp_msg("Smart Inference", "Running OpenSportsLib Localization Model...")
         self.right_panel.smart_widget.btn_run_infer.setEnabled(False)
+        self.right_panel.smart_widget.set_inference_progress_visible(True)
         self.inference_manager.start_inference(self.current_video_path, start_ms, end_ms)
-
 
     def _on_inference_success(self, predicted_events: list):
         self.right_panel.smart_widget.btn_run_infer.setEnabled(True)
+        self.right_panel.smart_widget.set_inference_progress_visible(False)
+
         if not self.current_video_path:
             return
-            
-        self.model.smart_localization_events[self.current_video_path] = predicted_events
-        self.main.show_temp_msg("Smart Inference", f"Success: Found {len(predicted_events)} events.")
         
+        old_temp = self.model.temp_smart_events.get(self.current_video_path, [])
+        self.model.push_undo(
+            CmdType.LOC_SMART_RUN, 
+            video_path=self.current_video_path, 
+            old_events=copy.deepcopy(old_temp),
+            new_events=copy.deepcopy(predicted_events)
+        )
+
+        self.model.temp_smart_events[self.current_video_path] = predicted_events
+        self.main.show_temp_msg("Smart Inference", f"Success: Found {len(predicted_events)} new events.")
+
         if self.right_panel.tabs.currentIndex() == 1:
             self._display_smart_events(self.current_video_path)
 
     def _on_inference_error(self, error_msg: str):
         self.right_panel.smart_widget.btn_run_infer.setEnabled(True)
+        self.right_panel.smart_widget.set_inference_progress_visible(False)
         from PyQt6.QtWidgets import QMessageBox
         QMessageBox.critical(self.main, "Inference Error", f"Failed to run model:\n{error_msg}")
 
     def _confirm_smart_events(self):
-        """将智能预测合并到手工标注中"""
         if not self.current_video_path:
             return
             
-        smart_events = self.model.smart_localization_events.get(self.current_video_path, [])
-        if not smart_events:
+        temp_events = self.model.temp_smart_events.get(self.current_video_path, [])
+        if not temp_events:
+            self.main.show_temp_msg("Info", "No new predictions to confirm.")
             return
+        
+        self.model.push_undo(
+            CmdType.LOC_SMART_CONFIRM, 
+            video_path=self.current_video_path, 
+            confirmed_events=copy.deepcopy(temp_events)
+        )
+        
+        schema_changed = False
+        for evt in temp_events:
+            h = evt.get("head", "ball_action")
+            l = evt.get("label", "Unknown")
             
-        # 初始化当前视频的手工事件列表（如果没有）
-        if self.current_video_path not in self.model.localization_events:
-            self.model.localization_events[self.current_video_path] = []
+            if h not in self.model.label_definitions:
+                self.model.label_definitions[h] = {"type": "single_label", "labels": []}
+                schema_changed = True
+                
+            if l not in self.model.label_definitions[h]["labels"] and l != "Unknown" and l != "?":
+                self.model.label_definitions[h]["labels"].append(l)
+                schema_changed = True
+
+        if schema_changed:
+            self._refresh_schema_ui()
+            self.right_panel.annot_mgmt.tabs.set_current_head(list(self.model.label_definitions.keys())[0])
             
-        # 合并事件 (此处暂不处理 undo/redo)
-        self.model.localization_events[self.current_video_path].extend(smart_events)
+        if self.current_video_path not in self.model.smart_localization_events:
+            self.model.smart_localization_events[self.current_video_path] = []
+            
+        self.model.smart_localization_events[self.current_video_path].extend(temp_events)
+        self.model.smart_localization_events[self.current_video_path].sort(key=lambda x: x.get('position_ms', 0))
         
-        # 按照时间排序
-        self.model.localization_events[self.current_video_path].sort(key=lambda x: x.get('position_ms', 0))
+        self.model.temp_smart_events[self.current_video_path] = []
+        self._display_smart_events(self.current_video_path) 
         
-        # 清空当前的 Smart Events
-        self.model.smart_localization_events[self.current_video_path] = []
-        self._display_smart_events(self.current_video_path) # 刷新为空表
-        
-        # 提示用户
-        self.main.show_temp_msg("Smart Spotting", "Predictions confirmed and merged into Hand Annotations.")
+        self.main.show_temp_msg("Smart Spotting", "Predictions confirmed and accumulated.")
         self.model.is_data_dirty = True
         self.main.update_save_export_button_state()
+
+        self.refresh_tree_icons()
 
     def _clear_smart_events(self):
         if not self.current_video_path:
             return
-        self.model.smart_localization_events[self.current_video_path] = []
+
+        old_temp = self.model.temp_smart_events.get(self.current_video_path, [])
+        if old_temp:
+            self.model.push_undo(
+                CmdType.LOC_SMART_RUN, 
+                video_path=self.current_video_path, 
+                old_events=copy.deepcopy(old_temp),
+                new_events=[]
+            )
+        self.model.temp_smart_events[self.current_video_path] = []
         self._display_smart_events(self.current_video_path)
-        self.main.show_temp_msg("Smart Spotting", "Cleared smart predictions.")
+        self.main.show_temp_msg("Smart Spotting", "Cleared unconfirmed predictions.")
+
 
     def _display_smart_events(self, video_path: str):
-        """Dedicated method to display ONLY smart events in the smart table and timeline."""
-        events = self.model.smart_localization_events.get(video_path, [])
-        # 更新 Smart Table
-        self.right_panel.smart_widget.smart_table.set_data(events)
-        # 更新 Timeline
+        confirmed_smart = self.model.smart_localization_events.get(video_path, [])
+        unconfirmed = self.model.temp_smart_events.get(video_path, [])
+        
+        confirmed_display = confirmed_smart.copy()
+        confirmed_display.sort(key=lambda x: x.get('position_ms', 0))
+        
+        unconfirmed_display = unconfirmed.copy()
+        unconfirmed_display.sort(key=lambda x: x.get('position_ms', 0))
+        
+        smart_ui = self.right_panel.smart_widget
+        smart_ui.predicted_table.set_data(unconfirmed_display)
+        smart_ui.confirmed_table.set_data(confirmed_display)
+        
+        smart_ui.toggle_predicted_ui(len(unconfirmed_display) > 0)
+        
         markers = []
-        for evt in events:
-            # Smart events 也可以使用不同的颜色，比如蓝色，用来和手工标注（红色）区分
-            from PyQt6.QtGui import QColor
-            markers.append({
-                'start_ms': evt.get('position_ms', 0),
-                'color': QColor('deepskyblue')
-            })
+        from PyQt6.QtGui import QColor
+        for evt in confirmed_display:
+            markers.append({'start_ms': evt.get('position_ms', 0), 'color': QColor('deepskyblue')})
+        for evt in unconfirmed_display:
+            markers.append({'start_ms': evt.get('position_ms', 0), 'color': QColor('#FFD700')})
+            
         self.center_panel.timeline.set_markers(markers)
 
+    def _on_delete_smart_annotation(self, item_data):
+        if not self.current_video_path: return
+        confirmed_smart = self.model.smart_localization_events.get(self.current_video_path, [])
+        unconfirmed = self.model.temp_smart_events.get(self.current_video_path, [])
+
+        is_dirty = False
+        
+        if item_data in unconfirmed:
+            self.model.push_undo(CmdType.LOC_SMART_EVENT_DEL, video_path=self.current_video_path, event=copy.deepcopy(item_data), is_confirmed=False)
+            unconfirmed.remove(item_data)
+            
+        elif item_data in confirmed_smart:
+            self.model.push_undo(CmdType.LOC_SMART_EVENT_DEL, video_path=self.current_video_path, event=copy.deepcopy(item_data), is_confirmed=True)
+            confirmed_smart.remove(item_data)
+            is_dirty = True
+
+        if is_dirty:
+            self.model.is_data_dirty = True
+            self.main.update_save_export_button_state()
+
+        self._display_smart_events(self.current_video_path)
+
     def _on_tab_switched(self, index: int):
-        """切换 Tab 时隔离视觉状态"""
         if not self.current_video_path:
             return
-            
         if index == 0:
-            # 回到手工标注，加载原始的手工事件
             self._display_events_for_item(self.current_video_path)
         elif index == 1:
-            # 去到智能标注，加载智能事件
             self._display_smart_events(self.current_video_path)
+

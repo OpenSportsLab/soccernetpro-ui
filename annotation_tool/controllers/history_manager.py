@@ -53,7 +53,7 @@ class HistoryManager:
             # Refresh Events (Table & Timeline)
             self.main.loc_manager._refresh_current_clip_events()
             # Refresh left side
-            self.main.loc_manager.populate_tree()
+            self.main.loc_manager.refresh_tree_icons()
 
         # 2. Description Mode
         elif current_widget == self.main.ui.description_ui:
@@ -200,6 +200,68 @@ class HistoryManager:
                 pass # Event not found
             
             self._refresh_active_view()
+
+
+        # =========================================================
+        # Redo/undo for localization smart annotation
+        # =========================================================
+        elif ctype == CmdType.LOC_SMART_CONFIRM:
+            path = cmd['video_path']
+            events = cmd['confirmed_events']
+            
+            smart_events = self.model.smart_localization_events.get(path, [])
+            temp_events = self.model.temp_smart_events.get(path, [])
+            
+            if is_undo:
+                for evt in events:
+                    if evt in smart_events:
+                        smart_events.remove(evt)
+                temp_events.extend(events)
+                temp_events.sort(key=lambda x: x.get('position_ms', 0))
+            else:
+                for evt in events:
+                    if evt in temp_events:
+                        temp_events.remove(evt)
+                smart_events.extend(events)
+                smart_events.sort(key=lambda x: x.get('position_ms', 0))
+                
+            self.model.smart_localization_events[path] = smart_events
+            self.model.temp_smart_events[path] = temp_events
+            
+            self.main.loc_manager.refresh_tree_icons()
+            self.main.loc_manager._display_smart_events(path)
+
+        elif ctype == CmdType.LOC_SMART_EVENT_DEL:
+            path = cmd['video_path']
+            evt = cmd['event']
+            is_confirmed = cmd['is_confirmed']
+            
+            if is_confirmed:
+                events_list = self.model.smart_localization_events.setdefault(path, [])
+            else:
+                events_list = self.model.temp_smart_events.setdefault(path, [])
+                
+            if is_undo:
+                events_list.append(evt)
+                events_list.sort(key=lambda x: x.get('position_ms', 0))
+            else:
+                if evt in events_list:
+                    events_list.remove(evt)
+                    
+            self.main.loc_manager.refresh_tree_icons()
+            self.main.loc_manager._display_smart_events(path)
+
+        elif ctype == CmdType.LOC_SMART_RUN:
+            path = cmd['video_path']
+            old_events = cmd['old_events']
+            new_events = cmd['new_events']
+            
+            if is_undo:
+                self.model.temp_smart_events[path] = copy.deepcopy(old_events)
+            else:
+                self.model.temp_smart_events[path] = copy.deepcopy(new_events)
+                
+            self.main.loc_manager._display_smart_events(path)
 
         # =========================================================
         # 3. Description Specific

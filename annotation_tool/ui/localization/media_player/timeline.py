@@ -137,7 +137,7 @@ class TimelineWidget(QWidget):
     def _change_zoom(self, direction):
         old_level = self.zoom_level
         if direction > 0:
-            self.zoom_level = min(self.zoom_level * 1.5, 20.0) 
+            self.zoom_level = min(self.zoom_level * 1.5, 100.0) 
         else:
             self.zoom_level = max(self.zoom_level / 1.5, 1.0)
             
