@@ -23,7 +23,7 @@ from ui.common.main_window import MainWindowUI
 from models.project_tree import ProjectTreeModel
 from utils import create_checkmark_icon, natural_sort_key, resource_path
 
-class ActionClassifierApp(QMainWindow):
+class VideoAnnotationWindow(QMainWindow):
     """Main application window for annotation + localization + description + dense workflows."""
 
     FILTER_ALL = 0
@@ -34,7 +34,7 @@ class ActionClassifierApp(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("Video Annotation Tool")
-        self.setGeometry(100, 100, 600, 400)
+        # self.setGeometry(100, 100, 600, 400)
 
         # --- MVC wiring ---
         self.ui = MainWindowUI()
