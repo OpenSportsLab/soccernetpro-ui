@@ -19,18 +19,19 @@ from controllers.history_manager import HistoryManager
 from controllers.media_controller import MediaController
 
 from controllers.router import AppRouter
+from controllers.common.dataset_explorer_controller import DatasetExplorerController
+from controllers.common.welcome_controller import WelcomeController
 from models import AppStateModel
 
 # [NEW] Direct UI Imports
 from ui.common.welcome_widget import WelcomeWidget
-from ui.common.project_navigator_panel import ProjectNavigatorPanel
+from ui.common.dataset_explorer_panel import DatasetExplorerPanel
 from ui.common.media_player import MediaCenterPanel
 from ui.classification.event_editor import ClassificationAnnotationPanel
 from ui.localization.event_editor import LocalizationAnnotationPanel
 from ui.description.event_editor import DescriptionAnnotationPanel
 from ui.dense_description.event_editor import DenseAnnotationPanel
 
-from models.project_tree import ProjectTreeModel
 from utils import create_checkmark_icon, natural_sort_key, resource_path
 
 class VideoAnnotationWindow(QMainWindow):
@@ -51,7 +52,6 @@ class VideoAnnotationWindow(QMainWindow):
 
         # --- Model wiring ---
         self.model = AppStateModel()
-        self.tree_model = ProjectTreeModel(self)
 
         # --- 1. Center Area: Stacked Widget (Welcome vs Media Player) ---
         self.center_stack = QStackedWidget()
@@ -64,18 +64,18 @@ class VideoAnnotationWindow(QMainWindow):
         
         self.setCentralWidget(self.center_stack)
 
-        # --- 2. Left Dock: Project Navigator ---
-        self.left_panel = ProjectNavigatorPanel(
+        # --- 2. Left Dock: Dataset Explorer ---
+        self.dataset_explorer_panel = DatasetExplorerPanel(
             tree_title="Data",
             filter_items=["Show All", "Hand Labelled", "Smart Labelled", "No Labelled"],
             clear_text="Clear All",
             enable_context_menu=True
         )
-        self.left_panel.tree.setModel(self.tree_model)
+        self.tree_model = self.dataset_explorer_panel.tree_model
         
-        self.data_dock = QDockWidget("Project Navigator", self)
-        self.data_dock.setObjectName("DataNavigatorDock")
-        self.data_dock.setWidget(self.left_panel)
+        self.data_dock = QDockWidget("Dataset Explorer", self)
+        self.data_dock.setObjectName("DatasetExplorerDock")
+        self.data_dock.setWidget(self.dataset_explorer_panel)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.data_dock)
 
         # --- 3. Right Dock: Annotation Editors ---
@@ -100,13 +100,24 @@ class VideoAnnotationWindow(QMainWindow):
         # Allow nested docking and tabbed docks
         self.setDockOptions(QMainWindow.DockOption.AllowNestedDocks | QMainWindow.DockOption.AnimatedDocks)
 
+        # [NEW] Dataset Explorer (Panel-Model-Controller)
+        # Initialized early so other controllers (like Router) can reference it
+        self.dataset_explorer_controller = DatasetExplorerController(
+            main_window=self,
+            panel=self.dataset_explorer_panel,
+            tree_model=self.tree_model,
+            app_state=self.model,
+            media_controller=None # Placeholder, will be set after MediaController init
+        )
+
         # --- Controllers ---
         self.router = AppRouter(self)
+        self.welcome_controller = WelcomeController(self.welcome_widget, self.router, self)
         self.history_manager = HistoryManager(self)
         
         # [CENTRALIZED] Create the ONE and ONLY Media Controller here
-        preview_panel = self.center_panel.media_preview
-        self.media_controller = MediaController(preview_panel.player, preview_panel.video_widget)
+        self.media_controller = MediaController(self.center_panel.player, self.center_panel.video_widget)
+        self.dataset_explorer_controller.media_controller = self.media_controller
         
         self.annot_manager = AnnotationManager(self)
         self.nav_manager = NavigationManager(self, self.media_controller)
@@ -207,35 +218,24 @@ class VideoAnnotationWindow(QMainWindow):
     def connect_signals(self) -> None:
         """Connect UI signals to controller actions."""
 
-        # Welcome screen
-        self.welcome_widget.import_btn.clicked.connect(self._safe_import_annotations)
-        self.welcome_widget.create_btn.clicked.connect(self._safe_create_project)
-
         # --- COMPONENT REFS ---
-        left_panel = self.left_panel
         center_panel = self.center_panel
         
-        # --- Left panel (Unified) ---
-        left_panel.addVideoRequested.connect(self._dispatch_add_video)
-        left_panel.clear_btn.clicked.connect(self._dispatch_clear_workspace)
-        left_panel.request_remove_item.connect(self._on_remove_item_requested)
-        left_panel.tree.selectionModel().currentChanged.connect(self._on_tree_selection_changed)
-        left_panel.filter_combo.currentIndexChanged.connect(self._dispatch_filter_change)
+        # --- Dataset Explorer panel (Unified) ---
+        # Handled by dataset_explorer_controller for clear PMC separation,
+        # but the controller will internally call MainWindow dispatchers
+        # when it needs global context.
+
 
         # --- Center panel (Unified Playback) ---
-        center_panel.playback.playPauseRequested.connect(self._dispatch_play_pause)
-        center_panel.playback.seekRelativeRequested.connect(self._dispatch_seek)
-        center_panel.playback.stopRequested.connect(self.stop_all_players)
-        center_panel.playback.playbackRateRequested.connect(center_panel.media_preview.set_playback_rate)
+        center_panel.playPauseRequested.connect(self._dispatch_play_pause)
+        center_panel.seekRelativeRequested.connect(self._dispatch_seek)
+        center_panel.stopRequested.connect(self.stop_all_players)
+        center_panel.playbackRateRequested.connect(center_panel.set_playback_rate)
         
         # Navigation signals from the unified bar
-        center_panel.playback.nextPrevClipRequested.connect(self._dispatch_next_prev_clip)
-        center_panel.playback.nextPrevAnnotRequested.connect(self._dispatch_next_prev_annot)
-        
-        # --- Timeline ---
-        center_panel.media_preview.durationChanged.connect(center_panel.timeline.set_duration)
-        center_panel.media_preview.positionChanged.connect(center_panel.timeline.set_position)
-        center_panel.timeline.seekRequested.connect(center_panel.media_preview.set_position)
+        center_panel.nextPrevClipRequested.connect(self._dispatch_next_prev_clip)
+        center_panel.nextPrevAnnotRequested.connect(self._dispatch_next_prev_annot)
         
         # --- Classification Editor ---
         self.classification_panel.annotation_saved.connect(lambda data: self.annot_manager.save_manual_annotation())
@@ -339,22 +339,13 @@ class VideoAnnotationWindow(QMainWindow):
     def _is_dense_mode(self) -> bool: return self._get_active_mode_index() == 3
 
     def _dispatch_add_video(self):
-        if self._is_loc_mode(): self.loc_manager._on_add_video_clicked()
-        elif self._is_desc_mode(): self.desc_nav_manager.add_items_via_dialog()
-        elif self._is_dense_mode(): self.dense_manager._on_add_video_clicked()
-        else: self.nav_manager.add_items_via_dialog()
+        self.dataset_explorer_controller.handle_add_video()
 
     def _dispatch_clear_workspace(self):
-        if self._is_loc_mode(): self.loc_manager._on_clear_all_clicked()
-        elif self._is_desc_mode(): self._on_desc_clear_clicked()
-        elif self._is_dense_mode(): self.dense_manager._on_clear_all_clicked()
-        else: self._on_class_clear_clicked()
+        self.dataset_explorer_controller.handle_clear_workspace()
 
     def _dispatch_filter_change(self, index):
-        if self._is_loc_mode(): self.loc_manager._apply_clip_filter(index)
-        elif self._is_desc_mode(): self.desc_nav_manager.apply_action_filter()
-        elif self._is_dense_mode(): self.dense_manager._apply_clip_filter(index)
-        else: self.nav_manager.apply_action_filter()
+        self.dataset_explorer_controller.handle_filter_change(index)
 
     def _on_tree_selection_changed(self, current: QModelIndex, previous: QModelIndex):
         if current.isValid():
@@ -370,7 +361,7 @@ class VideoAnnotationWindow(QMainWindow):
                 first_child = self.tree_model.index(0, 0, current)
                 if first_child.isValid():
                     # This will trigger selectionChanged again for the child
-                    self.left_panel.tree.setCurrentIndex(first_child)
+                    self.dataset_explorer_panel.tree.setCurrentIndex(first_child)
                     return
 
             # 2. Mode-aware Dispatching (Avoid duplicate loading)
@@ -392,22 +383,13 @@ class VideoAnnotationWindow(QMainWindow):
             self.dense_panel.setEnabled(False)
 
     def _on_remove_item_requested(self, index: QModelIndex):
-        if self._is_dense_mode(): self.dense_manager.remove_single_item(index)
-        else: self.nav_manager.remove_single_action_item(index)
+        self.dataset_explorer_controller.handle_remove_item(index)
 
     def _dispatch_save(self) -> None:
-        if self._is_loc_mode(): self.router.loc_fm.overwrite_json()
-        elif self._is_desc_mode():
-            self.desc_annot_manager.save_current_annotation()
-            self.router.desc_fm.save_json() 
-        elif self._is_dense_mode(): self.router.dense_fm.overwrite_json()
-        else: self.router.class_fm.save_json()
+        self.dataset_explorer_controller.save_project()
 
     def _dispatch_export(self) -> None:
-        if self._is_loc_mode(): self.router.loc_fm.export_json()
-        elif self._is_desc_mode(): self.router.desc_fm.export_json()
-        elif self._is_dense_mode(): self.router.dense_fm.export_json()
-        else: self.router.class_fm.export_json()
+        self.dataset_explorer_controller.export_project()
 
     def _dispatch_play_pause(self) -> None:
         # All managers now use the same media controller roughly
@@ -451,7 +433,7 @@ class VideoAnnotationWindow(QMainWindow):
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
         if msg.exec() == QMessageBox.StandardButton.Yes:
             self.stop_all_players()
-            self.router.class_fm._clear_workspace(full_reset=True)
+            self.dataset_explorer_controller.clear_classification_workspace()
 
     def _on_desc_clear_clicked(self) -> None:
         if not self.model.json_loaded: return
@@ -461,7 +443,7 @@ class VideoAnnotationWindow(QMainWindow):
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
         if msg.exec() == QMessageBox.StandardButton.Yes:
             self.stop_all_players()
-            self.router.desc_fm._clear_workspace(full_reset=True)
+            self.dataset_explorer_controller.clear_description_workspace()
 
     def prepare_new_project_ui(self) -> None:
         self.set_project_ui_enabled(True)
@@ -534,11 +516,11 @@ class VideoAnnotationWindow(QMainWindow):
         self.statusBar().showMessage(f"{title} — {one_line}" if title else one_line, duration)
 
     def get_current_action_path(self):
-        tree_view = self.left_panel.tree
+        tree_view = self.dataset_explorer_panel.tree
         idx = tree_view.selectionModel().currentIndex()
         if not idx.isValid(): return None
-        if idx.parent().isValid(): return idx.parent().data(ProjectTreeModel.FilePathRole)
-        return idx.data(ProjectTreeModel.FilePathRole)
+        if idx.parent().isValid(): return idx.parent().data(self.tree_model.FilePathRole)
+        return idx.data(self.tree_model.FilePathRole)
 
     def sync_batch_inference_dropdowns(self) -> None:
         ed = self.classification_panel
@@ -548,34 +530,12 @@ class VideoAnnotationWindow(QMainWindow):
         ed.update_action_list(action_names)
 
     def populate_action_tree(self) -> None:
-        self.tree_model.clear()
-        self.model.action_item_map.clear()
-        sorted_list = sorted(self.model.action_item_data, key=lambda d: natural_sort_key(d.get("name", "")))
-        self.sync_batch_inference_dropdowns()
-        for data in sorted_list:
-            item = self.tree_model.add_entry(name=data["name"], path=data["path"], source_files=data.get("source_files"))
-            self.model.action_item_map[data["path"]] = item
-            self.update_action_item_status(data["path"])
-        self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
-        tree = self.left_panel.tree
-        if self.tree_model.rowCount() > 0:
-            first_index = self.tree_model.index(0, 0)
-            if first_index.isValid(): tree.setCurrentIndex(first_index)
+        """Loads data from the app state into the UI model tree."""
+        self.dataset_explorer_controller.populate_tree()
 
     def update_action_item_status(self, action_path: str) -> None:
-        item: QStandardItem = self.model.action_item_map.get(action_path)
-        if not item: return
-        is_done = False # Mode-specific logic here...
-        if self._is_loc_mode(): is_done = action_path in self.model.localization_events
-        elif self._is_desc_mode(): 
-            # Check captions
-            for d in self.model.action_item_data:
-                if d.get("path") == action_path:
-                    if any(c.get("text", "").strip() for c in d.get("captions", [])): is_done = True
-                    break
-        elif self._is_dense_mode(): is_done = action_path in self.model.dense_description_events
-        else: is_done = action_path in self.model.manual_annotations
-        item.setIcon(self.done_icon if is_done else self.empty_icon)
+        """Updates the icon state for an item (Done/Not Done check)."""
+        self.dataset_explorer_controller.update_item_status(action_path)
 
     def setup_dynamic_ui(self) -> None:
         ed = self.classification_panel
@@ -594,15 +554,15 @@ class VideoAnnotationWindow(QMainWindow):
 
     def refresh_ui_after_undo_redo(self, action_path: str) -> None:
         if not action_path:
-            self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
+            self.dataset_explorer_controller.handle_filter_change(self.dataset_explorer_panel.filter_combo.currentIndex())
             self.update_save_export_button_state()
             return
         self.update_action_item_status(action_path)
-        self._dispatch_filter_change(self.left_panel.filter_combo.currentIndex())
+        self.dataset_explorer_controller.handle_filter_change(self.dataset_explorer_panel.filter_combo.currentIndex())
         item = self.model.action_item_map.get(action_path)
         if item:
             idx = item.index()
-            self.left_panel.tree.setCurrentIndex(idx)
+            self.dataset_explorer_panel.tree.setCurrentIndex(idx)
         if self._is_loc_mode(): self.loc_manager._display_events_for_item(action_path)
         elif self._is_desc_mode(): self.desc_nav_manager.on_item_selected(item.index(), None)
         elif self._is_dense_mode(): self.dense_manager._display_events_for_item(action_path)

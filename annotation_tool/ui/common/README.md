@@ -1,80 +1,58 @@
-# 🛠️ Common UI Components
+# Common UI Components
 
-This directory contains **shared interface widgets** that are used across all four modes of the application (**Classification, Localization, Description, and Dense Description**).
+This directory contains shared UI components used by the main application workspace.
 
-The goal of this module is to adhere to the **DRY (Don't Repeat Yourself)** principle, ensuring a consistent layout and user experience regardless of the active task.
+## Current Structure
 
-## 📂 Files & Components
+```text
+ui/common/
+├── dataset_explorer_panel/   # Left dock panel (UI + view logic)
+├── media_player/             # Center media panel (UI + view logic)
+├── welcome_widget/           # Landing screen view (UI + view logic)
+├── dialogs.py                # Shared dialogs
+└── README.md
+```
 
-### 1. `workspace.py`
+## Components
 
-* **Class:** `MainWorkspace`
-* **Purpose:** The modern, dock-based architecture providing a unified interface for all annotation modes.
-* **Structure:** A `QMainWindow` featuring:
-1. **Left Dock:** Project Navigator (`ProjectNavigatorPanel`).
-2. **Center Panel:** Generic Media Player with unified controls.
-3. **Right Dock:** Tab-based Annotation Editor (CLS, LOC, DESC, DENSE).
+### `dataset_explorer_panel/`
 
+- **Primary class:** `DatasetExplorerPanel`
+- **Model:** `DatasetExplorerTreeModel`
+- **Purpose:** Left sidebar for dataset items, filtering, add-data trigger, and context-menu remove actions.
+- **Implementation:** Package-style module with:
+  - `__init__.py`
+  - `dataset_explorer_panel.ui`
+  - local `README.md`
+- **Controller pair:** `controllers/common/dataset_explorer_controller.py`
 
-* **Usage:** This widget instantiates the Left Panel automatically, while the Center and Right widgets are injected via the constructor.
+### `media_player/`
 
-### 2. `main_window.py`
+- **Primary class:** `MediaCenterPanel`
+- **Purpose:** Unified center media area (video surface, timeline, playback controls).
+- **Implementation:** Package-style module with:
+  - `__init__.py`
+  - `media_center_panel.ui`
+  - local `README.md`
+- **Notes:** Exposes direct media/timeline/playback API used by `main_window.py` and mode managers.
 
-* **Class:** `MainWindowUI`
-* **Purpose:** The top-level container that orchestrates the **Screen Stack**.
-* **Architecture:** Uses a `QStackedLayout` to switch between views without destroying them.
-* **View Indices:**
-* **Index 0:** Welcome Screen (`WelcomeWidget`)
-* **Index 1:** Classification Workspace
-* **Index 2:** Localization Workspace
-* **Index 3:** Description Workspace (Global Captioning)
-* **Index 4:** **[NEW]** Dense Description Workspace (Timestamped Captioning)
+### `welcome_widget/`
 
+- **Primary class:** `WelcomeWidget`
+- **Purpose:** Landing screen with project entry actions (create/import) and external links.
+- **Implementation:** Package-style module with:
+  - `__init__.py`
+  - `welcome_widget.ui`
+  - local `README.md`
+- **Controller pair:** `controllers/common/welcome_controller.py`
+- **Notes:** View emits signals only; routing/open-link behavior is controller-owned.
 
+### `dialogs.py`
 
-### 3. `project_navigator_panel.py`
+- Shared dialogs used by controllers/router flows (project mode selection, picker dialogs, and media error dialog).
 
-* **Class:** `ProjectNavigatorPanel`
-* **Purpose:** The standardized **Left Sidebar** for file navigation.
-* **Key Features:**
-* **Architecture:** Refactored to use **Qt Model/View** (`QTreeView`) instead of `QTreeWidget` for better performance and separation of data.
-* **Integrated Controls:** Embeds `UnifiedProjectControls` at the top.
-* **Filtering:** Provides a "Show All / Labelled / Unlabelled" filter combo box.
-* **Context Menu:** Supports right-click actions (e.g., "Remove Item").
+## Architecture Notes
 
-
-
-### 4. `video_surface.py`
-
-* **Class:** `VideoSurface`
-* **Purpose:** A lightweight, logic-free wrapper for video rendering.
-* **Components:** Encapsulates `QMediaPlayer`, `QAudioOutput` (with volume preset to 100%), and `QVideoWidget`.
-* **Role:** Acts strictly as the **View** layer for media. Playback logic (Play/Pause/Seek) is handled externally by the `MediaController` to prevent audio/visual desync.
-
-### 5. `project_controls.py`
-
-* **Class:** `UnifiedProjectControls`
-* **Purpose:** A standardized 3x2 **Project Management Grid**.
-* **Layout:**
-* **Row 1:** `New Project`, `Load Project`
-* **Row 2:** `Add Data`, `Close Project`
-* **Row 3:** `Save JSON`, `Export JSON`
-
-
-* **Signals:** Emits signals (`createRequested`, `saveRequested`, etc.) to be caught by the main Controller, keeping this widget purely presentational.
-
-### 6. `dialogs.py`
-
-* **Classes:**
-* `ProjectTypeDialog`: The "New Project" wizard. Now updated to support **4 Modes**: Classification, Localization, Description, and **Dense Description**.
-* `FolderPickerDialog`: A custom file dialog allowing **Multi-Folder Selection** via a `QTreeView` with checkboxes/click-toggle.
-
-
-
-### 7. `welcome_widget.py`
-
-* **Class:** `WelcomeWidget`
-* **Purpose:** The landing screen displayed on application startup.
-* **Actions:** Provides large, accessible entry points to "Create New Project" or "Import Project JSON".
-
----
+- Views in `ui/common/*` focus on UI composition and signal emission.
+- Application and routing logic are handled in `controllers/*`.
+- `main_window.py` composes these common UI modules into the dock-based workspace.
