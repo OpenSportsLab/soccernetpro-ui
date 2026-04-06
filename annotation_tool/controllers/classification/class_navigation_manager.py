@@ -54,7 +54,7 @@ class NavigationManager:
             child_idx = model.index(i, 0, curr_idx)
             paths.append(child_idx.data(self.main.tree_model.FilePathRole))
             
-        self.main.center_panel.media_preview.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
+        self.main.center_panel.show_all_views([p for p in paths if p.lower().endswith(SUPPORTED_EXTENSIONS[:3])])
 
     def nav_prev_action(self): self._nav_tree(step=-1, level='top')
     def nav_next_action(self): self._nav_tree(step=1, level='top')

@@ -130,3 +130,19 @@ class MediaController(QObject):
 
     def set_position(self, position):
         self.player.setPosition(position)
+
+    def seek_relative(self, delta_ms: int):
+        """
+        Move playback position by a relative offset in milliseconds.
+        """
+        current = self.player.position()
+        target = current + delta_ms
+
+        if target < 0:
+            target = 0
+
+        duration = self.player.duration()
+        if duration > 0 and target > duration:
+            target = duration
+
+        self.player.setPosition(target)

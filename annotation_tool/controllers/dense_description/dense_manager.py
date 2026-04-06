@@ -45,11 +45,7 @@ class DenseManager:
         # --- Left Panel (Clip Tree) handled centrally in main_window.py ---
         
         # --- Center Panel (Playback & Timeline) ---
-        media = self.center_panel.media_preview
-        timeline = self.center_panel.timeline
-        pb = self.center_panel.playback
-        
-        media.positionChanged.connect(self._on_media_position_changed)
+        self.center_panel.positionChanged.connect(self._on_media_position_changed)
         
         # --- Right Panel (Text Input & Table) ---
         input_w = self.right_panel.input_widget
@@ -65,7 +61,6 @@ class DenseManager:
 
     def _on_media_position_changed(self, ms):
         """Update timeline and the time label in the input widget."""
-        self.center_panel.timeline.set_position(ms)
         time_str = self._fmt_ms_full(ms)
         self.right_panel.input_widget.update_time(time_str)
         
@@ -100,7 +95,7 @@ class DenseManager:
         2. Populate input widget with the text of that event.
         """
         # 1. Seek
-        self.center_panel.media_preview.set_position(ms)
+        self.center_panel.set_position(ms)
         
         # 2. Sync Editor (Force immediate sync)
         self._sync_editor_to_timeline()
@@ -115,7 +110,7 @@ class DenseManager:
             QMessageBox.warning(self.main, "Warning", "Please select a video first.")
             return
             
-        pos_ms = self.center_panel.media_preview.player.position()
+        pos_ms = self.center_panel.player.position()
         events = self.model.dense_description_events.get(self.current_video_path, [])
         
         tolerance = 50 
@@ -189,7 +184,7 @@ class DenseManager:
         self.right_panel.table.set_data(sorted_events)
         
         markers = [{'start_ms': e.get('position_ms', 0), 'color': QColor("#FFD700")} for e in sorted_events]
-        self.center_panel.timeline.set_markers(markers)
+        self.center_panel.set_markers(markers)
         
         # [FIX] 3. Restore Selection
         if current_selection_ms is not None:
@@ -206,7 +201,7 @@ class DenseManager:
         """
         if not self.current_video_path: return
         
-        current_ms = self.center_panel.media_preview.player.position()
+        current_ms = self.center_panel.player.position()
         events = self.model.dense_description_events.get(self.current_video_path, [])
         
         # Same tolerance as submission
@@ -274,7 +269,7 @@ class DenseManager:
         events = self.model.dense_description_events.get(self.current_video_path, [])
         if not events: return
         sorted_evts = sorted(events, key=lambda x: x.get('position_ms', 0))
-        cur_pos = self.center_panel.media_preview.player.position()
+        cur_pos = self.center_panel.player.position()
         target = None
         if step > 0:
             for e in sorted_evts:
@@ -284,7 +279,7 @@ class DenseManager:
                 if e['position_ms'] < cur_pos - 100: target = e; break
         
         if target is not None: 
-            self.center_panel.media_preview.set_position(target['position_ms'])
+            self.center_panel.set_position(target['position_ms'])
             # Ensure navigation also populates the text box
             self._select_row_by_time(target['position_ms'])
             self.right_panel.input_widget.set_text(target['text'])

@@ -59,7 +59,7 @@ class LocalizationManager:
             self.right_panel.tabs.currentChanged.connect(self._on_tab_switched)
         
         # [NEW] Keep local position sync for LOC labeling UI
-        self.center_panel.media_preview.positionChanged.connect(self._on_media_position_changed)
+        self.center_panel.positionChanged.connect(self._on_media_position_changed)
 
 
         tabs = self.right_panel.annot_mgmt.tabs
@@ -75,14 +75,13 @@ class LocalizationManager:
         tabs.labelRenameReq.connect(self._on_label_rename_req)
         tabs.labelDeleteReq.connect(self._on_label_delete_req)
         
-        table.annotationSelected.connect(lambda ms: self.center_panel.media_preview.set_position(ms))
+        table.annotationSelected.connect(lambda ms: self.center_panel.set_position(ms))
         table.annotationDeleted.connect(self._on_delete_single_annotation)
         table.annotationModified.connect(self._on_annotation_modified)
 
         table.updateTimeForSelectedRequested.connect(self._on_update_time_for_selected)
 
     def _on_media_position_changed(self, ms):
-        self.center_panel.timeline.set_position(ms)
         time_str = self._fmt_ms_full(ms)
         self.right_panel.annot_mgmt.tabs.update_current_time(time_str)
 
@@ -95,7 +94,7 @@ class LocalizationManager:
             return
 
         # 1. Get the current playback position in milliseconds
-        current_ms = self.center_panel.media_preview.player.position()
+        current_ms = self.center_panel.player.position()
 
         # 2. Copy the old event and update its timestamp
         new_event = old_event.copy()
@@ -188,7 +187,7 @@ class LocalizationManager:
 
     # --- Label Management ---
     def _on_label_add_req(self, head):
-        player = self.center_panel.media_preview.player
+        player = self.center_panel.player
         was_playing = (player.playbackState() == QMediaPlayer.PlaybackState.PlayingState)
         if was_playing: player.pause()
         current_pos = player.position()
@@ -260,7 +259,7 @@ class LocalizationManager:
     # --- Spotting (Data Creation) ---
     def _on_spotting_triggered(self, head, label):
         if not self.current_video_path: QMessageBox.warning(self.main, "Warning", "No video selected."); return
-        pos_ms = self.center_panel.media_preview.player.position()
+        pos_ms = self.center_panel.player.position()
         new_event = {"head": head, "label": label, "position_ms": pos_ms}
         self.model.push_undo(CmdType.LOC_EVENT_ADD, video_path=self.current_video_path, event=new_event)
         if self.current_video_path not in self.model.localization_events: self.model.localization_events[self.current_video_path] = []
@@ -336,7 +335,7 @@ class LocalizationManager:
         display_data.sort(key=lambda x: x.get('position_ms', 0))
         self.right_panel.table.set_data(display_data)
         markers = [{'start_ms': e.get('position_ms', 0), 'color': QColor("#00BFFF")} for e in events]
-        self.center_panel.timeline.set_markers(markers)
+        self.center_panel.set_markers(markers)
 
     def _navigate_clip(self, step):
         tree = self.dataset_explorer_panel.tree
@@ -350,7 +349,7 @@ class LocalizationManager:
         events = self.model.localization_events.get(self.current_video_path, [])
         if not events: return
         sorted_events = sorted(events, key=lambda x: x.get('position_ms', 0))
-        current_pos = self.center_panel.media_preview.player.position()
+        current_pos = self.center_panel.player.position()
         target_time = None
         if step > 0:
             for e in sorted_events:
@@ -359,7 +358,7 @@ class LocalizationManager:
             for e in reversed(sorted_events):
                 if e.get('position_ms', 0) < current_pos - 100: target_time = e.get('position_ms'); break
         if target_time is not None:
-            self.center_panel.media_preview.set_position(target_time)
+            self.center_panel.set_position(target_time)
             self._select_row_by_time(target_time)
 
     def _select_row_by_time(self, time_ms):
@@ -414,7 +413,7 @@ class LocalizationManager:
         Triggered when 'Set to Current' is clicked in Smart Spotting UI.
         Gets current player position and updates the smart UI.
         """
-        player = self.center_panel.media_preview.player
+        player = self.center_panel.player
         current_ms = player.position()
         time_str = self._fmt_ms_full(current_ms)
         
@@ -500,7 +499,7 @@ class LocalizationManager:
                 'start_ms': evt.get('position_ms', 0),
                 'color': QColor('deepskyblue')
             })
-        self.center_panel.timeline.set_markers(markers)
+        self.center_panel.set_markers(markers)
 
     def _on_tab_switched(self, index: int):
         # Isolate visual states when switching tabs

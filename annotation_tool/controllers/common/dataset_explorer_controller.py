@@ -377,9 +377,9 @@ class DatasetExplorerController(QObject):
         self.app_state.redo_stack.clear()
 
         self.media_controller.stop()
-        self.main.center_panel.media_preview.player.setSource(QUrl())
-        self.main.center_panel.media_preview.video_widget.update()
-        self.main.center_panel.timeline.set_markers([])
+        self.main.center_panel.player.setSource(QUrl())
+        self.main.center_panel.video_widget.update()
+        self.main.center_panel.set_markers([])
 
         self.tree_model.clear()
         self.main.loc_manager._refresh_schema_ui()
@@ -404,7 +404,7 @@ class DatasetExplorerController(QObject):
         self.main.dense_manager.current_video_path = None
         self.tree_model.clear()
         self.main.dense_manager.right_panel.table.set_data([])
-        self.main.center_panel.timeline.set_markers([])
+        self.main.center_panel.set_markers([])
         self.main.dense_manager.right_panel.input_widget.set_text("")
         self.main.show_welcome_view()
         self.main.show_temp_msg("Cleared", "Workspace reset.")
@@ -439,9 +439,9 @@ class DatasetExplorerController(QObject):
         if self.main.loc_manager.current_video_path == path:
             self.main.loc_manager.current_video_path = None
             self.media_controller.stop()
-            self.main.center_panel.media_preview.player.setSource(QUrl())
+            self.main.center_panel.player.setSource(QUrl())
             self.main.loc_manager.right_panel.table.set_data([])
-            self.main.center_panel.timeline.set_markers([])
+            self.main.center_panel.set_markers([])
 
         self._remove_tree_row(action_idx)
         self._mark_dirty_and_refresh()
@@ -483,7 +483,7 @@ class DatasetExplorerController(QObject):
             self.media_controller.stop()
             self.main.dense_manager.current_video_path = None
             self.main.dense_manager.right_panel.table.set_data([])
-            self.main.center_panel.timeline.set_markers([])
+            self.main.center_panel.set_markers([])
             self.main.dense_manager.right_panel.input_widget.set_text("")
 
         removed = self.app_state.remove_action_item_by_path(path)
@@ -694,7 +694,7 @@ class DatasetExplorerController(QObject):
         self.main.update_save_export_button_state()
 
         self.main.classification_panel.manual_box.setEnabled(False)
-        self.main.center_panel.media_preview.load_video(None)
+        self.main.center_panel.load_video(None)
 
         if hasattr(self.main.classification_panel, "reset_smart_inference"):
             self.main.classification_panel.reset_smart_inference()

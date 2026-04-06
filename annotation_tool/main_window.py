@@ -114,8 +114,7 @@ class VideoAnnotationWindow(QMainWindow):
         self.history_manager = HistoryManager(self)
         
         # [CENTRALIZED] Create the ONE and ONLY Media Controller here
-        preview_panel = self.center_panel.media_preview
-        self.media_controller = MediaController(preview_panel.player, preview_panel.video_widget)
+        self.media_controller = MediaController(self.center_panel.player, self.center_panel.video_widget)
         self.dataset_explorer_controller.media_controller = self.media_controller
         
         self.annot_manager = AnnotationManager(self)
@@ -231,19 +230,14 @@ class VideoAnnotationWindow(QMainWindow):
 
 
         # --- Center panel (Unified Playback) ---
-        center_panel.playback.playPauseRequested.connect(self._dispatch_play_pause)
-        center_panel.playback.seekRelativeRequested.connect(self._dispatch_seek)
-        center_panel.playback.stopRequested.connect(self.stop_all_players)
-        center_panel.playback.playbackRateRequested.connect(center_panel.media_preview.set_playback_rate)
+        center_panel.playPauseRequested.connect(self._dispatch_play_pause)
+        center_panel.seekRelativeRequested.connect(self._dispatch_seek)
+        center_panel.stopRequested.connect(self.stop_all_players)
+        center_panel.playbackRateRequested.connect(center_panel.set_playback_rate)
         
         # Navigation signals from the unified bar
-        center_panel.playback.nextPrevClipRequested.connect(self._dispatch_next_prev_clip)
-        center_panel.playback.nextPrevAnnotRequested.connect(self._dispatch_next_prev_annot)
-        
-        # --- Timeline ---
-        center_panel.media_preview.durationChanged.connect(center_panel.timeline.set_duration)
-        center_panel.media_preview.positionChanged.connect(center_panel.timeline.set_position)
-        center_panel.timeline.seekRequested.connect(center_panel.media_preview.set_position)
+        center_panel.nextPrevClipRequested.connect(self._dispatch_next_prev_clip)
+        center_panel.nextPrevAnnotRequested.connect(self._dispatch_next_prev_annot)
         
         # --- Classification Editor ---
         self.classification_panel.annotation_saved.connect(lambda data: self.annot_manager.save_manual_annotation())
